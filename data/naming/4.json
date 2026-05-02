@@ -1,0 +1,12 @@
+{
+  "id": 4,
+  "concept": "工程變更通知",
+  "stdName": "eco",
+  "aliases": ["engineering_change", "ecn"],
+  "domain": "semiconductor",
+  "tags": ["plm", "change_management"],
+  "aiDescription": "Engineering Change Order，正式的設計變更流程記錄",
+  "description": null,
+  "createdAt": "2026-04-10T00:00:00.000Z",
+  "updatedAt": "2026-04-10T00:00:00.000Z"
+}

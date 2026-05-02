@@ -1,0 +1,12 @@
+{
+  "id": 5,
+  "concept": "供應商",
+  "stdName": "supplier",
+  "aliases": ["vendor", "provider"],
+  "domain": "semiconductor",
+  "tags": ["supply_chain"],
+  "aiDescription": "提供零件或服務的外部廠商",
+  "description": null,
+  "createdAt": "2026-04-20T00:00:00.000Z",
+  "updatedAt": "2026-04-20T00:00:00.000Z"
+}

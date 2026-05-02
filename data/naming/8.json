@@ -1,0 +1,12 @@
+{
+  "id": 8,
+  "concept": "機台",
+  "stdName": "machine",
+  "aliases": ["equipment", "tool"],
+  "domain": "semiconductor",
+  "tags": ["mes", "equipment"],
+  "aiDescription": "製程設備，執行特定作業的機器",
+  "description": null,
+  "createdAt": "2026-04-15T00:00:00.000Z",
+  "updatedAt": "2026-04-15T00:00:00.000Z"
+}

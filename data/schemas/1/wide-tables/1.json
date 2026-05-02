@@ -1,0 +1,23 @@
+{
+  "id": 1,
+  "schemaId": 1,
+  "name": "v_bom_flat",
+  "description": "BOM 展開視圖",
+  "createdAt": "2026-04-20T00:00:00.000Z",
+  "updatedAt": "2026-04-20T00:00:00.000Z",
+  "sources": [
+    {"id": 1, "wideTableId": 1, "tableId": 10, "tableName": "parts", "colPrefix": "", "joinType": "BASE", "joinCondition": null, "position": 0},
+    {"id": 2, "wideTableId": 1, "tableId": 12, "tableName": "bom_items", "colPrefix": "", "joinType": "INNER", "joinCondition": "`bom_items`.`parent_id` = `parts`.`id`", "position": 1},
+    {"id": 3, "wideTableId": 1, "tableId": 11, "tableName": "part_revisions", "colPrefix": "rev_", "joinType": "LEFT", "joinCondition": "`part_revisions`.`part_id` = `parts`.`id`", "position": 2}
+  ],
+  "columns": [
+    {"id": 1, "wideTableId": 1, "sourceId": 1, "fieldId": 1002, "fieldName": "part_no", "fieldType": "VARCHAR(32)", "tableName": "parts", "outputName": "parent_part_no", "included": true, "position": 0},
+    {"id": 2, "wideTableId": 1, "sourceId": 1, "fieldId": 1003, "fieldName": "part_name", "fieldType": "VARCHAR(255)", "tableName": "parts", "outputName": "parent_part_name", "included": true, "position": 1},
+    {"id": 3, "wideTableId": 1, "sourceId": 1, "fieldId": 1005, "fieldName": "lifecycle_state", "fieldType": "VARCHAR(32)", "tableName": "parts", "outputName": "parent_lifecycle", "included": true, "position": 2},
+    {"id": 4, "wideTableId": 1, "sourceId": 2, "fieldId": 1203, "fieldName": "child_id", "fieldType": "BIGINT", "tableName": "bom_items", "outputName": "child_id", "included": true, "position": 3},
+    {"id": 5, "wideTableId": 1, "sourceId": 2, "fieldId": 1204, "fieldName": "quantity", "fieldType": "DECIMAL(12,4)", "tableName": "bom_items", "outputName": "quantity", "included": true, "position": 4},
+    {"id": 6, "wideTableId": 1, "sourceId": 2, "fieldId": 1205, "fieldName": "bom_type", "fieldType": "VARCHAR(16)", "tableName": "bom_items", "outputName": "bom_type", "included": true, "position": 5},
+    {"id": 7, "wideTableId": 1, "sourceId": 3, "fieldId": 1103, "fieldName": "revision_no", "fieldType": "VARCHAR(8)", "tableName": "part_revisions", "outputName": "rev_revision_no", "included": true, "position": 6},
+    {"id": 8, "wideTableId": 1, "sourceId": 3, "fieldId": 1104, "fieldName": "revision_state", "fieldType": "VARCHAR(32)", "tableName": "part_revisions", "outputName": "rev_revision_state", "included": true, "position": 7}
+  ]
+}

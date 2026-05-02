@@ -1,0 +1,26 @@
+{
+  "name": "@schema-studio/ddl-parser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "devDependencies": {
+    "@schema-studio/eslint-config": "workspace:*",
+    "typescript": "~5.6.3",
+    "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@schema-studio/core": "workspace:*"
+  }
+}

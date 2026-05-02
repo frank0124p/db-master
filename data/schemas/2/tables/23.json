@@ -1,0 +1,82 @@
+{
+  "id": 23,
+  "schemaId": 2,
+  "name": "process_logs",
+  "comment": "製程記錄",
+  "createdAt": "2026-04-15T00:00:00.000Z",
+  "updatedAt": "2026-05-02T08:03:13.944Z",
+  "fields": [
+    {
+      "id": 2301,
+      "tableId": 23,
+      "name": "id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": true,
+      "isUnique": false,
+      "comment": null,
+      "position": 0
+    },
+    {
+      "id": 2302,
+      "tableId": 23,
+      "name": "process_step_id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "製程步驟ID FK",
+      "position": 1
+    },
+    {
+      "id": 2303,
+      "tableId": 23,
+      "name": "operator",
+      "dataType": "VARCHAR(64)",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "操作員",
+      "position": 2
+    },
+    {
+      "id": 2304,
+      "tableId": 23,
+      "name": "result",
+      "dataType": "VARCHAR(16)",
+      "nullable": false,
+      "defaultValue": "pending",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "結果",
+      "position": 3
+    },
+    {
+      "id": 2305,
+      "tableId": 23,
+      "name": "logged_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 4
+    },
+    {
+      "id": 2309,
+      "tableId": 23,
+      "name": "operator_id",
+      "dataType": "VARCHAR(64)",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "操作員ID",
+      "position": 5
+    }
+  ]
+}

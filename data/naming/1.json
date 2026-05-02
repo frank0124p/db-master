@@ -1,0 +1,12 @@
+{
+  "id": 1,
+  "concept": "零件",
+  "stdName": "part",
+  "aliases": ["component", "piece"],
+  "domain": "semiconductor",
+  "tags": ["plm", "core"],
+  "aiDescription": "半導體零件主體，代表一個可製造或採購的物料單元",
+  "description": null,
+  "createdAt": "2026-04-02T00:00:00.000Z",
+  "updatedAt": "2026-04-02T00:00:00.000Z"
+}

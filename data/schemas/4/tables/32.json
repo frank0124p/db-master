@@ -1,0 +1,106 @@
+{
+  "id": 32,
+  "schemaId": 4,
+  "name": "defect_items",
+  "comment": "缺陷明細",
+  "createdAt": "2026-05-02T09:02:32.437Z",
+  "updatedAt": "2026-05-02T09:02:32.437Z",
+  "fields": [
+    {
+      "id": 2400,
+      "tableId": 32,
+      "name": "id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": true,
+      "isUnique": false,
+      "comment": null,
+      "position": 0
+    },
+    {
+      "id": 2401,
+      "tableId": 32,
+      "name": "record_id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "檢測記錄ID FK",
+      "position": 1
+    },
+    {
+      "id": 2402,
+      "tableId": 32,
+      "name": "defect_code",
+      "dataType": "VARCHAR(32)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "缺陷代碼",
+      "position": 2
+    },
+    {
+      "id": 2403,
+      "tableId": 32,
+      "name": "defect_type",
+      "dataType": "VARCHAR(64)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "缺陷類型",
+      "position": 3
+    },
+    {
+      "id": 2404,
+      "tableId": 32,
+      "name": "x_coord",
+      "dataType": "DECIMAL(10,4)",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "X 座標",
+      "position": 4
+    },
+    {
+      "id": 2405,
+      "tableId": 32,
+      "name": "y_coord",
+      "dataType": "DECIMAL(10,4)",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "Y 座標",
+      "position": 5
+    },
+    {
+      "id": 2406,
+      "tableId": 32,
+      "name": "severity",
+      "dataType": "VARCHAR(16)",
+      "nullable": false,
+      "defaultValue": "minor",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "嚴重程度",
+      "position": 6
+    },
+    {
+      "id": 2407,
+      "tableId": 32,
+      "name": "created_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 7
+    }
+  ]
+}

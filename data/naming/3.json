@@ -1,0 +1,12 @@
+{
+  "id": 3,
+  "concept": "物料清單",
+  "stdName": "bom",
+  "aliases": ["bill_of_materials", "bill-of-materials"],
+  "domain": "semiconductor",
+  "tags": ["plm", "structure"],
+  "aiDescription": "Bill of Materials，定義產品的零件組成結構",
+  "description": null,
+  "createdAt": "2026-04-02T00:00:00.000Z",
+  "updatedAt": "2026-04-02T00:00:00.000Z"
+}

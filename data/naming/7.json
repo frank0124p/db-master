@@ -1,0 +1,12 @@
+{
+  "id": 7,
+  "concept": "製程步驟",
+  "stdName": "process_step",
+  "aliases": ["operation", "op"],
+  "domain": "semiconductor",
+  "tags": ["mes", "process"],
+  "aiDescription": "生產流程中的單一製程作業步驟",
+  "description": null,
+  "createdAt": "2026-04-15T00:00:00.000Z",
+  "updatedAt": "2026-04-15T00:00:00.000Z"
+}

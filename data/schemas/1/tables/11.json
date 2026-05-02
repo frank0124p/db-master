@@ -1,0 +1,82 @@
+{
+  "id": 11,
+  "schemaId": 1,
+  "name": "part_revisions",
+  "comment": "零件版本管理",
+  "createdAt": "2026-04-02T00:00:00.000Z",
+  "updatedAt": "2026-05-02T08:03:13.948Z",
+  "fields": [
+    {
+      "id": 1101,
+      "tableId": 11,
+      "name": "id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": true,
+      "isUnique": false,
+      "comment": null,
+      "position": 0
+    },
+    {
+      "id": 1102,
+      "tableId": 11,
+      "name": "part_id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "零件ID FK",
+      "position": 1
+    },
+    {
+      "id": 1103,
+      "tableId": 11,
+      "name": "revision_no",
+      "dataType": "VARCHAR(8)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "版本號",
+      "position": 2
+    },
+    {
+      "id": 1104,
+      "tableId": 11,
+      "name": "revision_state",
+      "dataType": "VARCHAR(32)",
+      "nullable": false,
+      "defaultValue": "pending",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "版本狀態",
+      "position": 3
+    },
+    {
+      "id": 1105,
+      "tableId": 11,
+      "name": "created_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 4
+    },
+    {
+      "id": 1106,
+      "tableId": 11,
+      "name": "updated_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 5
+    }
+  ]
+}

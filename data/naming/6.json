@@ -1,0 +1,12 @@
+{
+  "id": 6,
+  "concept": "工單",
+  "stdName": "work_order",
+  "aliases": ["wo", "production_order"],
+  "domain": "semiconductor",
+  "tags": ["mes", "production"],
+  "aiDescription": "製造執行系統中的生產指令單",
+  "description": null,
+  "createdAt": "2026-04-15T00:00:00.000Z",
+  "updatedAt": "2026-04-15T00:00:00.000Z"
+}

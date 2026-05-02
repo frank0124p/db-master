@@ -1,0 +1,802 @@
+{
+  "id": 4,
+  "schemaId": 1,
+  "versionNo": 4,
+  "message": "版本快照 2026/5/2 下午9:26:28",
+  "createdAt": "2026-05-02T13:26:34.946Z",
+  "snapshot": {
+    "id": 1,
+    "name": "PLM Core",
+    "description": "產品生命週期管理核心 Schema",
+    "domain": "semiconductor",
+    "createdAt": "2026-04-02T00:00:00.000Z",
+    "updatedAt": "2026-04-20T00:00:00.000Z",
+    "tables": [
+      {
+        "id": 10,
+        "name": "parts",
+        "comment": "零件主檔",
+        "fields": [
+          {
+            "id": 1001,
+            "tableId": 10,
+            "name": "id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": true,
+            "isUnique": false,
+            "comment": null,
+            "position": 0
+          },
+          {
+            "id": 1002,
+            "tableId": 10,
+            "name": "part_no",
+            "dataType": "VARCHAR(32)",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": true,
+            "comment": null,
+            "position": 1
+          },
+          {
+            "id": 1003,
+            "tableId": 10,
+            "name": "part_name",
+            "dataType": "VARCHAR(255)",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 2
+          },
+          {
+            "id": 1004,
+            "tableId": 10,
+            "name": "part_type",
+            "dataType": "VARCHAR(32)",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 3
+          },
+          {
+            "id": 1005,
+            "tableId": 10,
+            "name": "lifecycle_state",
+            "dataType": "VARCHAR(32)",
+            "nullable": false,
+            "defaultValue": "draft",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 4
+          },
+          {
+            "id": 1006,
+            "tableId": 10,
+            "name": "process_node",
+            "dataType": "VARCHAR(32)",
+            "nullable": true,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 5
+          },
+          {
+            "id": 1007,
+            "tableId": 10,
+            "name": "description",
+            "dataType": "TEXT",
+            "nullable": true,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "零件描述",
+            "position": 6
+          },
+          {
+            "id": 1008,
+            "tableId": 10,
+            "name": "created_at",
+            "dataType": "TIMESTAMP",
+            "nullable": false,
+            "defaultValue": "CURRENT_TIMESTAMP",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 7
+          },
+          {
+            "id": 1009,
+            "tableId": 10,
+            "name": "updated_at",
+            "dataType": "TIMESTAMP",
+            "nullable": false,
+            "defaultValue": "CURRENT_TIMESTAMP",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 8
+          },
+          {
+            "id": 2435,
+            "tableId": 10,
+            "name": "part_no_id",
+            "dataType": "VARCHAR(32)",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 9
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "name": "part_revisions",
+        "comment": "零件版本管理",
+        "fields": [
+          {
+            "id": 1101,
+            "tableId": 11,
+            "name": "id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": true,
+            "isUnique": false,
+            "comment": null,
+            "position": 0
+          },
+          {
+            "id": 1102,
+            "tableId": 11,
+            "name": "part_id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "零件ID FK",
+            "position": 1
+          },
+          {
+            "id": 1103,
+            "tableId": 11,
+            "name": "revision_no",
+            "dataType": "VARCHAR(8)",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "版本號",
+            "position": 2
+          },
+          {
+            "id": 1104,
+            "tableId": 11,
+            "name": "revision_state",
+            "dataType": "VARCHAR(32)",
+            "nullable": false,
+            "defaultValue": "pending",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "版本狀態",
+            "position": 3
+          },
+          {
+            "id": 1105,
+            "tableId": 11,
+            "name": "created_at",
+            "dataType": "TIMESTAMP",
+            "nullable": false,
+            "defaultValue": "CURRENT_TIMESTAMP",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 4
+          },
+          {
+            "id": 1106,
+            "tableId": 11,
+            "name": "updated_at",
+            "dataType": "TIMESTAMP",
+            "nullable": false,
+            "defaultValue": "CURRENT_TIMESTAMP",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 5
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "name": "bom_items",
+        "comment": "BOM 結構",
+        "fields": [
+          {
+            "id": 1201,
+            "tableId": 12,
+            "name": "id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": true,
+            "isUnique": false,
+            "comment": null,
+            "position": 0
+          },
+          {
+            "id": 1202,
+            "tableId": 12,
+            "name": "parent_id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "父零件ID FK",
+            "position": 1
+          },
+          {
+            "id": 1203,
+            "tableId": 12,
+            "name": "child_id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "子零件ID FK",
+            "position": 2
+          },
+          {
+            "id": 1204,
+            "tableId": 12,
+            "name": "quantity",
+            "dataType": "DECIMAL(12,4)",
+            "nullable": false,
+            "defaultValue": "1.0000",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "數量",
+            "position": 3
+          },
+          {
+            "id": 1205,
+            "tableId": 12,
+            "name": "bom_type",
+            "dataType": "VARCHAR(16)",
+            "nullable": false,
+            "defaultValue": "engineering",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "BOM類型",
+            "position": 4
+          },
+          {
+            "id": 1206,
+            "tableId": 12,
+            "name": "created_at",
+            "dataType": "TIMESTAMP",
+            "nullable": false,
+            "defaultValue": "CURRENT_TIMESTAMP",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 5
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "name": "engineering_changes",
+        "comment": "ECO 工程變更單",
+        "fields": [
+          {
+            "id": 1301,
+            "tableId": 13,
+            "name": "id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": true,
+            "isUnique": false,
+            "comment": null,
+            "position": 0
+          },
+          {
+            "id": 1302,
+            "tableId": 13,
+            "name": "eco_no",
+            "dataType": "VARCHAR(32)",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": true,
+            "comment": "ECO編號",
+            "position": 1
+          },
+          {
+            "id": 1303,
+            "tableId": 13,
+            "name": "title",
+            "dataType": "VARCHAR(255)",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "標題",
+            "position": 2
+          },
+          {
+            "id": 1304,
+            "tableId": 13,
+            "name": "status",
+            "dataType": "VARCHAR(32)",
+            "nullable": false,
+            "defaultValue": "draft",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "狀態",
+            "position": 3
+          },
+          {
+            "id": 1305,
+            "tableId": 13,
+            "name": "created_at",
+            "dataType": "TIMESTAMP",
+            "nullable": false,
+            "defaultValue": "CURRENT_TIMESTAMP",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 4
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "name": "suppliers",
+        "comment": "供應商主檔",
+        "fields": [
+          {
+            "id": 1401,
+            "tableId": 14,
+            "name": "id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": true,
+            "isUnique": false,
+            "comment": null,
+            "position": 0
+          },
+          {
+            "id": 1402,
+            "tableId": 14,
+            "name": "supplier_code",
+            "dataType": "VARCHAR(32)",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": true,
+            "comment": "供應商代碼",
+            "position": 1
+          },
+          {
+            "id": 1403,
+            "tableId": 14,
+            "name": "supplier_name",
+            "dataType": "VARCHAR(255)",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "供應商名稱",
+            "position": 2
+          },
+          {
+            "id": 1404,
+            "tableId": 14,
+            "name": "created_at",
+            "dataType": "TIMESTAMP",
+            "nullable": false,
+            "defaultValue": "CURRENT_TIMESTAMP",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 3
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "name": "part_suppliers",
+        "comment": "零件供應商對應",
+        "fields": [
+          {
+            "id": 1501,
+            "tableId": 15,
+            "name": "id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": true,
+            "isUnique": false,
+            "comment": null,
+            "position": 0
+          },
+          {
+            "id": 1502,
+            "tableId": 15,
+            "name": "part_id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "零件ID FK",
+            "position": 1
+          },
+          {
+            "id": 1503,
+            "tableId": 15,
+            "name": "supplier_id",
+            "dataType": "BIGINT",
+            "nullable": false,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "供應商ID FK",
+            "position": 2
+          },
+          {
+            "id": 1504,
+            "tableId": 15,
+            "name": "lead_time_days",
+            "dataType": "INT",
+            "nullable": true,
+            "defaultValue": null,
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": "前置天數",
+            "position": 3
+          },
+          {
+            "id": 1505,
+            "tableId": 15,
+            "name": "created_at",
+            "dataType": "TIMESTAMP",
+            "nullable": false,
+            "defaultValue": "CURRENT_TIMESTAMP",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "comment": null,
+            "position": 4
+          }
+        ]
+      }
+    ],
+    "wideTables": [
+      {
+        "id": 2,
+        "name": "XXX",
+        "description": null,
+        "sources": [
+          {
+            "tableName": "parts",
+            "joinType": "BASE"
+          },
+          {
+            "tableName": "part_revisions",
+            "joinType": "LEFT"
+          },
+          {
+            "tableName": "bom_items",
+            "joinType": "LEFT"
+          },
+          {
+            "tableName": "engineering_changes",
+            "joinType": "LEFT"
+          }
+        ],
+        "includedColumns": [
+          {
+            "outputName": "id",
+            "fieldType": "BIGINT",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "part_no",
+            "fieldType": "VARCHAR(32)",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "part_name",
+            "fieldType": "VARCHAR(255)",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "part_type",
+            "fieldType": "VARCHAR(32)",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "lifecycle_state",
+            "fieldType": "VARCHAR(32)",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "process_node",
+            "fieldType": "VARCHAR(32)",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "description",
+            "fieldType": "TEXT",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "created_at",
+            "fieldType": "TIMESTAMP",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "updated_at",
+            "fieldType": "TIMESTAMP",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "part_revisions_id",
+            "fieldType": "BIGINT",
+            "tableName": "part_revisions"
+          },
+          {
+            "outputName": "part_revisions_part_id",
+            "fieldType": "BIGINT",
+            "tableName": "part_revisions"
+          },
+          {
+            "outputName": "part_revisions_revision_no",
+            "fieldType": "VARCHAR(8)",
+            "tableName": "part_revisions"
+          },
+          {
+            "outputName": "part_revisions_revision_state",
+            "fieldType": "VARCHAR(32)",
+            "tableName": "part_revisions"
+          },
+          {
+            "outputName": "part_revisions_created_at",
+            "fieldType": "TIMESTAMP",
+            "tableName": "part_revisions"
+          },
+          {
+            "outputName": "part_revisions_updated_at",
+            "fieldType": "TIMESTAMP",
+            "tableName": "part_revisions"
+          },
+          {
+            "outputName": "bom_items_id",
+            "fieldType": "BIGINT",
+            "tableName": "bom_items"
+          },
+          {
+            "outputName": "bom_items_parent_id",
+            "fieldType": "BIGINT",
+            "tableName": "bom_items"
+          },
+          {
+            "outputName": "bom_items_child_id",
+            "fieldType": "BIGINT",
+            "tableName": "bom_items"
+          },
+          {
+            "outputName": "bom_items_quantity",
+            "fieldType": "DECIMAL(12,4)",
+            "tableName": "bom_items"
+          },
+          {
+            "outputName": "bom_items_bom_type",
+            "fieldType": "VARCHAR(16)",
+            "tableName": "bom_items"
+          },
+          {
+            "outputName": "bom_items_created_at",
+            "fieldType": "TIMESTAMP",
+            "tableName": "bom_items"
+          },
+          {
+            "outputName": "engineering_changes_id",
+            "fieldType": "BIGINT",
+            "tableName": "engineering_changes"
+          },
+          {
+            "outputName": "engineering_changes_eco_no",
+            "fieldType": "VARCHAR(32)",
+            "tableName": "engineering_changes"
+          },
+          {
+            "outputName": "engineering_changes_title",
+            "fieldType": "VARCHAR(255)",
+            "tableName": "engineering_changes"
+          },
+          {
+            "outputName": "engineering_changes_status",
+            "fieldType": "VARCHAR(32)",
+            "tableName": "engineering_changes"
+          },
+          {
+            "outputName": "engineering_changes_created_at",
+            "fieldType": "TIMESTAMP",
+            "tableName": "engineering_changes"
+          }
+        ]
+      },
+      {
+        "id": 1,
+        "name": "v_bom_flat",
+        "description": "BOM 展開視圖",
+        "sources": [
+          {
+            "tableName": "parts",
+            "joinType": "BASE"
+          },
+          {
+            "tableName": "bom_items",
+            "joinType": "INNER"
+          },
+          {
+            "tableName": "part_revisions",
+            "joinType": "LEFT"
+          }
+        ],
+        "includedColumns": [
+          {
+            "outputName": "parent_part_no",
+            "fieldType": "VARCHAR(32)",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "parent_part_name",
+            "fieldType": "VARCHAR(255)",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "parent_lifecycle",
+            "fieldType": "VARCHAR(32)",
+            "tableName": "parts"
+          },
+          {
+            "outputName": "child_id",
+            "fieldType": "BIGINT",
+            "tableName": "bom_items"
+          },
+          {
+            "outputName": "quantity",
+            "fieldType": "DECIMAL(12,4)",
+            "tableName": "bom_items"
+          },
+          {
+            "outputName": "bom_type",
+            "fieldType": "VARCHAR(16)",
+            "tableName": "bom_items"
+          },
+          {
+            "outputName": "rev_revision_no",
+            "fieldType": "VARCHAR(8)",
+            "tableName": "part_revisions"
+          },
+          {
+            "outputName": "rev_revision_state",
+            "fieldType": "VARCHAR(32)",
+            "tableName": "part_revisions"
+          }
+        ]
+      }
+    ]
+  },
+  "diff": {
+    "tables": {
+      "added": [],
+      "removed": [],
+      "modified": [
+        {
+          "name": "parts",
+          "fieldsAdded": [
+            "id",
+            "part_no",
+            "part_name",
+            "part_type",
+            "lifecycle_state",
+            "process_node",
+            "description",
+            "created_at",
+            "updated_at",
+            "part_no_id"
+          ],
+          "fieldsRemoved": [],
+          "fieldsModified": []
+        },
+        {
+          "name": "part_revisions",
+          "fieldsAdded": [
+            "id",
+            "part_id",
+            "revision_no",
+            "revision_state",
+            "created_at",
+            "updated_at"
+          ],
+          "fieldsRemoved": [],
+          "fieldsModified": []
+        },
+        {
+          "name": "bom_items",
+          "fieldsAdded": [
+            "id",
+            "parent_id",
+            "child_id",
+            "quantity",
+            "bom_type",
+            "created_at"
+          ],
+          "fieldsRemoved": [],
+          "fieldsModified": []
+        },
+        {
+          "name": "engineering_changes",
+          "fieldsAdded": [
+            "id",
+            "eco_no",
+            "title",
+            "status",
+            "created_at"
+          ],
+          "fieldsRemoved": [],
+          "fieldsModified": []
+        },
+        {
+          "name": "suppliers",
+          "fieldsAdded": [
+            "id",
+            "supplier_code",
+            "supplier_name",
+            "created_at"
+          ],
+          "fieldsRemoved": [],
+          "fieldsModified": []
+        },
+        {
+          "name": "part_suppliers",
+          "fieldsAdded": [
+            "id",
+            "part_id",
+            "supplier_id",
+            "lead_time_days",
+            "created_at"
+          ],
+          "fieldsRemoved": [],
+          "fieldsModified": []
+        }
+      ]
+    },
+    "wideTables": {
+      "added": [
+        "XXX"
+      ],
+      "removed": [],
+      "modified": []
+    }
+  }
+}

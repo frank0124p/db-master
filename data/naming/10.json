@@ -1,0 +1,12 @@
+{
+  "id": 10,
+  "concept": "製程節點",
+  "stdName": "process_node",
+  "aliases": ["technology_node", "node"],
+  "domain": "semiconductor",
+  "tags": ["fabrication", "technology"],
+  "aiDescription": "半導體製程技術節點，如 7nm、14nm 等",
+  "description": null,
+  "createdAt": "2026-04-02T00:00:00.000Z",
+  "updatedAt": "2026-04-02T00:00:00.000Z"
+}

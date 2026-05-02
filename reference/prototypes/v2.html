@@ -1,0 +1,1809 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schema Studio — Prototype v2</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg-1: #0f0f13;
+    --bg-2: #17171d;
+    --bg-3: #1f1f28;
+    --bg-4: #27272f;
+    --text-1: #e4e4f0;
+    --text-2: #8888a8;
+    --text-3: #555568;
+    --accent: #7b8cff;
+    --accent-dim: #7b8cff22;
+    --success: #4ade80;
+    --success-dim: #4ade8022;
+    --warning: #fbbf24;
+    --warning-dim: #fbbf2422;
+    --error: #f87171;
+    --error-dim: #f8717122;
+    --info: #60a5fa;
+    --border: #2a2a38;
+    --border-light: #35353f;
+    --radius: 6px;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-1);
+    color: var(--text-1);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 13px;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    height: 44px;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 24px;
+    flex-shrink: 0;
+    z-index: 100;
+  }
+  .topbar-logo {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+  }
+  .topbar-nav { display: flex; gap: 2px; }
+  .nav-btn {
+    padding: 5px 12px;
+    border-radius: var(--radius);
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+  }
+  .nav-btn:hover { background: var(--bg-3); color: var(--text-1); }
+  .nav-btn.active { background: var(--accent-dim); color: var(--accent); }
+
+  /* ── Main layout ── */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 220px;
+    background: var(--bg-2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sidebar-header {
+    padding: 12px 14px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sidebar-title { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.8px; }
+  .icon-btn {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { background: var(--bg-3); color: var(--text-1); }
+  .schema-list { flex: 1; overflow-y: auto; padding: 4px 8px; }
+  .schema-item {
+    padding: 7px 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s;
+    margin-bottom: 1px;
+  }
+  .schema-item:hover { background: var(--bg-3); }
+  .schema-item.active { background: var(--accent-dim); }
+  .schema-item.active .schema-name { color: var(--accent); }
+  .schema-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-3);
+    flex-shrink: 0;
+  }
+  .schema-item.active .schema-dot { background: var(--accent); }
+  .schema-name { font-size: 12px; color: var(--text-2); flex: 1; }
+  .schema-badge {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 10px;
+    background: var(--bg-4);
+    color: var(--text-3);
+  }
+
+  /* ── Content ── */
+  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Page: Schema Editor ── */
+  .page { display: none; flex: 1; overflow: hidden; }
+  .page.active { display: flex; }
+
+  /* Schema editor layout */
+  .schema-editor { display: flex; flex: 1; overflow: hidden; }
+  .table-list-panel {
+    width: 200px;
+    background: var(--bg-2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+  .panel-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-title { font-size: 11px; font-weight: 600; color: var(--text-2); }
+  .table-items { flex: 1; overflow-y: auto; padding: 6px; }
+  .table-item {
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 1px;
+  }
+  .table-item:hover { background: var(--bg-3); }
+  .table-item.active { background: var(--accent-dim); }
+  .table-item-name {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-2);
+  }
+  .table-item.active .table-item-name { color: var(--accent); }
+  .table-item-count { font-size: 10px; color: var(--text-3); margin-top: 1px; }
+
+  /* Field editor */
+  .field-editor-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .field-editor-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .table-name-display {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-1);
+  }
+  .table-comment { font-size: 12px; color: var(--text-2); }
+  .header-actions { margin-left: auto; display: flex; gap: 8px; }
+  .btn {
+    padding: 5px 12px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-ghost { background: transparent; color: var(--text-2); border: 1px solid var(--border-light); }
+  .btn-ghost:hover { background: var(--bg-3); color: var(--text-1); }
+  .btn-success { background: var(--success); color: #000; font-weight: 600; }
+  .btn-success:hover { opacity: 0.9; }
+
+  /* Fields table */
+  .fields-container { flex: 1; overflow-y: auto; padding: 16px; }
+  .fields-table { width: 100%; border-collapse: collapse; }
+  .fields-table th {
+    text-align: left;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fields-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .fields-table tr:hover td { background: var(--bg-2); }
+
+  .field-name-cell { position: relative; }
+  .field-name {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-1);
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 3px 6px;
+    border-radius: 4px;
+    width: 160px;
+    transition: all 0.15s;
+    outline: none;
+  }
+  .field-name:hover { border-color: var(--border-light); background: var(--bg-3); }
+  .field-name:focus { border-color: var(--accent); background: var(--bg-3); }
+
+  /* Naming hint */
+  .naming-hint {
+    display: none;
+    margin-top: 4px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.5;
+    position: absolute;
+    z-index: 50;
+    min-width: 260px;
+    background: var(--bg-4);
+    border: 1px solid var(--border-light);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .naming-hint.show { display: block; }
+  .hint-alias { border-left: 2px solid var(--warning); }
+  .hint-unknown { border-left: 2px solid var(--text-3); }
+  .hint-exact { border-left: 2px solid var(--success); }
+  .hint-row { display: flex; align-items: center; gap: 6px; color: var(--text-2); }
+  .hint-icon { font-size: 12px; }
+  .hint-std { font-family: var(--font-mono); color: var(--warning); font-size: 11px; }
+  .hint-actions { display: flex; gap: 4px; margin-top: 6px; }
+  .hint-btn {
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: none;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .hint-btn-adopt { background: var(--warning); color: #000; }
+  .hint-btn-ignore { background: var(--bg-3); color: var(--text-2); border: 1px solid var(--border-light); }
+
+  .type-select {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    outline: none;
+  }
+  .type-select:focus { border-color: var(--accent); }
+
+  .nullable-toggle {
+    width: 32px; height: 16px;
+    background: var(--bg-4);
+    border-radius: 8px;
+    position: relative;
+    cursor: pointer;
+    border: 1px solid var(--border-light);
+    transition: all 0.2s;
+  }
+  .nullable-toggle.on { background: var(--accent); border-color: var(--accent); }
+  .nullable-toggle::after {
+    content: '';
+    position: absolute;
+    width: 10px; height: 10px;
+    background: var(--text-3);
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: all 0.2s;
+  }
+  .nullable-toggle.on::after { left: 18px; background: #fff; }
+
+  .pk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+  .status-exact { color: var(--success); font-size: 13px; }
+  .status-alias { color: var(--warning); font-size: 13px; }
+  .status-unknown { color: var(--text-3); font-size: 13px; }
+
+  .add-field-row td {
+    padding: 10px;
+    border-bottom: none;
+  }
+  .add-field-btn {
+    background: transparent;
+    border: 1px dashed var(--border-light);
+    color: var(--text-3);
+    padding: 5px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+    width: 100%;
+    text-align: left;
+  }
+  .add-field-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 16px; }
+  .tab {
+    padding: 8px 14px;
+    font-size: 12px;
+    color: var(--text-2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+  .tab:hover { color: var(--text-1); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Naming Dictionary Page ── */
+  .dict-page { flex: 1; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; gap: 16px; }
+  .dict-header { display: flex; align-items: center; justify-content: space-between; }
+  .dict-title { font-size: 16px; font-weight: 600; }
+  .dict-filters { display: flex; gap: 8px; }
+  .filter-chip {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    cursor: pointer;
+    background: var(--bg-3);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+  .filter-chip.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+  .dict-table { width: 100%; border-collapse: collapse; background: var(--bg-2); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .dict-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--bg-3);
+    border-bottom: 1px solid var(--border);
+  }
+  .dict-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .dict-table tr:last-child td { border-bottom: none; }
+  .dict-table tr:hover td { background: var(--bg-3); }
+  .std-name { font-family: var(--font-mono); font-size: 12px; color: var(--success); }
+  .concept { font-size: 12px; color: var(--text-1); }
+  .aliases-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .alias-chip {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--bg-4);
+    color: var(--text-3);
+    border: 1px solid var(--border);
+  }
+  .domain-chip {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+  .domain-semi { background: rgba(123,140,255,0.12); color: var(--accent); }
+  .domain-general { background: var(--bg-4); color: var(--text-3); }
+  .dict-actions { display: flex; gap: 4px; }
+  .row-btn {
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: none;
+    font-size: 11px;
+    cursor: pointer;
+    background: var(--bg-4);
+    color: var(--text-2);
+    transition: all 0.15s;
+  }
+  .row-btn:hover { background: var(--bg-3); color: var(--text-1); }
+  .row-btn.danger:hover { background: var(--error-dim); color: var(--error); }
+
+  /* ── Version Diff Page ── */
+  .diff-page { flex: 1; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; gap: 16px; }
+  .diff-header { display: flex; align-items: center; justify-content: space-between; }
+  .version-selector { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .version-select {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    padding: 4px 8px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    outline: none;
+  }
+  .diff-score-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .score-label { font-size: 12px; color: var(--text-2); }
+  .score-value { font-size: 20px; font-weight: 700; color: var(--success); font-family: var(--font-mono); }
+  .score-delta { font-size: 12px; color: var(--success); background: var(--success-dim); padding: 2px 8px; border-radius: 10px; }
+  .score-bar-wrap { flex: 1; height: 6px; background: var(--bg-4); border-radius: 3px; overflow: hidden; }
+  .score-bar-fill { height: 100%; background: var(--success); border-radius: 3px; transition: width 0.5s; }
+
+  .diff-block {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .diff-block-header {
+    padding: 10px 14px;
+    background: var(--bg-3);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .diff-op {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-weight: 700;
+  }
+  .diff-op-add { background: var(--success-dim); color: var(--success); }
+  .diff-op-remove { background: var(--error-dim); color: var(--error); }
+  .diff-op-modify { background: var(--warning-dim); color: var(--warning); }
+
+  .diff-rows { padding: 4px 0; }
+  .diff-row {
+    display: grid;
+    grid-template-columns: 180px 1fr 1fr 80px;
+    padding: 7px 14px;
+    gap: 12px;
+    align-items: center;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .diff-row:last-child { border-bottom: none; }
+  .diff-row.added { background: var(--success-dim); }
+  .diff-row.removed { background: var(--error-dim); }
+  .diff-row.modified { background: rgba(251,191,36,0.04); }
+  .diff-col-name { font-family: var(--font-mono); color: var(--text-1); font-size: 11px; }
+  .diff-col-before { color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+  .diff-col-after { color: var(--text-1); display: flex; align-items: center; gap: 6px; }
+  .diff-arrow { color: var(--text-3); }
+  .naming-badge {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+  }
+  .naming-exact { background: var(--success-dim); color: var(--success); }
+  .naming-alias { background: var(--warning-dim); color: var(--warning); }
+  .naming-unknown { background: var(--bg-4); color: var(--text-3); }
+  .diff-col-header {
+    font-size: 10px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+
+  /* ── Analysis Panel ── */
+  .analysis-page {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .analysis-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+  .issues-panel {
+    width: 340px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .issues-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .issue-item {
+    padding: 10px 10px;
+    border-radius: var(--radius);
+    margin-bottom: 4px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .issue-item:hover { border-color: var(--border-light); }
+  .issue-item.active { border-color: var(--accent); background: var(--accent-dim); }
+  .issue-item.error { border-left: 3px solid var(--error); }
+  .issue-item.warning { border-left: 3px solid var(--warning); }
+  .issue-item.info { border-left: 3px solid var(--info); }
+  .issue-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .severity-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .severity-error { background: var(--error); }
+  .severity-warning { background: var(--warning); }
+  .severity-info { background: var(--info); }
+  .issue-target { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); }
+  .issue-message { font-size: 12px; color: var(--text-1); }
+  .issue-source {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--bg-4);
+    color: var(--text-3);
+    margin-left: auto;
+  }
+  .llm-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    overflow-y: auto;
+    gap: 12px;
+  }
+  .llm-streaming {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-1);
+    white-space: pre-wrap;
+  }
+  .cursor-blink {
+    display: inline-block;
+    width: 2px;
+    height: 14px;
+    background: var(--accent);
+    margin-left: 2px;
+    animation: blink 1s infinite;
+    vertical-align: text-bottom;
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--bg-4);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    transform: translateY(60px);
+    opacity: 0;
+    transition: all 0.25s;
+    z-index: 999;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast-success { border-left: 3px solid var(--success); }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--bg-2);
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    width: 400px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .modal-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+  .form-row { margin-bottom: 12px; }
+  .form-label { font-size: 11px; color: var(--text-2); margin-bottom: 4px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-input {
+    width: 100%;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    padding: 7px 10px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+  .version-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+  .version-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .version-item:hover { border-color: var(--border-light); }
+  .version-item.active { border-color: var(--accent); background: var(--accent-dim); }
+  .version-no { font-family: var(--font-mono); font-size: 11px; color: var(--accent); min-width: 30px; }
+  .version-time { font-size: 11px; color: var(--text-3); flex: 1; }
+  .version-score { font-size: 11px; font-family: var(--font-mono); }
+  .score-green { color: var(--success); }
+  .score-up { color: var(--success); font-size: 10px; }
+  .score-down { color: var(--error); font-size: 10px; }
+
+  /* ── ER Diagram ── */
+  .er-page { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .er-toolbar {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-2);
+  }
+  .er-toolbar-title { font-size: 14px; font-weight: 600; }
+  .er-toolbar-info { font-size: 12px; color: var(--text-3); }
+  .er-layout { display: flex; flex: 1; overflow: hidden; }
+  .er-sidebar {
+    width: 220px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-2);
+  }
+  .er-sidebar-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .er-table-toggles { padding: 8px; flex: 1; overflow-y: auto; }
+  .er-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 6px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .er-toggle-row:hover { background: var(--bg-3); }
+  .er-checkbox {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    border: 1px solid var(--border-light);
+    background: var(--bg-4);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    font-size: 10px;
+  }
+  .er-checkbox.checked { background: var(--accent); border-color: var(--accent); }
+  .er-table-label { font-family: var(--font-mono); font-size: 12px; color: var(--text-2); }
+  .er-canvas {
+    flex: 1;
+    overflow: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .er-diagram-wrap {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    min-width: 600px;
+  }
+  .er-diagram-wrap .mermaid { display: flex; justify-content: center; }
+  .er-code-wrap {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    width: 100%;
+  }
+  .er-code-header {
+    padding: 8px 14px;
+    background: var(--bg-3);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-3);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .er-code {
+    padding: 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-2);
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.6;
+  }
+  .er-rel-list { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; }
+  .er-rel-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-2);
+    padding: 5px 8px;
+    border-radius: 4px;
+    background: var(--bg-3);
+  }
+  .er-rel-from { font-family: var(--font-mono); color: var(--accent); }
+  .er-rel-arrow { color: var(--text-3); }
+  .er-rel-to { font-family: var(--font-mono); color: var(--success); }
+  .er-rel-label { font-size: 11px; color: var(--text-3); margin-left: auto; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-logo">⬡ Schema Studio</div>
+  <div class="topbar-nav">
+    <button class="nav-btn active" onclick="switchPage('editor')">Schema Editor</button>
+    <button class="nav-btn" onclick="switchPage('dict')">Naming Dictionary</button>
+    <button class="nav-btn" onclick="switchPage('versions')">Version History</button>
+    <button class="nav-btn" onclick="switchPage('analysis')">Analysis</button>
+    <button class="nav-btn" onclick="switchPage('er')">ER Diagram</button>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Schemas</span>
+      <button class="icon-btn" onclick="showNewSchemaModal()" title="新建 Schema">＋</button>
+    </div>
+    <div class="schema-list">
+      <div class="schema-item active" onclick="selectSchema(this)">
+        <div class="schema-dot"></div>
+        <div class="schema-name">MES Core v2</div>
+        <div class="schema-badge">5</div>
+      </div>
+      <div class="schema-item" onclick="selectSchema(this)">
+        <div class="schema-dot"></div>
+        <div class="schema-name">SPC 量測系統</div>
+        <div class="schema-badge">3</div>
+      </div>
+      <div class="schema-item" onclick="selectSchema(this)">
+        <div class="schema-dot"></div>
+        <div class="schema-name">設備保養記錄</div>
+        <div class="schema-badge">2</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- Page: Schema Editor -->
+    <div class="page active" id="page-editor">
+      <div class="schema-editor">
+        <!-- Table list -->
+        <div class="table-list-panel">
+          <div class="panel-header">
+            <span class="panel-title">Tables</span>
+            <button class="icon-btn" title="新增 Table">＋</button>
+          </div>
+          <div class="table-items">
+            <div class="table-item active" onclick="selectTable(this, 'lot_records')">
+              <div class="table-item-name">lot_records</div>
+              <div class="table-item-count">8 fields</div>
+            </div>
+            <div class="table-item" onclick="selectTable(this, 'equipments')">
+              <div class="table-item-name">equipments</div>
+              <div class="table-item-count">6 fields</div>
+            </div>
+            <div class="table-item" onclick="selectTable(this, 'process_steps')">
+              <div class="table-item-name">process_steps</div>
+              <div class="table-item-count">7 fields</div>
+            </div>
+            <div class="table-item" onclick="selectTable(this, 'equipment_maintenance_logs')">
+              <div class="table-item-name">equipment_maintenance_logs</div>
+              <div class="table-item-count">9 fields</div>
+            </div>
+            <div class="table-item" onclick="selectTable(this, 'process_measurements')">
+              <div class="table-item-name">process_measurements</div>
+              <div class="table-item-count">10 fields</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field editor -->
+        <div class="field-editor-panel">
+          <div class="field-editor-header">
+            <span class="table-name-display" id="current-table-name">lot_records</span>
+            <span class="table-comment" id="current-table-comment">批次追蹤記錄</span>
+            <div class="header-actions">
+              <button class="btn btn-ghost" onclick="showImportDDL()">↑ 匯入 DDL</button>
+              <button class="btn btn-ghost" onclick="showExportDDL()">↓ 匯出 DDL</button>
+              <button class="btn btn-ghost" onclick="switchPage('analysis')">🔍 分析</button>
+              <button class="btn btn-primary" onclick="saveVersion()">儲存版本</button>
+            </div>
+          </div>
+
+          <div class="fields-container">
+            <table class="fields-table" id="fields-table">
+              <thead>
+                <tr>
+                  <th style="width:180px">欄位名稱</th>
+                  <th style="width:130px">型別</th>
+                  <th style="width:60px">Nullable</th>
+                  <th style="width:80px">Default</th>
+                  <th style="width:60px">命名</th>
+                  <th>中文說明</th>
+                </tr>
+              </thead>
+              <tbody id="fields-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page: Naming Dictionary -->
+    <div class="page" id="page-dict">
+      <div class="dict-page">
+        <div class="dict-header">
+          <div class="dict-title">命名字典</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div class="dict-filters">
+              <div class="filter-chip active" onclick="filterDict(this,'all')">全部</div>
+              <div class="filter-chip" onclick="filterDict(this,'semiconductor')">半導體</div>
+              <div class="filter-chip" onclick="filterDict(this,'general')">通用</div>
+            </div>
+            <button class="btn btn-primary" onclick="showAddEntry()">＋ 新增詞彙</button>
+          </div>
+        </div>
+        <table class="dict-table">
+          <thead>
+            <tr>
+              <th>概念</th>
+              <th>標準英文名</th>
+              <th>常見別名</th>
+              <th>領域</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="dict-tbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Page: Version History -->
+    <div class="page" id="page-versions">
+      <div class="diff-page">
+        <div class="diff-header">
+          <div style="font-size:16px;font-weight:600">Version History — MES Core v2</div>
+        </div>
+
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <!-- Version list -->
+          <div style="width:220px;flex-shrink:0">
+            <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">版本列表</div>
+            <div class="version-list">
+              <div class="version-item active" onclick="selectVersion(this,3)">
+                <div class="version-no">v3</div>
+                <div class="version-time">今天 14:32</div>
+                <div class="version-score score-green">94% <span class="score-up">↑16%</span></div>
+              </div>
+              <div class="version-item" onclick="selectVersion(this,2)">
+                <div class="version-no">v2</div>
+                <div class="version-time">昨天 10:15</div>
+                <div class="version-score score-green">78%</div>
+              </div>
+              <div class="version-item" onclick="selectVersion(this,1)">
+                <div class="version-no">v1</div>
+                <div class="version-time">4/28 09:00</div>
+                <div class="version-score" style="color:var(--text-3)">52%</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Diff content -->
+          <div style="flex:1" id="diff-content">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page: ER Diagram -->
+    <div class="page" id="page-er">
+      <div class="er-page">
+        <div class="er-toolbar">
+          <span class="er-toolbar-title">ER Diagram — MES Core v2</span>
+          <span class="er-toolbar-info" id="er-rel-count"></span>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="btn btn-ghost" onclick="copyMermaid()">複製 Mermaid 原始碼</button>
+            <button class="btn btn-primary" onclick="refreshDiagram()">↻ 重新生成</button>
+          </div>
+        </div>
+        <div class="er-layout">
+          <div class="er-sidebar">
+            <div class="er-sidebar-header">顯示的 Tables</div>
+            <div class="er-table-toggles" id="er-table-toggles"></div>
+          </div>
+          <div class="er-canvas" id="er-canvas"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page: Analysis -->
+    <div class="page" id="page-analysis">
+      <div class="analysis-page">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+          <span style="font-size:14px;font-weight:600">Schema 分析 — MES Core v2</span>
+          <button class="btn btn-primary" onclick="runAnalysis()">▶ 執行分析</button>
+          <span style="font-size:12px;color:var(--text-3)" id="analysis-status"></span>
+        </div>
+        <div class="analysis-content">
+          <div class="issues-panel">
+            <div class="panel-header">
+              <span class="panel-title">Issues <span id="issue-count" style="color:var(--text-3)">(6)</span></span>
+            </div>
+            <div class="issues-list" id="issues-list">
+            </div>
+          </div>
+          <div class="llm-panel">
+            <div style="font-size:12px;font-weight:600;color:var(--text-2)">AI 整體評估</div>
+            <div class="llm-streaming" id="llm-output">點擊「執行分析」開始分析...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- New Schema Modal -->
+<div class="modal-overlay" id="modal-new-schema">
+  <div class="modal">
+    <div class="modal-title">新建 Schema</div>
+    <div class="form-row">
+      <label class="form-label">Schema 名稱</label>
+      <input class="form-input" placeholder="e.g. MES Core v3" id="new-schema-name">
+    </div>
+    <div class="form-row">
+      <label class="form-label">說明</label>
+      <input class="form-input" placeholder="簡短說明此 Schema 的用途">
+    </div>
+    <div class="form-row">
+      <label class="form-label">領域</label>
+      <select class="form-input">
+        <option value="semiconductor">半導體</option>
+        <option value="general">通用</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-new-schema')">取消</button>
+      <button class="btn btn-primary" onclick="createSchema()">建立</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Dict Entry Modal -->
+<div class="modal-overlay" id="modal-add-entry">
+  <div class="modal">
+    <div class="modal-title">新增命名詞彙</div>
+    <div class="form-row">
+      <label class="form-label">中文概念</label>
+      <input class="form-input" placeholder="e.g. 設備ID" id="entry-concept">
+    </div>
+    <div class="form-row">
+      <label class="form-label">標準英文名</label>
+      <input class="form-input" placeholder="e.g. equip_id" id="entry-std" style="font-family:var(--font-mono)">
+    </div>
+    <div class="form-row">
+      <label class="form-label">常見別名（逗號分隔）</label>
+      <input class="form-input" placeholder="e.g. equipment_id, eqp_id" id="entry-aliases" style="font-family:var(--font-mono)">
+    </div>
+    <div class="form-row">
+      <label class="form-label">領域</label>
+      <select class="form-input" id="entry-domain">
+        <option value="semiconductor">半導體</option>
+        <option value="general">通用</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-entry')">取消</button>
+      <button class="btn btn-success" onclick="addEntry()">新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- NL Generate Modal -->
+<div class="modal-overlay" id="modal-nl">
+  <div class="modal" style="width:500px">
+    <div class="modal-title">🤖 用自然語言描述 Schema</div>
+    <div class="form-row">
+      <label class="form-label">描述你需要的系統</label>
+      <textarea class="form-input" id="nl-input" rows="4" placeholder="e.g. 建立一個設備保養記錄系統，記錄設備、保養類型、執行人員、執行時間與下次預定時間" style="resize:vertical"></textarea>
+    </div>
+    <div style="font-size:11px;color:var(--text-3);margin-top:-6px;margin-bottom:12px">
+      AI 將根據命名字典生成符合規範的 Schema 草稿
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-nl')">取消</button>
+      <button class="btn btn-primary" onclick="generateSchema()">生成 Schema</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data ──
+const namingDict = [
+  { concept: '設備ID', std: 'equip_id', aliases: ['equipment_id','eqp_id','machine_id','tool_id'], domain: 'semiconductor' },
+  { concept: '批次ID', std: 'lot_id', aliases: ['lot_no','lotid','batch_id'], domain: 'semiconductor' },
+  { concept: '晶圓ID', std: 'wafer_id', aliases: ['wafer_no','wfr_id'], domain: 'semiconductor' },
+  { concept: '片號', std: 'slot_no', aliases: ['slot_id','wafer_slot'], domain: 'semiconductor' },
+  { concept: '製程配方ID', std: 'recipe_id', aliases: ['recipe_no','rcp_id'], domain: 'semiconductor' },
+  { concept: '腔體ID', std: 'chamber_id', aliases: ['chamber_no','chmb_id'], domain: 'semiconductor' },
+  { concept: '製程步驟序號', std: 'step_seq', aliases: ['step_no','step_id','process_step'], domain: 'semiconductor' },
+  { concept: '操作員ID', std: 'operator_id', aliases: ['op_id','user_id'], domain: 'semiconductor' },
+  { concept: '量測值', std: 'meas_value', aliases: ['measurement','value','measure_val'], domain: 'semiconductor' },
+  { concept: '量測時間', std: 'meas_at', aliases: ['measure_time','meas_time','measured_at'], domain: 'semiconductor' },
+  { concept: '設備狀態', std: 'equip_status', aliases: ['machine_status','tool_status','status'], domain: 'semiconductor' },
+  { concept: '批次狀態', std: 'lot_status', aliases: ['batch_status','lot_state'], domain: 'semiconductor' },
+  { concept: '良率', std: 'yield_rate', aliases: ['yield','yield_pct'], domain: 'semiconductor' },
+  { concept: '缺陷數', std: 'defect_count', aliases: ['defect_num','defect_qty'], domain: 'semiconductor' },
+  { concept: '保養類型', std: 'maint_type', aliases: ['maintenance_type','pm_type'], domain: 'semiconductor' },
+  { concept: '保養時間', std: 'maint_at', aliases: ['maintenance_time','pm_time'], domain: 'semiconductor' },
+  { concept: '下次保養時間', std: 'next_maint_at', aliases: ['next_pm','next_maintenance'], domain: 'semiconductor' },
+  { concept: '產品ID', std: 'product_id', aliases: ['prod_id','part_id'], domain: 'semiconductor' },
+  { concept: '製程ID', std: 'process_id', aliases: ['proc_id','process_no'], domain: 'semiconductor' },
+];
+
+const tablesData = {
+  lot_records: {
+    comment: '批次追蹤記錄',
+    fields: [
+      { name: 'id', type: 'BIGINT', nullable: false, default: '', pk: true, comment: '主鍵' },
+      { name: 'lot_id', type: 'VARCHAR(32)', nullable: false, default: '', pk: false, comment: '批次識別碼' },
+      { name: 'product_id', type: 'VARCHAR(32)', nullable: true, default: '', pk: false, comment: '產品識別碼' },
+      { name: 'wafer_count', type: 'INT', nullable: true, default: '', pk: false, comment: '晶圓片數' },
+      { name: 'lot_status', type: 'VARCHAR(32)', nullable: false, default: 'queued', pk: false, comment: '批次狀態' },
+      { name: 'operator_id', type: 'BIGINT', nullable: true, default: '', pk: false, comment: '操作員' },
+      { name: 'created_at', type: 'TIMESTAMP', nullable: false, default: 'CURRENT_TIMESTAMP', pk: false, comment: '建立時間' },
+      { name: 'updated_at', type: 'TIMESTAMP', nullable: false, default: 'CURRENT_TIMESTAMP ON UPDATE', pk: false, comment: '更新時間' },
+    ]
+  },
+  equipments: {
+    comment: '設備主檔',
+    fields: [
+      { name: 'id', type: 'BIGINT', nullable: false, default: '', pk: true, comment: '主鍵' },
+      { name: 'equip_id', type: 'VARCHAR(32)', nullable: false, default: '', pk: false, comment: '設備編號' },
+      { name: 'equip_name', type: 'VARCHAR(128)', nullable: true, default: '', pk: false, comment: '設備名稱' },
+      { name: 'equip_status', type: 'VARCHAR(32)', nullable: false, default: 'idle', pk: false, comment: '設備狀態' },
+      { name: 'created_at', type: 'TIMESTAMP', nullable: false, default: 'CURRENT_TIMESTAMP', pk: false, comment: '建立時間' },
+      { name: 'updated_at', type: 'TIMESTAMP', nullable: false, default: 'CURRENT_TIMESTAMP ON UPDATE', pk: false, comment: '更新時間' },
+    ]
+  }
+};
+
+// ── Naming check ──
+function checkName(name) {
+  if (!name) return { status: 'unknown', icon: '?', label: '未輸入' };
+  for (const e of namingDict) {
+    if (e.std === name) return { status: 'exact', icon: '✓', label: '符合標準', hint: null };
+    if (e.aliases.includes(name)) return { status: 'alias', icon: '⚠', label: `建議改為 ${e.std}`, hint: { std: e.std, concept: e.concept } };
+  }
+  // fuzzy
+  for (const e of namingDict) {
+    const all = [e.std, ...e.aliases];
+    for (const a of all) {
+      if (levenshtein(name, a) <= 2 && name.length > 3) {
+        return { status: 'fuzzy', icon: '~', label: `可能是 ${e.std}？`, hint: { std: e.std, concept: e.concept } };
+      }
+    }
+  }
+  const sysFields = ['id','created_at','updated_at','deleted_at'];
+  if (sysFields.includes(name)) return { status: 'exact', icon: '✓', label: '系統標準欄位', hint: null };
+  return { status: 'unknown', icon: '?', label: '未登錄字典' };
+}
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const d = Array.from({length: m+1}, (_,i) => Array.from({length: n+1}, (_,j) => j === 0 ? i : i === 0 ? j : 0));
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    d[i][j] = a[i-1] === b[j-1] ? d[i-1][j-1] : 1 + Math.min(d[i-1][j], d[i][j-1], d[i-1][j-1]);
+  return d[m][n];
+}
+
+// ── Render fields ──
+function renderFields(tableName) {
+  const data = tablesData[tableName];
+  if (!data) return;
+  document.getElementById('current-table-name').textContent = tableName;
+  document.getElementById('current-table-comment').textContent = data.comment;
+  const tbody = document.getElementById('fields-tbody');
+  tbody.innerHTML = '';
+  data.fields.forEach((f, i) => {
+    const check = checkName(f.name);
+    const statusColor = check.status === 'exact' ? 'var(--success)' : check.status === 'alias' ? 'var(--warning)' : check.status === 'fuzzy' ? 'var(--info)' : 'var(--text-3)';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="field-name-cell">
+        ${f.pk ? '<span class="pk-badge">🔑 PK</span> ' : ''}
+        <input class="field-name" value="${f.name}" data-idx="${i}" data-table="${tableName}"
+          onblur="onFieldNameBlur(this)"
+          onfocus="showHint(this, '${f.name}')"
+          oninput="onFieldNameInput(this)">
+        <div class="naming-hint ${check.status === 'alias' ? 'hint-alias' : check.status === 'fuzzy' ? 'hint-alias' : 'hint-unknown'}" id="hint-${i}">
+          ${renderHint(check, i, tableName)}
+        </div>
+      </td>
+      <td>
+        <select class="type-select">
+          ${['BIGINT','INT','VARCHAR(32)','VARCHAR(64)','VARCHAR(128)','VARCHAR(255)','TEXT','TIMESTAMP','DATE','DOUBLE','DECIMAL(15,4)','TINYINT(1)','JSON'].map(t =>
+            `<option ${t===f.type?'selected':''}>${t}</option>`
+          ).join('')}
+        </select>
+      </td>
+      <td>
+        <div class="nullable-toggle ${f.nullable?'on':''}" onclick="this.classList.toggle('on')"></div>
+      </td>
+      <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-3)">${f.default||'—'}</td>
+      <td>
+        <span style="color:${statusColor};font-size:14px;cursor:pointer" title="${check.label}" onclick="toggleHint(${i})">${check.icon}</span>
+      </td>
+      <td style="color:var(--text-2);font-size:12px">${f.comment}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  // Add field row
+  const addRow = document.createElement('tr');
+  addRow.className = 'add-field-row';
+  addRow.innerHTML = `<td colspan="6"><button class="add-field-btn" onclick="addField('${tableName}')">＋ 新增欄位</button></td>`;
+  tbody.appendChild(addRow);
+}
+
+function renderHint(check, idx, tableName) {
+  if (check.status === 'exact') return `<div class="hint-row"><span style="color:var(--success)">✓</span> 符合命名標準</div>`;
+  if (check.status === 'alias' && check.hint) {
+    return `<div class="hint-row"><span class="hint-icon">⚠</span> 此為別名，建議改為 <span class="hint-std">${check.hint.std}</span>（${check.hint.concept}）</div>
+    <div class="hint-actions">
+      <button class="hint-btn hint-btn-adopt" onclick="adoptSuggestion('${tableName}', ${idx}, '${check.hint.std}')">採用建議</button>
+      <button class="hint-btn hint-btn-ignore" onclick="hideHint(${idx})">忽略</button>
+    </div>`;
+  }
+  if (check.status === 'fuzzy' && check.hint) {
+    return `<div class="hint-row"><span class="hint-icon">~</span> 可能是 <span class="hint-std">${check.hint.std}</span>（${check.hint.concept}）？</div>
+    <div class="hint-actions">
+      <button class="hint-btn hint-btn-adopt" onclick="adoptSuggestion('${tableName}', ${idx}, '${check.hint.std}')">採用建議</button>
+      <button class="hint-btn hint-btn-ignore" onclick="hideHint(${idx})">忽略</button>
+    </div>`;
+  }
+  return `<div class="hint-row"><span class="hint-icon">?</span> 未登錄命名字典 <button class="hint-btn hint-btn-ignore" style="margin-left:8px" onclick="addToDict(this)">加入字典</button></div>`;
+}
+
+function toggleHint(idx) {
+  const hint = document.getElementById(`hint-${idx}`);
+  hint.classList.toggle('show');
+}
+function hideHint(idx) { document.getElementById(`hint-${idx}`).classList.remove('show'); }
+function showHint(input, name) {
+  const idx = input.dataset.idx;
+  const check = checkName(input.value || name);
+  if (check.status !== 'exact') {
+    document.getElementById(`hint-${idx}`)?.classList.add('show');
+  }
+}
+function onFieldNameBlur(input) {
+  setTimeout(() => {
+    const idx = input.dataset.idx;
+    document.getElementById(`hint-${idx}`)?.classList.remove('show');
+  }, 200);
+}
+function onFieldNameInput(input) {
+  const idx = input.dataset.idx;
+  const tableName = input.dataset.table;
+  const check = checkName(input.value);
+  const hintEl = document.getElementById(`hint-${idx}`);
+  hintEl.innerHTML = renderHint(check, idx, tableName);
+  hintEl.className = `naming-hint ${check.status === 'alias' ? 'hint-alias' : 'hint-unknown'} show`;
+}
+
+function adoptSuggestion(tableName, idx, stdName) {
+  const data = tablesData[tableName];
+  if (data) data.fields[idx].name = stdName;
+  renderFields(tableName);
+  showToast(`✓ 已採用建議：${stdName}`);
+}
+
+function addField(tableName) {
+  const data = tablesData[tableName];
+  if (!data) return;
+  data.fields.push({ name: 'new_field', type: 'VARCHAR(64)', nullable: true, default: '', pk: false, comment: '' });
+  renderFields(tableName);
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('.field-name');
+    const last = inputs[inputs.length - 2];
+    if (last) { last.focus(); last.select(); }
+  }, 50);
+}
+
+function addToDict(btn) {
+  closeModal('');
+  showAddEntry();
+}
+
+// ── Render dict ──
+function renderDict(filter = 'all') {
+  const tbody = document.getElementById('dict-tbody');
+  tbody.innerHTML = '';
+  const list = filter === 'all' ? namingDict : namingDict.filter(e => e.domain === filter);
+  list.forEach((e, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="concept">${e.concept}</span></td>
+      <td><span class="std-name">${e.std}</span></td>
+      <td><div class="aliases-list">${e.aliases.map(a=>`<span class="alias-chip">${a}</span>`).join('')}</div></td>
+      <td><span class="domain-chip ${e.domain === 'semiconductor' ? 'domain-semi' : 'domain-general'}">${e.domain === 'semiconductor' ? '半導體' : '通用'}</span></td>
+      <td><div class="dict-actions">
+        <button class="row-btn">編輯</button>
+        <button class="row-btn danger" onclick="deleteEntry(${namingDict.indexOf(e)})">刪除</button>
+      </div></td>
+    `;
+    tbody.innerHTML += tr.outerHTML;
+  });
+}
+
+function filterDict(el, domain) {
+  document.querySelectorAll('.filter-chip').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderDict(domain);
+}
+
+function deleteEntry(idx) {
+  namingDict.splice(idx, 1);
+  renderDict();
+  showToast('已刪除詞彙');
+}
+
+// ── Render diff ──
+const diffData = {
+  3: {
+    score: 94, scoreDelta: '+16%',
+    blocks: [
+      {
+        op: 'modify', tableName: 'lot_records',
+        rows: [
+          { name: 'lot_no', before: 'VARCHAR(32) | lot_no ⚠alias→lot_id', after: 'VARCHAR(32) | lot_id ✓exact', namingBefore: 'alias', namingAfter: 'exact', beforeStd: 'lot_id' },
+          { name: 'batch_status', before: 'VARCHAR(32) | batch_status ⚠alias→lot_status', after: 'VARCHAR(32) | lot_status ✓exact', namingBefore: 'alias', namingAfter: 'exact', beforeStd: 'lot_status' },
+        ]
+      },
+      {
+        op: 'modify', tableName: 'equipments',
+        rows: [
+          { name: 'equipment_id', before: 'VARCHAR(32) | equipment_id ⚠alias→equip_id', after: 'VARCHAR(32) | equip_id ✓exact', namingBefore: 'alias', namingAfter: 'exact', beforeStd: 'equip_id' },
+          { name: 'machine_status', before: 'VARCHAR(32) | machine_status ⚠alias→equip_status', after: 'VARCHAR(32) | equip_status ✓exact', namingBefore: 'alias', namingAfter: 'exact', beforeStd: 'equip_status' },
+        ]
+      },
+      {
+        op: 'add', tableName: 'equipment_maintenance_logs',
+        rows: [
+          { name: '+ equip_id', before: '', after: 'VARCHAR(32) NOT NULL', namingBefore: '', namingAfter: 'exact', type: 'added' },
+          { name: '+ maint_type', before: '', after: 'VARCHAR(32)', namingBefore: '', namingAfter: 'exact', type: 'added' },
+          { name: '+ maint_at', before: '', after: 'TIMESTAMP', namingBefore: '', namingAfter: 'exact', type: 'added' },
+          { name: '+ next_maint_at', before: '', after: 'TIMESTAMP NULL', namingBefore: '', namingAfter: 'exact', type: 'added' },
+        ]
+      }
+    ]
+  },
+  2: {
+    score: 78, scoreDelta: '+26%',
+    blocks: [
+      {
+        op: 'add', tableName: 'lot_records',
+        rows: [
+          { name: '+ lot_no', before: '', after: 'VARCHAR(32) NOT NULL', namingBefore: '', namingAfter: 'alias', type: 'added' },
+          { name: '+ batch_status', before: '', after: 'VARCHAR(32)', namingBefore: '', namingAfter: 'alias', type: 'added' },
+        ]
+      }
+    ]
+  }
+};
+
+function renderDiff(version) {
+  const data = diffData[version];
+  if (!data) return;
+  const container = document.getElementById('diff-content');
+  let html = `
+    <div class="diff-score-bar" style="margin-bottom:16px">
+      <div>
+        <div class="score-label">命名規範分數（v${version}）</div>
+      </div>
+      <div class="score-value">${data.score}%</div>
+      <div class="score-delta">${data.scoreDelta} vs 前版</div>
+      <div class="score-bar-wrap">
+        <div class="score-bar-fill" style="width:${data.score}%"></div>
+      </div>
+    </div>
+  `;
+  data.blocks.forEach(block => {
+    const opLabel = block.op === 'add' ? '新增' : block.op === 'remove' ? '刪除' : '修改';
+    const opClass = block.op === 'add' ? 'diff-op-add' : block.op === 'remove' ? 'diff-op-remove' : 'diff-op-modify';
+    html += `
+      <div class="diff-block" style="margin-bottom:12px">
+        <div class="diff-block-header">
+          <span class="diff-op ${opClass}">${opLabel}</span>
+          <span style="font-family:var(--font-mono);color:var(--text-1)">${block.tableName}</span>
+        </div>
+        <div class="diff-rows">
+          <div class="diff-row" style="background:var(--bg-3)">
+            <div class="diff-col-header">欄位</div>
+            <div class="diff-col-header">修改前</div>
+            <div class="diff-col-header">修改後</div>
+            <div class="diff-col-header">命名</div>
+          </div>
+    `;
+    block.rows.forEach(row => {
+      const rowClass = row.type === 'added' ? 'added' : 'modified';
+      const namingBefore = row.namingBefore === 'alias' ? `<span class="naming-badge naming-alias">⚠ alias</span>` : row.namingBefore === 'exact' ? `<span class="naming-badge naming-exact">✓</span>` : row.namingBefore === 'unknown' ? `<span class="naming-badge naming-unknown">?</span>` : '';
+      const namingAfter = row.namingAfter === 'exact' ? `<span class="naming-badge naming-exact">✓ exact</span>` : row.namingAfter === 'alias' ? `<span class="naming-badge naming-alias">⚠ alias</span>` : `<span class="naming-badge naming-unknown">?</span>`;
+      html += `
+        <div class="diff-row ${rowClass}">
+          <div class="diff-col-name">${row.name}</div>
+          <div class="diff-col-before">${row.before || '—'} ${namingBefore}</div>
+          <div class="diff-col-after">${row.after} ${namingAfter}</div>
+          <div>${row.namingBefore && row.namingAfter ? (row.namingBefore === 'alias' && row.namingAfter === 'exact' ? '<span style="color:var(--success);font-size:12px">⚠→✓</span>' : '') : (row.namingAfter === 'exact' ? '<span style="color:var(--success);font-size:12px">✓</span>' : '<span style="color:var(--warning);font-size:12px">⚠</span>')}</div>
+        </div>
+      `;
+    });
+    html += `</div></div>`;
+  });
+  container.innerHTML = html;
+}
+
+// ── Analysis ──
+const issuesData = [
+  { severity: 'warning', source: 'naming', target: 'lot_records.lot_no', message: '"lot_no" 是 lot_id 的別名，建議改為標準名', suggestion: 'lot_id' },
+  { severity: 'warning', source: 'naming', target: 'equipments.equipment_id', message: '"equipment_id" 是 equip_id 的別名', suggestion: 'equip_id' },
+  { severity: 'warning', source: 'rule', target: 'process_measurements', message: '缺少 created_at 欄位', suggestion: null },
+  { severity: 'info', source: 'naming', target: 'lot_records.prod_batch_no', message: '"prod_batch_no" 未登錄字典，考慮新增詞彙', suggestion: null },
+  { severity: 'info', source: 'llm', target: 'lot_records', message: '建議加入 deleted_at 欄位以支援軟刪除', suggestion: null },
+  { severity: 'info', source: 'llm', target: 'equipments', message: 'chamber_id 可考慮抽出為獨立 chambers 表', suggestion: null },
+];
+
+function renderIssues() {
+  const list = document.getElementById('issues-list');
+  list.innerHTML = '';
+  issuesData.forEach((issue, i) => {
+    const div = document.createElement('div');
+    div.className = `issue-item ${issue.severity}`;
+    div.innerHTML = `
+      <div class="issue-header">
+        <div class="severity-dot severity-${issue.severity}"></div>
+        <div class="issue-target">${issue.target}</div>
+        <div class="issue-source">${issue.source}</div>
+      </div>
+      <div class="issue-message">${issue.message}</div>
+      ${issue.suggestion ? `<div style="margin-top:6px"><button class="hint-btn hint-btn-adopt" onclick="adoptIssue(${i})">採用建議 → ${issue.suggestion}</button></div>` : ''}
+    `;
+    div.onclick = () => { document.querySelectorAll('.issue-item').forEach(e=>e.classList.remove('active')); div.classList.add('active'); };
+    list.appendChild(div);
+  });
+}
+
+let analysisRunning = false;
+function runAnalysis() {
+  if (analysisRunning) return;
+  analysisRunning = true;
+  const output = document.getElementById('llm-output');
+  const status = document.getElementById('analysis-status');
+  output.innerHTML = '<span class="cursor-blink"></span>';
+  status.textContent = '分析中...';
+  renderIssues();
+
+  const text = `MES Core v2 的整體結構合理，具備半導體 MES 系統所需的核心表設計。
+
+主要問題：
+
+1. **命名一致性** — lot_records 和 equipments 表中有 2 個欄位使用別名（lot_no、equipment_id），建議統一改為字典標準名，提升跨表查詢的可讀性。
+
+2. **process_measurements 缺少 created_at** — 量測資料通常需要時間軸分析，缺少 created_at 會影響後續 SPC 趨勢查詢。
+
+3. **設計建議** — equipments 表如果未來需要支援多腔體設備（如 CVD、ALD），建議將 chamber 資訊抽出為 equipment_chambers 子表，避免 lot 與 chamber 的關係難以追蹤。
+
+整體評分：78/100，命名調整後可提升至 94+。`;
+
+  let i = 0;
+  const interval = setInterval(() => {
+    if (i >= text.length) {
+      clearInterval(interval);
+      analysisRunning = false;
+      status.textContent = '分析完成';
+      output.innerHTML = text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+      return;
+    }
+    i += 3;
+    output.innerHTML = text.slice(0, i).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>') + '<span class="cursor-blink"></span>';
+  }, 30);
+}
+
+function adoptIssue(idx) {
+  const issue = issuesData[idx];
+  showToast(`✓ 已採用建議：${issue.suggestion}`);
+}
+
+function selectTable(el, name) {
+  document.querySelectorAll('.table-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderFields(name);
+}
+
+function selectSchema(el) {
+  document.querySelectorAll('.schema-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function selectVersion(el, v) {
+  document.querySelectorAll('.version-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderDiff(v);
+}
+
+// ── Modals ──
+function showNewSchemaModal() { document.getElementById('modal-new-schema').classList.add('show'); }
+function showAddEntry() { document.getElementById('modal-add-entry').classList.add('show'); }
+function closeModal(id) {
+  if (id) document.getElementById(id).classList.remove('show');
+  else document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('show'));
+}
+
+function createSchema() {
+  const name = document.getElementById('new-schema-name').value.trim();
+  if (!name) return;
+  const list = document.querySelector('.schema-list');
+  const div = document.createElement('div');
+  div.className = 'schema-item';
+  div.innerHTML = `<div class="schema-dot"></div><div class="schema-name">${name}</div><div class="schema-badge">0</div>`;
+  div.onclick = () => selectSchema(div);
+  list.appendChild(div);
+  closeModal('modal-new-schema');
+  showToast(`✓ Schema "${name}" 已建立`);
+}
+
+function addEntry() {
+  const concept = document.getElementById('entry-concept').value.trim();
+  const std = document.getElementById('entry-std').value.trim();
+  const aliases = document.getElementById('entry-aliases').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const domain = document.getElementById('entry-domain').value;
+  if (!concept || !std) return;
+  namingDict.push({ concept, std, aliases, domain });
+  closeModal('modal-add-entry');
+  renderDict();
+  showToast(`✓ 已新增詞彙：${std}`);
+}
+
+function saveVersion() {
+  showToast('✓ 版本已儲存');
+}
+
+function showImportDDL() {
+  showToast('（Prototype）匯入 DDL 功能將在實作後可用');
+}
+function showExportDDL() {
+  showToast('（Prototype）匯出 DDL 功能將在實作後可用');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast toast-success show';
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── ER Diagram ──
+const allTablesData = {
+  lot_records: {
+    comment: '批次追蹤記錄',
+    fields: [
+      { name: 'id', type: 'BIGINT', pk: true, nullable: false },
+      { name: 'lot_id', type: 'VARCHAR(32)', pk: false, nullable: false },
+      { name: 'product_id', type: 'VARCHAR(32)', pk: false, nullable: true },
+      { name: 'wafer_count', type: 'INT', pk: false, nullable: true },
+      { name: 'lot_status', type: 'VARCHAR(32)', pk: false, nullable: false },
+      { name: 'operator_id', type: 'BIGINT', pk: false, nullable: true, fk: 'operators' },
+      { name: 'created_at', type: 'TIMESTAMP', pk: false, nullable: false },
+      { name: 'updated_at', type: 'TIMESTAMP', pk: false, nullable: false },
+    ]
+  },
+  equipments: {
+    comment: '設備主檔',
+    fields: [
+      { name: 'id', type: 'BIGINT', pk: true, nullable: false },
+      { name: 'equip_id', type: 'VARCHAR(32)', pk: false, nullable: false },
+      { name: 'equip_name', type: 'VARCHAR(128)', pk: false, nullable: true },
+      { name: 'equip_status', type: 'VARCHAR(32)', pk: false, nullable: false },
+      { name: 'created_at', type: 'TIMESTAMP', pk: false, nullable: false },
+      { name: 'updated_at', type: 'TIMESTAMP', pk: false, nullable: false },
+    ]
+  },
+  process_steps: {
+    comment: '製程步驟定義',
+    fields: [
+      { name: 'id', type: 'BIGINT', pk: true, nullable: false },
+      { name: 'process_id', type: 'BIGINT', pk: false, nullable: false, fk: 'processes' },
+      { name: 'step_seq', type: 'INT', pk: false, nullable: false },
+      { name: 'recipe_id', type: 'VARCHAR(64)', pk: false, nullable: true },
+      { name: 'equip_id', type: 'VARCHAR(32)', pk: false, nullable: true },
+      { name: 'created_at', type: 'TIMESTAMP', pk: false, nullable: false },
+      { name: 'updated_at', type: 'TIMESTAMP', pk: false, nullable: false },
+    ]
+  },
+  equipment_maintenance_logs: {
+    comment: '設備保養記錄',
+    fields: [
+      { name: 'id', type: 'BIGINT', pk: true, nullable: false },
+      { name: 'equip_id', type: 'VARCHAR(32)', pk: false, nullable: false, fk: 'equipments' },
+      { name: 'maint_type', type: 'VARCHAR(32)', pk: false, nullable: false },
+      { name: 'operator_id', type: 'BIGINT', pk: false, nullable: true, fk: 'operators' },
+      { name: 'maint_at', type: 'TIMESTAMP', pk: false, nullable: false },
+      { name: 'next_maint_at', type: 'TIMESTAMP', pk: false, nullable: true },
+      { name: 'created_at', type: 'TIMESTAMP', pk: false, nullable: false },
+      { name: 'updated_at', type: 'TIMESTAMP', pk: false, nullable: false },
+    ]
+  },
+  process_measurements: {
+    comment: '製程量測資料',
+    fields: [
+      { name: 'id', type: 'BIGINT', pk: true, nullable: false },
+      { name: 'lot_id', type: 'VARCHAR(32)', pk: false, nullable: false, fk: 'lot_records' },
+      { name: 'wafer_id', type: 'VARCHAR(32)', pk: false, nullable: true },
+      { name: 'slot_no', type: 'INT', pk: false, nullable: true },
+      { name: 'equip_id', type: 'VARCHAR(32)', pk: false, nullable: true, fk: 'equipments' },
+      { name: 'recipe_id', type: 'VARCHAR(64)', pk: false, nullable: true },
+      { name: 'step_seq', type: 'INT', pk: false, nullable: true },
+      { name: 'meas_value', type: 'DOUBLE', pk: false, nullable: true },
+      { name: 'meas_at', type: 'TIMESTAMP', pk: false, nullable: true },
+      { name: 'created_at', type: 'TIMESTAMP', pk: false, nullable: false },
+    ]
+  }
+};
+
+const erVisible = new Set(Object.keys(allTablesData));
+
+function buildMermaidCode(visibleTables) {
+  const lines = ['erDiagram'];
+  const relations = [];
+
+  for (const tName of visibleTables) {
+    const tData = allTablesData[tName];
+    if (!tData) continue;
+    lines.push(`  ${tName} {`);
+    for (const f of tData.fields) {
+      const pkMark = f.pk ? ' PK' : (f.fk ? ' FK' : '');
+      const safeName = f.name;
+      lines.push(`    ${f.type.replace(/[()]/g,'_').replace(/,/g,'')} ${safeName}${pkMark}`);
+    }
+    lines.push(`  }`);
+
+    // Collect FK relations
+    for (const f of tData.fields) {
+      if (f.fk && visibleTables.includes(f.fk)) {
+        const nullable = f.nullable;
+        const rel = nullable ? '||--o{' : '||--||';
+        relations.push(`  ${f.fk} ${rel} ${tName} : "${f.name}"`);
+      }
+    }
+  }
+
+  lines.push('');
+  relations.forEach(r => lines.push(r));
+  return lines.join('\n');
+}
+
+function renderErToggles() {
+  const wrap = document.getElementById('er-table-toggles');
+  wrap.innerHTML = '';
+  for (const tName of Object.keys(allTablesData)) {
+    const div = document.createElement('div');
+    div.className = 'er-toggle-row';
+    div.onclick = () => toggleErTable(tName, div);
+    div.innerHTML = `
+      <div class="er-checkbox ${erVisible.has(tName) ? 'checked' : ''}" id="er-cb-${tName}">
+        ${erVisible.has(tName) ? '✓' : ''}
+      </div>
+      <span class="er-table-label">${tName}</span>
+    `;
+    wrap.appendChild(div);
+  }
+}
+
+function toggleErTable(tName, row) {
+  if (erVisible.has(tName)) {
+    if (erVisible.size <= 1) return; // 至少保留一個
+    erVisible.delete(tName);
+  } else {
+    erVisible.add(tName);
+  }
+  const cb = document.getElementById(`er-cb-${tName}`);
+  cb.classList.toggle('checked', erVisible.has(tName));
+  cb.textContent = erVisible.has(tName) ? '✓' : '';
+  refreshDiagram();
+}
+
+async function refreshDiagram() {
+  const visibleTables = [...erVisible];
+  const code = buildMermaidCode(visibleTables);
+
+  // Count relations
+  const relCount = (code.match(/\|\|/g) || []).length / 2;
+  document.getElementById('er-rel-count').textContent = `${visibleTables.length} 張表 · ${relCount} 個關係`;
+
+  const canvas = document.getElementById('er-canvas');
+  canvas.innerHTML = '';
+
+  // Diagram block
+  const diagramWrap = document.createElement('div');
+  diagramWrap.className = 'er-diagram-wrap';
+  diagramWrap.style.width = '100%';
+
+  const diagramEl = document.createElement('div');
+  diagramEl.className = 'mermaid';
+  diagramEl.textContent = code;
+  diagramWrap.appendChild(diagramEl);
+  canvas.appendChild(diagramWrap);
+
+  // Relations list
+  const rels = [];
+  for (const tName of visibleTables) {
+    const tData = allTablesData[tName];
+    for (const f of tData.fields) {
+      if (f.fk && erVisible.has(f.fk)) {
+        rels.push({ from: f.fk, to: tName, via: f.name, nullable: f.nullable });
+      }
+    }
+  }
+
+  if (rels.length > 0) {
+    const relWrap = document.createElement('div');
+    relWrap.className = 'er-code-wrap';
+    relWrap.style.width = '100%';
+    relWrap.innerHTML = `
+      <div class="er-code-header">
+        <span>Table Relationships</span>
+        <span>${rels.length} 個 FK 關係</span>
+      </div>
+      <div class="er-rel-list">
+        ${rels.map(r => `
+          <div class="er-rel-item">
+            <span class="er-rel-from">${r.from}</span>
+            <span class="er-rel-arrow">──${r.nullable ? '0..N' : '1'}──▶</span>
+            <span class="er-rel-to">${r.to}</span>
+            <span class="er-rel-label">via ${r.via}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    canvas.appendChild(relWrap);
+  }
+
+  // Mermaid code block
+  const codeWrap = document.createElement('div');
+  codeWrap.className = 'er-code-wrap';
+  codeWrap.style.width = '100%';
+  codeWrap.id = 'er-mermaid-source';
+  codeWrap.innerHTML = `
+    <div class="er-code-header">
+      <span>Mermaid 原始碼</span>
+      <button class="row-btn" onclick="copyMermaid()">複製</button>
+    </div>
+    <div class="er-code" id="er-code-text">${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+  `;
+  canvas.appendChild(codeWrap);
+
+  // Re-run mermaid
+  await mermaid.run({ nodes: [diagramEl] });
+}
+
+function copyMermaid() {
+  const code = buildMermaidCode([...erVisible]);
+  navigator.clipboard.writeText(code).then(() => showToast('✓ Mermaid 原始碼已複製'));
+}
+
+// ── Page switching ──
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');
+  const btnMap = { editor: 0, dict: 1, versions: 2, analysis: 3, er: 4 };
+  document.querySelectorAll('.nav-btn')[btnMap[name]]?.classList.add('active');
+  if (name === 'dict') renderDict();
+  if (name === 'versions') renderDiff(3);
+  if (name === 'analysis') renderIssues();
+  if (name === 'er') { renderErToggles(); refreshDiagram(); }
+}
+
+// ── Init ──
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  themeVariables: {
+    primaryColor: '#1f1f28',
+    primaryTextColor: '#e4e4f0',
+    primaryBorderColor: '#7b8cff',
+    lineColor: '#555568',
+    secondaryColor: '#27272f',
+    tertiaryColor: '#17171d',
+    edgeLabelBackground: '#1f1f28',
+    fontFamily: 'JetBrains Mono, Fira Code, monospace',
+    fontSize: '12px',
+  },
+  er: { diagramPadding: 20, layoutDirection: 'TB', minEntityWidth: 100, minEntityHeight: 75, entityPadding: 15, useMaxWidth: true },
+});
+
+renderFields('lot_records');
+renderDiff(3);
+</script>
+</body>
+</html>

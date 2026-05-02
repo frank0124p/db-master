@@ -1,0 +1,12 @@
+{
+  "id": 15,
+  "concept": "建立時間",
+  "stdName": "created_at",
+  "aliases": ["creation_time", "create_time"],
+  "domain": "semiconductor",
+  "tags": ["common", "audit"],
+  "aiDescription": "記錄建立的時間戳",
+  "description": null,
+  "createdAt": "2026-04-02T00:00:00.000Z",
+  "updatedAt": "2026-04-02T00:00:00.000Z"
+}

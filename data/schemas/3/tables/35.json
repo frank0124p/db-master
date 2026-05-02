@@ -1,0 +1,142 @@
+{
+  "id": 35,
+  "schemaId": 3,
+  "name": "test1",
+  "comment": null,
+  "createdAt": "2026-05-02T10:46:48.392Z",
+  "updatedAt": "2026-05-02T10:47:42.521Z",
+  "fields": [
+    {
+      "id": 2424,
+      "tableId": 35,
+      "name": "id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": true,
+      "isUnique": false,
+      "comment": null,
+      "position": 0
+    },
+    {
+      "id": 2425,
+      "tableId": 35,
+      "name": "equip_id",
+      "dataType": "VARCHAR(64)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": true,
+      "comment": "設備標準代碼，與 ERP 系統對齊",
+      "position": 1
+    },
+    {
+      "id": 2426,
+      "tableId": 35,
+      "name": "equip_name",
+      "dataType": "VARCHAR(255)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "設備全名",
+      "position": 2
+    },
+    {
+      "id": 2427,
+      "tableId": 35,
+      "name": "equip_type",
+      "dataType": "VARCHAR(64)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "設備類型：FURNACE / CVD / CMP / LITHO / ETCH",
+      "position": 3
+    },
+    {
+      "id": 2428,
+      "tableId": 35,
+      "name": "chamber_id",
+      "dataType": "VARCHAR(64)",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "腔體 ID（多腔體設備才填）",
+      "position": 4
+    },
+    {
+      "id": 2429,
+      "tableId": 35,
+      "name": "location",
+      "dataType": "VARCHAR(128)",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "廠區位置：FAB1-BAY3-SLOT2",
+      "position": 5
+    },
+    {
+      "id": 2430,
+      "tableId": 35,
+      "name": "equip_status",
+      "dataType": "VARCHAR(32)",
+      "nullable": false,
+      "defaultValue": "idle",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "idle / running / down / pm",
+      "position": 6
+    },
+    {
+      "id": 2431,
+      "tableId": 35,
+      "name": "owner_dept",
+      "dataType": "VARCHAR(64)",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "負責部門",
+      "position": 7
+    },
+    {
+      "id": 2432,
+      "tableId": 35,
+      "name": "install_date",
+      "dataType": "DATE",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "安裝日期",
+      "position": 8
+    },
+    {
+      "id": 2433,
+      "tableId": 35,
+      "name": "created_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 9
+    },
+    {
+      "id": 2434,
+      "tableId": 35,
+      "name": "updated_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 10
+    }
+  ]
+}

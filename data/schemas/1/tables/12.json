@@ -1,0 +1,82 @@
+{
+  "id": 12,
+  "schemaId": 1,
+  "name": "bom_items",
+  "comment": "BOM 結構",
+  "createdAt": "2026-04-02T00:00:00.000Z",
+  "updatedAt": "2026-05-02T08:03:13.948Z",
+  "fields": [
+    {
+      "id": 1201,
+      "tableId": 12,
+      "name": "id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": true,
+      "isUnique": false,
+      "comment": null,
+      "position": 0
+    },
+    {
+      "id": 1202,
+      "tableId": 12,
+      "name": "parent_id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "父零件ID FK",
+      "position": 1
+    },
+    {
+      "id": 1203,
+      "tableId": 12,
+      "name": "child_id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "子零件ID FK",
+      "position": 2
+    },
+    {
+      "id": 1204,
+      "tableId": 12,
+      "name": "quantity",
+      "dataType": "DECIMAL(12,4)",
+      "nullable": false,
+      "defaultValue": "1.0000",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "數量",
+      "position": 3
+    },
+    {
+      "id": 1205,
+      "tableId": 12,
+      "name": "bom_type",
+      "dataType": "VARCHAR(16)",
+      "nullable": false,
+      "defaultValue": "engineering",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "BOM類型",
+      "position": 4
+    },
+    {
+      "id": 1206,
+      "tableId": 12,
+      "name": "created_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 5
+    }
+  ]
+}

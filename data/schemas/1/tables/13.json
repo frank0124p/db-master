@@ -1,0 +1,70 @@
+{
+  "id": 13,
+  "schemaId": 1,
+  "name": "engineering_changes",
+  "comment": "ECO 工程變更單",
+  "createdAt": "2026-04-10T00:00:00.000Z",
+  "updatedAt": "2026-05-02T08:03:13.949Z",
+  "fields": [
+    {
+      "id": 1301,
+      "tableId": 13,
+      "name": "id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": true,
+      "isUnique": false,
+      "comment": null,
+      "position": 0
+    },
+    {
+      "id": 1302,
+      "tableId": 13,
+      "name": "eco_no",
+      "dataType": "VARCHAR(32)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": true,
+      "comment": "ECO編號",
+      "position": 1
+    },
+    {
+      "id": 1303,
+      "tableId": 13,
+      "name": "title",
+      "dataType": "VARCHAR(255)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "標題",
+      "position": 2
+    },
+    {
+      "id": 1304,
+      "tableId": 13,
+      "name": "status",
+      "dataType": "VARCHAR(32)",
+      "nullable": false,
+      "defaultValue": "draft",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "狀態",
+      "position": 3
+    },
+    {
+      "id": 1305,
+      "tableId": 13,
+      "name": "created_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 4
+    }
+  ]
+}

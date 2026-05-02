@@ -1,0 +1,118 @@
+{
+  "id": 26,
+  "schemaId": 3,
+  "name": "equipment_alarms",
+  "comment": "設備警報記錄",
+  "createdAt": "2026-05-02T09:02:32.306Z",
+  "updatedAt": "2026-05-02T09:02:32.306Z",
+  "fields": [
+    {
+      "id": 2331,
+      "tableId": 26,
+      "name": "id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": true,
+      "isUnique": false,
+      "comment": null,
+      "position": 0
+    },
+    {
+      "id": 2332,
+      "tableId": 26,
+      "name": "equip_id",
+      "dataType": "VARCHAR(64)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "發生警報的設備",
+      "position": 1
+    },
+    {
+      "id": 2333,
+      "tableId": 26,
+      "name": "alarm_code",
+      "dataType": "VARCHAR(64)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "警報代碼",
+      "position": 2
+    },
+    {
+      "id": 2334,
+      "tableId": 26,
+      "name": "alarm_msg",
+      "dataType": "TEXT",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "警報訊息內容",
+      "position": 3
+    },
+    {
+      "id": 2335,
+      "tableId": 26,
+      "name": "severity",
+      "dataType": "VARCHAR(16)",
+      "nullable": false,
+      "defaultValue": "warning",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "info / warning / critical",
+      "position": 4
+    },
+    {
+      "id": 2336,
+      "tableId": 26,
+      "name": "occurred_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "警報發生時間",
+      "position": 5
+    },
+    {
+      "id": 2337,
+      "tableId": 26,
+      "name": "resolved_at",
+      "dataType": "TIMESTAMP",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "警報解除時間（NULL 表示尚未解除）",
+      "position": 6
+    },
+    {
+      "id": 2338,
+      "tableId": 26,
+      "name": "created_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 7
+    },
+    {
+      "id": 2339,
+      "tableId": 26,
+      "name": "updated_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 8
+    }
+  ]
+}

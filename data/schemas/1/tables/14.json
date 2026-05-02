@@ -1,0 +1,58 @@
+{
+  "id": 14,
+  "schemaId": 1,
+  "name": "suppliers",
+  "comment": "供應商主檔",
+  "createdAt": "2026-04-20T00:00:00.000Z",
+  "updatedAt": "2026-05-02T08:03:13.949Z",
+  "fields": [
+    {
+      "id": 1401,
+      "tableId": 14,
+      "name": "id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": true,
+      "isUnique": false,
+      "comment": null,
+      "position": 0
+    },
+    {
+      "id": 1402,
+      "tableId": 14,
+      "name": "supplier_code",
+      "dataType": "VARCHAR(32)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": true,
+      "comment": "供應商代碼",
+      "position": 1
+    },
+    {
+      "id": 1403,
+      "tableId": 14,
+      "name": "supplier_name",
+      "dataType": "VARCHAR(255)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "供應商名稱",
+      "position": 2
+    },
+    {
+      "id": 1404,
+      "tableId": 14,
+      "name": "created_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 3
+    }
+  ]
+}

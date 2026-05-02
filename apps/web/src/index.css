@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/* ── Dark theme (default) ───────────────────────────────────────────────────── */
+:root {
+  --bg-1: #0f0f13;
+  --bg-2: #17171d;
+  --bg-3: #1f1f28;
+  --bg-4: #27272f;
+  --text-1: #e4e4f0;
+  --text-2: #8888a8;
+  --text-3: #555568;
+  --accent: #7b8cff;
+  --accent-dim: #7b8cff22;
+  --success: #4ade80;
+  --success-dim: #4ade8022;
+  --warning: #fbbf24;
+  --warning-dim: #fbbf2422;
+  --error: #f87171;
+  --error-dim: #f8717122;
+  --info: #60a5fa;
+  --border: #2a2a38;
+  --border-light: #35353f;
+  --radius: 6px;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.5);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
+}
+
+/* ── Light theme ────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-1: #f2f2f7;
+  --bg-2: #ffffff;
+  --bg-3: #f0f0f5;
+  --bg-4: #e6e6f0;
+  --text-1: #18182c;
+  --text-2: #52527a;
+  --text-3: #9494b0;
+  --accent: #4c5cf0;
+  --accent-dim: #4c5cf012;
+  --success: #16a34a;
+  --success-dim: #16a34a14;
+  --warning: #d97706;
+  --warning-dim: #d9770614;
+  --error: #dc2626;
+  --error-dim: #dc262614;
+  --info: #2563eb;
+  --border: #dddde8;
+  --border-light: #cacad8;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.14);
+}
+
+/* ── Reset & base ───────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-1);
+  color: var(--text-1);
+  height: 100vh;
+  overflow: hidden;
+  font-size: 13px;
+  transition: background 0.2s, color 0.2s;
+}
+
+#root { height: 100vh; display: flex; flex-direction: column; }
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+input, select, textarea { font-family: inherit; font-size: 13px; color: var(--text-1); }
+
+/* ── Animations ─────────────────────────────────────────────────────────────── */
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes spin   { to { transform: rotate(360deg); } }
+@keyframes theme-fade { from { opacity: 0.85; } to { opacity: 1; } }
+
+[data-theme] { animation: theme-fade 0.15s ease; }

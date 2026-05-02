@@ -1,0 +1,12 @@
+{
+  "id": 13,
+  "concept": "數量",
+  "stdName": "quantity",
+  "aliases": ["qty", "amount", "count"],
+  "domain": "semiconductor",
+  "tags": ["common"],
+  "aiDescription": "物料或零件的數量",
+  "description": null,
+  "createdAt": "2026-04-02T00:00:00.000Z",
+  "updatedAt": "2026-04-02T00:00:00.000Z"
+}

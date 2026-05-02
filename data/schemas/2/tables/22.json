@@ -1,0 +1,82 @@
+{
+  "id": 22,
+  "schemaId": 2,
+  "name": "machines",
+  "comment": "機台主檔",
+  "createdAt": "2026-04-15T00:00:00.000Z",
+  "updatedAt": "2026-05-02T08:03:13.944Z",
+  "fields": [
+    {
+      "id": 2201,
+      "tableId": 22,
+      "name": "id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": true,
+      "isUnique": false,
+      "comment": null,
+      "position": 0
+    },
+    {
+      "id": 2202,
+      "tableId": 22,
+      "name": "machine_code",
+      "dataType": "VARCHAR(32)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": true,
+      "comment": "機台代碼",
+      "position": 1
+    },
+    {
+      "id": 2203,
+      "tableId": 22,
+      "name": "machine_name",
+      "dataType": "VARCHAR(128)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "機台名稱",
+      "position": 2
+    },
+    {
+      "id": 2204,
+      "tableId": 22,
+      "name": "status",
+      "dataType": "VARCHAR(16)",
+      "nullable": false,
+      "defaultValue": "'idle'",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "狀態",
+      "position": 3
+    },
+    {
+      "id": 2205,
+      "tableId": 22,
+      "name": "created_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 4
+    },
+    {
+      "id": 2308,
+      "tableId": 22,
+      "name": "equip_status",
+      "dataType": "VARCHAR(16)",
+      "nullable": false,
+      "defaultValue": "idle",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "設備狀態",
+      "position": 5
+    }
+  ]
+}

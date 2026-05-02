@@ -1,0 +1,130 @@
+{
+  "id": 31,
+  "schemaId": 4,
+  "name": "inspection_records",
+  "comment": "檢測記錄",
+  "createdAt": "2026-05-02T09:02:32.429Z",
+  "updatedAt": "2026-05-02T09:02:32.429Z",
+  "fields": [
+    {
+      "id": 2390,
+      "tableId": 31,
+      "name": "id",
+      "dataType": "BIGINT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": true,
+      "isUnique": false,
+      "comment": null,
+      "position": 0
+    },
+    {
+      "id": 2391,
+      "tableId": 31,
+      "name": "lot_id",
+      "dataType": "VARCHAR(32)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "批次識別碼 FK",
+      "position": 1
+    },
+    {
+      "id": 2392,
+      "tableId": 31,
+      "name": "equip_id",
+      "dataType": "VARCHAR(32)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "設備識別碼",
+      "position": 2
+    },
+    {
+      "id": 2393,
+      "tableId": 31,
+      "name": "recipe_id",
+      "dataType": "VARCHAR(32)",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "配方識別碼",
+      "position": 3
+    },
+    {
+      "id": 2394,
+      "tableId": 31,
+      "name": "step_no",
+      "dataType": "INT",
+      "nullable": false,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "製程步驟序號",
+      "position": 4
+    },
+    {
+      "id": 2395,
+      "tableId": 31,
+      "name": "meas_value",
+      "dataType": "DECIMAL(18,6)",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "量測值",
+      "position": 5
+    },
+    {
+      "id": 2396,
+      "tableId": 31,
+      "name": "upper_limit",
+      "dataType": "DECIMAL(18,6)",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "規格上限",
+      "position": 6
+    },
+    {
+      "id": 2397,
+      "tableId": 31,
+      "name": "lower_limit",
+      "dataType": "DECIMAL(18,6)",
+      "nullable": true,
+      "defaultValue": null,
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "規格下限",
+      "position": 7
+    },
+    {
+      "id": 2398,
+      "tableId": 31,
+      "name": "pass_flag",
+      "dataType": "TINYINT(1)",
+      "nullable": false,
+      "defaultValue": "1",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": "是否合格",
+      "position": 8
+    },
+    {
+      "id": 2399,
+      "tableId": 31,
+      "name": "created_at",
+      "dataType": "TIMESTAMP",
+      "nullable": false,
+      "defaultValue": "CURRENT_TIMESTAMP",
+      "isPrimaryKey": false,
+      "isUnique": false,
+      "comment": null,
+      "position": 9
+    }
+  ]
+}

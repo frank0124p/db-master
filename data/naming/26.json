@@ -1,0 +1,1 @@
+{"id":26,"concept":"設備狀態","stdName":"equip_status","aliases":["machine_status","tool_status","status"],"domain":"semiconductor","tags":["mes","equipment"],"aiDescription":"設備當前的運作狀態","description":null,"createdAt":"2026-04-02T00:00:00.000Z","updatedAt":"2026-04-02T00:00:00.000Z"}

@@ -1,0 +1,12 @@
+{
+  "id": 2,
+  "concept": "版本",
+  "stdName": "revision",
+  "aliases": ["version", "rev"],
+  "domain": "semiconductor",
+  "tags": ["plm", "versioning"],
+  "aiDescription": "零件的設計版本，追蹤工程變更歷程",
+  "description": null,
+  "createdAt": "2026-04-02T00:00:00.000Z",
+  "updatedAt": "2026-04-02T00:00:00.000Z"
+}

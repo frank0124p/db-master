@@ -1,0 +1,1 @@
+{"id":27,"concept":"批次狀態","stdName":"lot_status","aliases":["batch_status","lot_state"],"domain":"semiconductor","tags":["mes","lot"],"aiDescription":"晶圓批次的當前處理狀態","description":null,"createdAt":"2026-04-02T00:00:00.000Z","updatedAt":"2026-04-02T00:00:00.000Z"}
