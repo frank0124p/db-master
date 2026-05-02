@@ -277,31 +277,34 @@ main.ts (Express)
     │  app.use("/api/v1/schemas", schemasRouter)
     ▼
 routes/schemas.ts
-    │  const input = CreateSchemaInput.parse(req.body)  ← Zod 驗證
-    │  await repo.createSchema(input)                    ← 呼叫 repository
+    │  const input = CreateSchemaInput.parse(req.body)   ← Zod 驗證
+    │  await repo.createSchema(input)                     ← 呼叫 repository
     ▼
 repositories/schemas.ts
-    │  const pool = getPool()
-    │  await pool.query("INSERT INTO schemas ...", [name, ...])
-    │  return SchemaRowSchema.parse(result)              ← Zod 驗證回傳值
+    │  await store.writeJson(schemaFile(id), data)        ← 寫入 JSON 檔案
+    │  await store.indexSet("tableSchema", id, schemaId)  ← 更新反向索引
     ▼
 HTTP Response (JSON)
 ```
 
-### 連線池（`apps/api/src/db/pool.ts`）
+### 檔案儲存層（`apps/api/src/db/fileStore.ts`）
+
+本專案使用 **JSON 檔案** 作為資料庫（無需 MariaDB）。所有資料存放於 `data/` 目錄下。
 
 ```typescript
-let _pool: mariadb.Pool | null = null;
+// 讀寫 JSON 檔案
+await store.readJson<T>(path)
+await store.writeJson(path, data)
 
-export function getPool(): mariadb.Pool {
-  if (!_pool) {
-    _pool = mariadb.createPool({ ... });  // 只建立一次（singleton）
-  }
-  return _pool;
-}
+// 自動遞增 ID（存於 data/_counters.json）
+const id = await store.nextId("tables")
+
+// 反向索引（存於 data/_index.json）
+await store.indexSet("tableSchema", tableId, schemaId)
+const schemaId = await store.indexGet("tableSchema", tableId)
 ```
 
-**重要**：`getPool()` 使用 Singleton 模式。連線池在第一次呼叫時建立，之後都回傳同一個 instance。每個 repository function 在函式最頂層呼叫 `getPool()`，不需要（也不應該）自己管理連線的開關。
+**設計原則**：每個 repository 直接呼叫 `fileStore`，不使用 ORM 或 SQL，目的是讓資料結構透明可見。
 
 ### 統一錯誤處理（`apps/api/src/middleware/error.ts`）
 
@@ -653,10 +656,10 @@ buildFkEdges(tables, fieldsByTable)
         "bom_id" stem "bom" → "bom_headers".startsWith("bom_")  ✓
 ```
 
-找出所有 FK 邊後，用 **BFS（廣度優先搜尋）** 決定 JOIN 順序：
+找出所有 FK 邊後，用 **BFS（廣度優先搜尋）** 決定 JOIN 順序（內部函式 `autoComposeOrder`，位於 `repositories/wide-tables.ts`）：
 
 ```
-autoComposeOrder(tables, fieldsByTable)
+autoComposeOrder(tables, fieldsByTable)  // 內部使用，非公開 API
   │
   ├── 計算每張表的「入度」（有幾張表的 FK 指向它）
   │     parts: 被 part_revisions、bom_headers、asl 引用 → 入度 3

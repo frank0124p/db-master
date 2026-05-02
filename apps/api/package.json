@@ -9,9 +9,7 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint src",
-    "db:migrate": "tsx src/db/migrate.ts",
-    "db:seed": "tsx src/db/seed.ts"
+    "lint": "eslint src"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
@@ -21,7 +19,6 @@
     "dotenv": "^16.4.0",
     "dotenv-expand": "^13.0.0",
     "express": "^4.21.0",
-    "mariadb": "^3.3.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

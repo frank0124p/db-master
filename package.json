@@ -7,11 +7,7 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck",
-    "db:up": "docker compose up -d db",
-    "db:down": "docker compose down",
-    "db:migrate": "pnpm --filter @schema-studio/api db:migrate",
-    "db:seed": "pnpm --filter @schema-studio/api db:seed"
+    "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",

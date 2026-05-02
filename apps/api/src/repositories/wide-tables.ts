@@ -204,7 +204,7 @@ export type AutoComposeResult = {
   joinMap: Map<number, { fromTable: TableInfo; fromField: string; toTable: TableInfo; score: number }>;
 };
 
-export function autoComposeOrder(tables: TableInfo[], fieldsByTable: Map<number, FieldInfo[]>): AutoComposeResult {
+function autoComposeOrder(tables: TableInfo[], fieldsByTable: Map<number, FieldInfo[]>): AutoComposeResult {
   if (tables.length === 0) return { orderedIds: [], joinMap: new Map() };
   if (tables.length === 1) return { orderedIds: [tables[0]!.id], joinMap: new Map() };
 

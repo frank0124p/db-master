@@ -7,11 +7,13 @@ dist/
 # Vite dev server temp files
 vite.config.ts.timestamp-*.mjs
 
-# Data directory (runtime DB, may contain sensitive schema data)
+# Data directory — runtime file-based store (NOT committed, created at runtime)
+# Exceptions: data/ddl/ (sample SQL) and data/skills/ (custom rules) ARE tracked
 data/schemas/
 data/naming/
 data/versions/
 data/wide-tables/
+data/rules/
 data/_counters.json
 data/_index.json
 data/_ddl-manifest.json

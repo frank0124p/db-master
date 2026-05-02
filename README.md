@@ -115,15 +115,12 @@ DB Master/
 │           ├── api.ts            # API 客戶端（real / mock 切換）
 │           ├── store.ts          # Zustand 全域狀態
 │           ├── pages/
-│           │   ├── SchemasPage.tsx      # Schema 列表 + 欄位編輯
-│           │   ├── SchemaEditorPage.tsx # 欄位編輯器
+│           │   ├── SchemaEditorPage.tsx # 欄位編輯器 + DDL 匯入 + 版本儲存
 │           │   ├── AnalysisPage.tsx     # AI 分析 + 規則檢查
 │           │   ├── NamingDictPage.tsx   # 命名字典管理
-│           │   ├── NamingPage.tsx       # 命名一致性檢查
 │           │   ├── VersionHistoryPage.tsx
 │           │   ├── ErDiagramPage.tsx    # ER 圖 (Mermaid)
 │           │   └── WideTablePage.tsx    # 寬表 JOIN 建構器
-│           ├── components/ui.tsx # 共用 UI 元件
 │           └── mock/             # Mock API（VITE_USE_MOCK=true）
 │
 ├── packages/
