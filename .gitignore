@@ -1,4 +1,17 @@
 node_modules/
 dist/
 *.env.local
+.env.local
 .DS_Store
+
+# Vite dev server temp files
+vite.config.ts.timestamp-*.mjs
+
+# Data directory (runtime DB, may contain sensitive schema data)
+data/schemas/
+data/naming/
+data/versions/
+data/wide-tables/
+data/_counters.json
+data/_index.json
+data/_ddl-manifest.json

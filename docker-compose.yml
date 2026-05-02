@@ -2,7 +2,7 @@ services:
   db:
     image: mariadb:11
     environment:
-      MARIADB_ROOT_PASSWORD: schema_studio_dev
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?請在 .env.local 設定 MARIADB_ROOT_PASSWORD}
       MARIADB_DATABASE: schema_studio
       MARIADB_CHARACTER_SET_SERVER: utf8mb4
       MARIADB_COLLATION_SERVER: utf8mb4_unicode_ci

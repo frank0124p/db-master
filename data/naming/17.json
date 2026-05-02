@@ -1,1 +1,0 @@
-{"id":17,"concept":"批次 ID","stdName":"lot_id","aliases":["lot_no","lotid","batch_id"],"domain":"semiconductor","tags":["mes","lot"],"aiDescription":"晶圓批次的唯一識別碼","description":null,"createdAt":"2026-04-02T00:00:00.000Z","updatedAt":"2026-04-02T00:00:00.000Z"}

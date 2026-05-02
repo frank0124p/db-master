@@ -1,1 +1,0 @@
-{"id":16,"concept":"設備 ID","stdName":"equip_id","aliases":["equipment_id","eqp_id","machine_id","tool_id"],"domain":"semiconductor","tags":["mes","equipment"],"aiDescription":"設備的唯一識別碼，標準命名以 equip_id 使用","description":null,"createdAt":"2026-04-02T00:00:00.000Z","updatedAt":"2026-04-02T00:00:00.000Z"}

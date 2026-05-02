@@ -1,8 +1,0 @@
-{
-  "id": 3,
-  "name": "Mes Equipment",
-  "description": "從 mes_equipment.sql 匯入",
-  "domain": "semiconductor",
-  "createdAt": "2026-05-02T09:02:32.273Z",
-  "updatedAt": "2026-05-02T09:02:32.273Z"
-}
