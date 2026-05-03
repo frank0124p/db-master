@@ -199,9 +199,9 @@ export const mockWideDetail: WideTableDetail = {
   description: "BOM 展開視圖 — 父件 × 子件 × 版本",
   createdAt: ts(5), updatedAt: ts(1),
   sources: [
-    { id: 1, wideTableId: 1, tableId: 10, tableName: "parts",          colPrefix: "parent", joinType: "BASE",  joinCondition: null,                           position: 0 },
-    { id: 2, wideTableId: 1, tableId: 12, tableName: "bom_items",      colPrefix: null,     joinType: "INNER", joinCondition: "bom_items.parent_id = parts.id", position: 1 },
-    { id: 3, wideTableId: 1, tableId: 11, tableName: "part_revisions", colPrefix: "rev",    joinType: "LEFT",  joinCondition: "part_revisions.part_id = bom_items.child_id", position: 2 },
+    { id: 1, wideTableId: 1, schemaId: 1, tableId: 10, tableName: "parts",          colPrefix: "parent", joinType: "BASE",  joinCondition: null,                           position: 0 },
+    { id: 2, wideTableId: 1, schemaId: 1, tableId: 12, tableName: "bom_items",      colPrefix: null,     joinType: "INNER", joinCondition: "bom_items.parent_id = parts.id", position: 1 },
+    { id: 3, wideTableId: 1, schemaId: 1, tableId: 11, tableName: "part_revisions", colPrefix: "rev",    joinType: "LEFT",  joinCondition: "part_revisions.part_id = bom_items.child_id", position: 2 },
   ],
   columns: [
     { id: 1,  wideTableId: 1, sourceId: 1, fieldId: 1002, fieldName: "part_no",        fieldType: "VARCHAR(32)",   tableName: "parts",          outputName: "parent_part_no",    included: true,  position: 0 },

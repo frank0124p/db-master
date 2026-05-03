@@ -65,7 +65,7 @@ export interface WideTableSummary {
 }
 
 export interface WideTableSource {
-  id: number; wideTableId: number; tableId: number; tableName: string;
+  id: number; wideTableId: number; schemaId: number; tableId: number; tableName: string;
   colPrefix: string | null; joinType: JoinType; joinCondition: string | null; position: number;
 }
 
@@ -81,6 +81,7 @@ export interface WideTableDetail extends WideTableSummary {
 }
 
 export interface PreviewSource {
+  schemaId: number; schemaName: string;
   tableId: number; tableName: string; colPrefix: string;
   joinType: JoinType; joinCondition: string | null; position: number;
 }
@@ -208,11 +209,11 @@ const realApi = {
   wideTables: {
     list: (schemaId: number) => req<WideTableSummary[]>(`/schemas/${schemaId}/wide-tables`),
     get: (schemaId: number, id: number) => req<WideTableDetail>(`/schemas/${schemaId}/wide-tables/${id}`),
-    preview: (schemaId: number, tableIds: number[]) =>
-      req<WideTablePreview>(`/schemas/${schemaId}/wide-tables/preview`, { method: "POST", body: JSON.stringify({ tableIds }) }),
+    preview: (schemaId: number, tableRefs: { schemaId: number; tableId: number }[]) =>
+      req<WideTablePreview>(`/schemas/${schemaId}/wide-tables/preview`, { method: "POST", body: JSON.stringify({ tableRefs }) }),
     create: (schemaId: number, body: {
       name: string; description?: string;
-      sources: { tableId: number; colPrefix?: string | null; joinType: JoinType; joinCondition?: string | null; position: number }[];
+      sources: { schemaId?: number; tableId: number; colPrefix?: string | null; joinType: JoinType; joinCondition?: string | null; position: number }[];
       columns: { sourcePosition: number; fieldId: number; outputName: string; included: boolean; position: number }[];
     }) => req<WideTableDetail>(`/schemas/${schemaId}/wide-tables`, { method: "POST", body: JSON.stringify(body) }),
     delete: (schemaId: number, id: number) => req<void>(`/schemas/${schemaId}/wide-tables/${id}`, { method: "DELETE" }),

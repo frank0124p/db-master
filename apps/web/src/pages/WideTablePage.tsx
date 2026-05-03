@@ -130,9 +130,12 @@ function JoinFlowDiagram({ sources, columns }: { sources: PreviewSource[]; colum
                     color: isBase ? "var(--warning)" : "var(--accent)" }}>
                     {isBase ? "BASE" : `JOIN ${i}`}
                   </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--text-1)", marginBottom: colCount > 0 ? 4 : 0 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--text-1)", marginBottom: 2 }}>
                     {src.tableName}
                   </div>
+                  {src.schemaName && (
+                    <div style={{ fontSize: 9, color: "var(--text-3)", fontFamily: "var(--font-mono)", marginBottom: colCount > 0 ? 2 : 0 }}>{src.schemaName}</div>
+                  )}
                   {colCount > 0 && (
                     <div style={{ fontSize: 10, color: "var(--text-3)" }}>{colCount} cols</div>
                   )}
@@ -227,7 +230,10 @@ function JoinDiagramModal({ sources, columns, name, onClose }: {
                       <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: isBase ? "rgba(251,191,36,0.2)" : "rgba(123,140,255,0.2)", color: isBase ? "var(--warning)" : "var(--accent)" }}>
                         {isBase ? "BASE" : `JOIN ${i}`}
                       </span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>{src.tableName}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>{src.tableName}</div>
+                        {src.schemaName && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-3)", marginTop: 1 }}>{src.schemaName}</div>}
+                      </div>
                     </div>
                     {/* Column list */}
                     {srcCols.length > 0 && (
@@ -269,7 +275,7 @@ function WideTableDetailView({ schemaId, id, onBack }: { schemaId: number; id: n
   const { data: wt } = useQuery({ queryKey: ["wideTable", schemaId, id], queryFn: () => api.wideTables.get(schemaId, id) });
   if (!wt) return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: "var(--text-3)" }}>載入中...</span></div>;
 
-  const sources: PreviewSource[] = wt.sources.map(s => ({ ...s, colPrefix: s.colPrefix ?? "" }));
+  const sources: PreviewSource[] = wt.sources.map(s => ({ ...s, schemaId: s.schemaId ?? wt.schemaId, schemaName: String(s.schemaId ?? wt.schemaId), colPrefix: s.colPrefix ?? "" }));
   const columns: PreviewColumn[] = wt.columns.map(c => ({
     sourcePosition: wt.sources.find(s => s.id === c.sourceId)?.position ?? 0,
     tableId: wt.sources.find(s => s.id === c.sourceId)?.tableId ?? 0,
@@ -336,6 +342,110 @@ function parseSqlJoins(sql: string): ParsedSqlJoin[] {
   return result;
 }
 
+// ── Cross-Schema Table Picker ─────────────────────────────────────────────────
+
+function SchemaTablePicker({ primarySchemaId, checked, onToggle }: {
+  primarySchemaId: number;
+  checked: Set<string>;
+  onToggle: (schemaId: number, tableId: number) => void;
+}) {
+  const { data: allSchemas } = useQuery({ queryKey: ["schemas"], queryFn: () => api.schemas.list() });
+  const [expanded, setExpanded] = useState<Set<number>>(new Set([primarySchemaId]));
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 8px" }}>
+      <div style={{ padding: "6px 4px 6px", fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
+        已選 {checked.size} 張 table（可跨 Schema）
+      </div>
+      {allSchemas?.map(sc => (
+        <SchemaSection
+          key={sc.id}
+          schema={sc}
+          isPrimary={sc.id === primarySchemaId}
+          expanded={expanded.has(sc.id)}
+          onToggleExpand={() => setExpanded(prev => {
+            const n = new Set(prev);
+            if (n.has(sc.id)) n.delete(sc.id); else n.add(sc.id);
+            return n;
+          })}
+          checked={checked}
+          onToggle={onToggle}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SchemaSection({ schema, isPrimary, expanded, onToggleExpand, checked, onToggle }: {
+  schema: import("../api.js").Schema;
+  isPrimary: boolean;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  checked: Set<string>;
+  onToggle: (schemaId: number, tableId: number) => void;
+}) {
+  const { data: detail } = useQuery({
+    queryKey: ["schema", schema.id],
+    queryFn: () => api.schemas.get(schema.id),
+    enabled: expanded,
+  });
+  const selectedCount = detail?.tables.filter(t => checked.has(`${schema.id}:${t.id}`)).length ?? 0;
+
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div onClick={onToggleExpand}
+        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px", borderRadius: 6, cursor: "pointer",
+          background: isPrimary ? "rgba(123,140,255,0.06)" : "transparent",
+          border: `1px solid ${isPrimary ? "var(--accent)" : "transparent"}` }}
+        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = isPrimary ? "rgba(123,140,255,0.1)" : "var(--bg-3)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isPrimary ? "rgba(123,140,255,0.06)" : "transparent"; }}>
+        <span style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0, transition: "transform 0.15s", display: "inline-block", transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: isPrimary ? "var(--accent)" : "var(--text-1)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{schema.name}</span>
+        {selectedCount > 0 && (
+          <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 8, background: "var(--accent-dim)", color: "var(--accent)", fontWeight: 700, flexShrink: 0 }}>{selectedCount}</span>
+        )}
+        {isPrimary && (
+          <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "var(--accent)", color: "#fff", fontWeight: 700, flexShrink: 0 }}>主</span>
+        )}
+      </div>
+      {expanded && detail && (
+        <div style={{ paddingLeft: 12, marginTop: 2 }}>
+          {detail.tables.length === 0 && (
+            <div style={{ padding: "6px 8px", fontSize: 11, color: "var(--text-3)" }}>此 Schema 無 Tables</div>
+          )}
+          {detail.tables.map(t => {
+            const key = `${schema.id}:${t.id}`;
+            const active = checked.has(key);
+            return (
+              <div key={t.id} onClick={() => onToggle(schema.id, t.id)}
+                style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "7px 8px", borderRadius: 5, cursor: "pointer", marginBottom: 1,
+                  background: active ? "var(--accent-dim)" : "transparent",
+                  border: `1px solid ${active ? "var(--accent)" : "transparent"}`,
+                  transition: "all 0.15s" }}
+                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = "var(--bg-3)"; }}
+                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
+                <div style={{ width: 13, height: 13, borderRadius: 3, flexShrink: 0, marginTop: 2,
+                  border: `1px solid ${active ? "var(--accent)" : "var(--border-light)"}`,
+                  background: active ? "var(--accent)" : "var(--bg-4)",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#fff" }}>
+                  {active ? "✓" : ""}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: active ? "var(--accent)" : "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
+                  {t.comment && <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1, lineHeight: 1.3 }}>{t.comment}</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {expanded && !detail && (
+        <div style={{ paddingLeft: 20, padding: "6px 20px", fontSize: 11, color: "var(--text-3)" }}>載入中...</div>
+      )}
+    </div>
+  );
+}
+
 // ── Builder ───────────────────────────────────────────────────────────────────
 
 type Step = "select" | "columns" | "save";
@@ -348,7 +458,8 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
 
   const [step, setStep] = useState<Step>("select");
   const [inputMode, setInputMode] = useState<InputMode>("check");
-  const [checked, setChecked] = useState<Set<number>>(new Set());
+  // checked: Set<"${schemaId}:${tableId}"> — supports cross-schema
+  const [checked, setChecked] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<WideTablePreview | null>(null);
   const [sources, setSources] = useState<PreviewSource[]>([]);
   const [columns, setColumns] = useState<PreviewColumn[]>([]);
@@ -361,6 +472,13 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
   const [sqlParsing, setSqlParsing] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  function tableRefs() {
+    return [...checked].map(key => {
+      const [s, t] = key.split(":").map(Number);
+      return { schemaId: s!, tableId: t! };
+    });
+  }
+
   // Auto-trigger analysis whenever checked set changes (debounced) — check mode only
   useEffect(() => {
     if (inputMode !== "check") return;
@@ -369,7 +487,7 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
     debounceRef.current = setTimeout(async () => {
       setAnalyzing(true);
       try {
-        const p = await api.wideTables.preview(schemaId, [...checked]);
+        const p = await api.wideTables.preview(schemaId, tableRefs());
         setPreview(p);
         setSources(p.sources);
         setColumns(p.columns);
@@ -377,12 +495,14 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
         setAnalyzing(false);
       }
     }, 350);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checked, inputMode]);
 
-  function toggle(id: number) {
+  function toggle(sid: number, tid: number) {
+    const key = `${sid}:${tid}`;
     setChecked(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
   }
@@ -395,7 +515,7 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
       const parsed = parseSqlJoins(sqlInput);
       if (parsed.length === 0) { setSqlError("無法從 SQL 解析出 FROM / JOIN，請確認語法"); return; }
 
-      // Match table names to schema tables
+      // Match table names to current schema's tables (SQL mode remains single-schema)
       const matched: Array<ParsedSqlJoin & { tableId: number }> = [];
       for (const p of parsed) {
         const t = schema.tables.find(t => t.name.toLowerCase() === p.tableName.toLowerCase());
@@ -403,9 +523,8 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
         matched.push({ ...p, tableId: t.id });
       }
 
-      // Call preview with matched table IDs to get columns
-      const tableIds = matched.map(m => m.tableId);
-      const p = await api.wideTables.preview(schemaId, tableIds);
+      const refs = matched.map(m => ({ schemaId, tableId: m.tableId }));
+      const p = await api.wideTables.preview(schemaId, refs);
       setPreview(p);
       setColumns(p.columns);
 
@@ -421,7 +540,7 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
         };
       });
       setSources(overridden);
-      setChecked(new Set(tableIds));
+      setChecked(new Set(refs.map(r => `${r.schemaId}:${r.tableId}`)));
     } catch (e) {
       setSqlError(String(e));
     } finally {
@@ -448,7 +567,7 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
       const body = {
         name: name.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
-        sources: sources.map(s => ({ tableId: s.tableId, colPrefix: s.colPrefix || null, joinType: s.joinType, joinCondition: s.joinCondition || null, position: s.position })),
+        sources: sources.map(s => ({ schemaId: s.schemaId, tableId: s.tableId, colPrefix: s.colPrefix || null, joinType: s.joinType, joinCondition: s.joinCondition || null, position: s.position })),
         columns: columns.map((c, i) => ({ sourcePosition: c.sourcePosition, fieldId: c.fieldId, outputName: c.outputName, included: c.included, position: i })),
       };
       await api.wideTables.create(schemaId, body);
@@ -502,7 +621,7 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
         {step === "select" && (
           <>
             {/* Left: input panel */}
-            <div style={{ width: 260, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0 }}>
+            <div style={{ width: 280, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0 }}>
               {/* Mode toggle */}
               <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", gap: 0 }}>
                 <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)", width: "100%" }}>
@@ -517,41 +636,16 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
                 </div>
               </div>
 
-              {/* Check mode: table list */}
+              {/* Check mode: cross-schema table picker */}
               {inputMode === "check" && (
-                <>
-                  <div style={{ padding: "6px 12px 4px", fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
-                    已選 {checked.size} / {schema?.tables.length ?? 0}
-                  </div>
-                  <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 8px" }}>
-                    {schema?.tables.map(t => {
-                      const active = checked.has(t.id);
-                      return (
-                        <div key={t.id} onClick={() => toggle(t.id)}
-                          style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 8px", borderRadius: 6, cursor: "pointer", marginBottom: 2,
-                            background: active ? "var(--accent-dim)" : "transparent",
-                            border: `1px solid ${active ? "var(--accent)" : "transparent"}`,
-                            transition: "all 0.15s" }}
-                          onMouseEnter={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = "var(--bg-3)"; }}
-                          onMouseLeave={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
-                          <div style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, marginTop: 2,
-                            border: `1px solid ${active ? "var(--accent)" : "var(--border-light)"}`,
-                            background: active ? "var(--accent)" : "var(--bg-4)",
-                            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff" }}>
-                            {active ? "✓" : ""}
-                          </div>
-                          <div>
-                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: active ? "var(--accent)" : "var(--text-1)" }}>{t.name}</div>
-                            {t.comment && <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2, lineHeight: 1.4 }}>{t.comment}</div>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
+                <SchemaTablePicker
+                  primarySchemaId={schemaId}
+                  checked={checked}
+                  onToggle={toggle}
+                />
               )}
 
-              {/* SQL mode: input area */}
+              {/* SQL mode: input area (single-schema) */}
               {inputMode === "sql" && (
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 10, gap: 8, overflow: "hidden" }}>
                   <div style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.5 }}>貼入含 JOIN 的 SQL 語句，系統自動解析 Table 與 JOIN 條件：</div>
@@ -571,19 +665,19 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
                     {sqlParsing ? "解析中..." : "解析 SQL →"}
                   </button>
                   <div style={{ fontSize: 10, color: "var(--text-3)", lineHeight: 1.5 }}>
-                    支援 LEFT JOIN / INNER JOIN，Table 名稱須存在於此 Schema 中。
+                    SQL 模式限目前 Schema 的 Tables。跨 Schema 請使用「勾選」模式。
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Right: live preview + Mermaid */}
+            {/* Right: live preview + flow diagram */}
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
               {!preview && !analyzing && (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-3)", gap: 8 }}>
                   <div style={{ fontSize: 28 }}>⊞</div>
                   <div style={{ fontSize: 13 }}>
-                    {inputMode === "check" ? "勾選 2 張以上 Table，系統將自動分析 FK 關係" : "貼入 SQL，點擊「解析 SQL」查看關聯圖"}
+                    {inputMode === "check" ? "勾選 2 張以上 Table（可跨 Schema），系統將自動分析 FK 關係" : "貼入 SQL，點擊「解析 SQL」查看關聯圖"}
                   </div>
                 </div>
               )}
@@ -597,7 +691,6 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
 
               {preview && !analyzing && (
                 <>
-                  {/* Mermaid first — immediate visual overview */}
                   <JoinFlowDiagram sources={sources} columns={columns} />
 
                   <SectionHeader title="Join 關係設定" badge={`${sources.filter(s => s.position > 0 && s.joinCondition).length} / ${sources.length - 1} 已解析`} badgeColor={unresolved > 0 ? "var(--warning)" : "var(--success)"} />
@@ -745,7 +838,10 @@ function JoinGraph({ sources, editable, onUpdate }: {
               color: i === 0 ? "var(--warning)" : "var(--accent)" }}>
               {i === 0 ? "BASE" : `JOIN ${i}`}
             </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-1)", flex: 1 }}>{src.tableName}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-1)" }}>{src.tableName}</div>
+              {src.schemaName && <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-3)" }}>{src.schemaName}</div>}
+            </div>
             {editable && (
               <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
                 <span style={{ fontSize: 10, color: "var(--text-3)" }}>前綴:</span>

@@ -2,7 +2,7 @@ import { Router, type Router as RouterType, type Request } from "express";
 import { z } from "zod";
 import {
   listWideTables, getWideTable, createWideTable, deleteWideTable,
-  previewWideTable, buildViewSql, CreateWideTableInput, type PreviewSource,
+  previewWideTable, buildViewSql, CreateWideTableInput, type PreviewSource, type TableRef,
 } from "../repositories/wide-tables.js";
 // autoCompose is exposed via the /auto-compose route which calls previewWideTable (same logic)
 
@@ -16,19 +16,33 @@ router.get("/", async (req, res, next) => {
   catch (e) { next(e); }
 });
 
+const TableRefsBody = z.object({
+  tableRefs: z.array(z.object({ schemaId: z.number(), tableId: z.number() })).optional(),
+  tableIds: z.array(z.number()).optional(), // backward-compat
+});
+
+function resolveTableRefs(body: z.infer<typeof TableRefsBody>, fallbackSchemaId: number): TableRef[] {
+  if (body.tableRefs?.length) return body.tableRefs;
+  return (body.tableIds ?? []).map(id => ({ schemaId: fallbackSchemaId, tableId: id }));
+}
+
 // POST /schemas/:schemaId/wide-tables/auto-compose  (must be before /:id)
 router.post("/auto-compose", async (req, res, next) => {
   try {
-    const { tableIds } = z.object({ tableIds: z.array(z.number()).min(2) }).parse(req.body);
-    res.json(await previewWideTable(sid(req), tableIds));
+    const body = TableRefsBody.parse(req.body);
+    const refs = resolveTableRefs(body, sid(req));
+    if (refs.length < 2) { res.status(400).json({ error: { message: "Need at least 2 tables" } }); return; }
+    res.json(await previewWideTable(sid(req), refs));
   } catch (e) { next(e); }
 });
 
 // POST /schemas/:schemaId/wide-tables/preview  (must be before /:id)
 router.post("/preview", async (req, res, next) => {
   try {
-    const { tableIds } = z.object({ tableIds: z.array(z.number()).min(1) }).parse(req.body);
-    res.json(await previewWideTable(sid(req), tableIds));
+    const body = TableRefsBody.parse(req.body);
+    const refs = resolveTableRefs(body, sid(req));
+    if (!refs.length) { res.status(400).json({ error: { message: "Need at least 1 table" } }); return; }
+    res.json(await previewWideTable(sid(req), refs));
   } catch (e) { next(e); }
 });
 
@@ -63,6 +77,7 @@ router.get("/:id/ddl", async (req, res, next) => {
     const wt = await getWideTable(Number(req.params["id"]));
     if (!wt) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Wide table not found" } });
     const sources: PreviewSource[] = wt.sources.map(s => ({
+      schemaId: s.schemaId ?? wt.schemaId, schemaName: String(s.schemaId ?? wt.schemaId),
       tableId: s.tableId, tableName: s.tableName,
       colPrefix: s.colPrefix ?? "",
       joinType: s.joinType, joinCondition: s.joinCondition, position: s.position,

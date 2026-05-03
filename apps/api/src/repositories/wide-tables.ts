@@ -10,7 +10,7 @@ export type WideTableSummary = {
 };
 
 export type WideTableSource = {
-  id: number; wideTableId: number; tableId: number; tableName: string;
+  id: number; wideTableId: number; schemaId: number; tableId: number; tableName: string;
   colPrefix: string | null; joinType: "BASE" | "INNER" | "LEFT";
   joinCondition: string | null; position: number;
 };
@@ -39,6 +39,7 @@ export const CreateWideTableInput = z.object({
   name: z.string().min(1).max(128),
   description: z.string().optional(),
   sources: z.array(z.object({
+    schemaId: z.number().optional(),
     tableId: z.number(),
     colPrefix: z.string().max(32).nullable().optional(),
     joinType: z.enum(["BASE", "INNER", "LEFT"]),
@@ -107,17 +108,24 @@ export async function createWideTable(schemaId: number, input: CreateWideTableIn
   const schemaSlug = await getSchemaSlug(schemaId);
   const now = new Date().toISOString();
 
-  // Resolve sourceIds by position
+  // Pre-load tables for each unique schemaId referenced in sources
+  const tablesBySchema = new Map<number, Awaited<ReturnType<typeof loadTables>>>();
+  const uniqueSchemaIds = [...new Set(input.sources.map(s => s.schemaId ?? schemaId))];
+  for (const sid of uniqueSchemaIds) {
+    tablesBySchema.set(sid, await loadTables(sid));
+  }
+
   const sourceIdByPosition = new Map<number, number>();
   const sources: WideTableSource[] = [];
 
   for (const src of input.sources) {
+    const srcSchemaId = src.schemaId ?? schemaId;
     const srcId = await store.nextId("wideSources");
     sourceIdByPosition.set(src.position, srcId);
-    const tables = await loadTables(schemaId);
+    const tables = tablesBySchema.get(srcSchemaId) ?? [];
     const tbl = tables.find(t => t.id === src.tableId);
     sources.push({
-      id: srcId, wideTableId: wtId, tableId: src.tableId,
+      id: srcId, wideTableId: wtId, schemaId: srcSchemaId, tableId: src.tableId,
       tableName: tbl?.name ?? String(src.tableId),
       colPrefix: src.colPrefix ?? null,
       joinType: src.joinType,
@@ -126,16 +134,18 @@ export async function createWideTable(schemaId: number, input: CreateWideTableIn
     });
   }
 
+  // Build a combined field lookup across all schemas
+  const allTables = [...tablesBySchema.values()].flat();
+
   const columns: WideTableColumn[] = [];
   for (const col of input.columns) {
     const srcId = sourceIdByPosition.get(col.sourcePosition);
     if (!srcId) continue;
     const colId = await store.nextId("wideColumns");
-    const tables = await loadTables(schemaId);
     let fieldName = String(col.fieldId);
     let fieldType = "VARCHAR(255)";
     let tableName = "";
-    outer: for (const t of tables) {
+    outer: for (const t of allTables) {
       for (const f of t.fields) {
         if (f.id === col.fieldId) {
           fieldName = f.name;
@@ -176,6 +186,7 @@ export async function deleteWideTable(id: number): Promise<void> {
 // ── Preview (stateless, no DB) ─────────────────────────────────────────────────
 
 export type PreviewSource = {
+  schemaId: number; schemaName: string;
   tableId: number; tableName: string; colPrefix: string;
   joinType: "BASE" | "INNER" | "LEFT"; joinCondition: string | null;
   position: number;
@@ -268,26 +279,55 @@ function autoComposeOrder(tables: TableInfo[], fieldsByTable: Map<number, FieldI
   return { orderedIds, joinMap };
 }
 
-export async function previewWideTable(schemaId: number, tableIds: number[]): Promise<WideTablePreview> {
-  // Load tables from file store
-  const allTables = await loadTables(schemaId);
-  const requestedTables = allTables.filter(t => tableIds.includes(t.id));
-  if (!requestedTables.length) return { sources: [], columns: [], sql: "" };
+export type TableRef = { schemaId: number; tableId: number };
 
-  const tableMap = new Map<number, TableInfo>(requestedTables.map(t => ({ id: t.id, name: t.name })).map(t => [t.id, t]));
+export async function previewWideTable(
+  _primarySchemaId: number,
+  tableRefs: TableRef[],
+): Promise<WideTablePreview> {
+  if (!tableRefs.length) return { sources: [], columns: [], sql: "" };
+
+  // Load each unique schema's tables + name
+  const uniqueSchemaIds = [...new Set(tableRefs.map(r => r.schemaId))];
+  const tablesBySchema = new Map<number, Awaited<ReturnType<typeof loadTables>>>();
+  const schemaNameById = new Map<number, string>();
+
+  for (const sid of uniqueSchemaIds) {
+    const tables = await loadTables(sid);
+    tablesBySchema.set(sid, tables);
+    // Derive schema name from slug (best-effort)
+    const slug = await store.indexGetStr("schemaIdToSlug", sid);
+    schemaNameById.set(sid, slug ?? String(sid));
+  }
+
+  // Resolve requested tables (tableId is unique across schemas)
+  const resolved = tableRefs.map(ref => {
+    const tables = tablesBySchema.get(ref.schemaId) ?? [];
+    const tbl = tables.find(t => t.id === ref.tableId);
+    return tbl ? { ...tbl, schemaId: ref.schemaId } : null;
+  }).filter(Boolean) as (Awaited<ReturnType<typeof loadTables>>[number] & { schemaId: number })[];
+
+  if (!resolved.length) return { sources: [], columns: [], sql: "" };
+
+  const tableMap = new Map<number, TableInfo>(resolved.map(t => [t.id, { id: t.id, name: t.name }]));
   const fieldsByTable = new Map<number, FieldInfo[]>();
-  for (const t of requestedTables) {
+  const schemaIdByTableId = new Map<number, number>();
+
+  for (const t of resolved) {
     fieldsByTable.set(t.id, t.fields.map(f => ({
       id: f.id, name: f.name, data_type: f.dataType, is_primary_key: f.isPrimaryKey,
     })));
+    schemaIdByTableId.set(t.id, t.schemaId);
   }
 
-  const inputTables = tableIds.map(id => tableMap.get(id)).filter(Boolean) as TableInfo[];
+  const inputTables = tableRefs.map(r => tableMap.get(r.tableId)).filter(Boolean) as TableInfo[];
   const { orderedIds, joinMap } = autoComposeOrder(inputTables, fieldsByTable);
   const orderedTables = orderedIds.map(id => tableMap.get(id)).filter(Boolean) as TableInfo[];
 
   const sources: PreviewSource[] = orderedTables.map((tbl, pos) => {
-    if (pos === 0) return { tableId: tbl.id, tableName: tbl.name, colPrefix: "", joinType: "BASE" as const, joinCondition: null, position: 0 };
+    const tblSchemaId = schemaIdByTableId.get(tbl.id) ?? _primarySchemaId;
+    const tblSchemaName = schemaNameById.get(tblSchemaId) ?? String(tblSchemaId);
+    if (pos === 0) return { schemaId: tblSchemaId, schemaName: tblSchemaName, tableId: tbl.id, tableName: tbl.name, colPrefix: "", joinType: "BASE" as const, joinCondition: null, position: 0 };
     const edge = joinMap.get(tbl.id);
     let joinCondition: string | null = null;
     if (edge) {
@@ -296,7 +336,7 @@ export async function previewWideTable(schemaId: number, tableIds: number[]): Pr
       else
         joinCondition = `\`${edge.fromTable.name}\`.\`${edge.fromField}\` = \`${tbl.name}\`.\`id\``;
     }
-    return { tableId: tbl.id, tableName: tbl.name, colPrefix: `${tbl.name}_`, joinType: "LEFT" as const, joinCondition, position: pos };
+    return { schemaId: tblSchemaId, schemaName: tblSchemaName, tableId: tbl.id, tableName: tbl.name, colPrefix: `${tbl.name}_`, joinType: "LEFT" as const, joinCondition, position: pos };
   });
 
   const allOutputNames = new Map<string, number>();

@@ -198,11 +198,13 @@ export const mockApi = {
       await delay(80);
       return id === 1 ? mockWideDetail : { ...mockWideDetail, id, sources: [], columns: [] };
     },
-    preview: async (schemaId: number, tableIds: number[]): Promise<WideTablePreview> => {
+    preview: async (schemaId: number, tableRefs: { schemaId: number; tableId: number }[]): Promise<WideTablePreview> => {
       await delay(150);
       const schema = getDetail(schemaId);
+      const tableIds = tableRefs.map(r => r.tableId);
       const sourceTables = schema.tables.filter(t => tableIds.includes(t.id));
       const sources = sourceTables.map((t, i) => ({
+        schemaId, schemaName: schema.name,
         tableId: t.id, tableName: t.name,
         colPrefix: i === 0 ? "" : t.name,
         joinType: (i === 0 ? "BASE" : "LEFT") as "BASE" | "LEFT",
