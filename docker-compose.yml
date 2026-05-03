@@ -1,0 +1,47 @@
+services:
+  app:
+    build: .
+    image: db-master:latest
+    container_name: db-master
+    ports:
+      - "3005:3005"          # 改這裡可換成其他 host port，例如 "8080:3005"
+    volumes:
+      - app_data:/app/data   # 所有資料（Schema、命名字典、版本…）都存這裡
+    environment:
+      NODE_ENV: production
+      PORT: "3005"
+      # ── LLM 設定（選填）────────────────────────────────────────────────────
+      # 不設定時，Schema 編輯、命名字典、DDL 匯入等功能仍正常使用
+      # AI 分析與自然語言生成功能將無法使用
+      #
+      # Anthropic Claude（推薦）
+      # LLM_PROVIDER: anthropic
+      # ANTHROPIC_API_KEY: "sk-ant-..."
+      #
+      # OpenRouter（多種開源模型）
+      # LLM_PROVIDER: openai
+      # LLM_BASE_URL: "https://openrouter.ai/api/v1"
+      # LLM_API_KEY: "sk-or-..."
+      # LLM_MODEL: "meta-llama/llama-3.3-70b-instruct"
+      #
+      # Ollama 本機（完全離線）
+      # LLM_PROVIDER: openai
+      # LLM_BASE_URL: "http://host.docker.internal:11434/v1"
+      # LLM_API_KEY: "ollama"
+      # LLM_MODEL: "llama3.2"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3005/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  app_data:
+    driver: local
+    # 若想指定 host 上的實際路徑（方便備份），改成：
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /your/host/path/data

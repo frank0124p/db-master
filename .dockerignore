@@ -1,0 +1,34 @@
+# Dependencies (rebuilt in Docker)
+node_modules
+**/node_modules
+
+# Built output (rebuilt in Docker)
+**/dist
+apps/api/public
+
+# Git
+.git
+.gitignore
+
+# Runtime data (not part of the image; mounted as a volume)
+data/schemas
+data/naming
+data/rules
+data/versions
+data/wide-tables
+data/_counters.json
+data/_index.json
+data/_ddl-manifest.json
+data/settings.json
+data/llm-audit-logs.jsonl
+data/.initialized
+
+# Local env files (secrets never go in the image)
+.env
+.env.local
+**/.env.local
+
+# Editor / OS
+.DS_Store
+*.log
+.claude
