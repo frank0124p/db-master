@@ -11,6 +11,7 @@ const zh = {
   "nav.er":        "ER 圖",
   "nav.wide":      "寬表",
   "nav.rules":     "規則 & Skills",
+  "nav.datahub":   "DataHub",
 
   // ── Sidebar ───────────────────────────────────────────────────────────────
   "sidebar.schemas":    "Schemas",
@@ -192,6 +193,7 @@ const en: Record<string, string> = {
   "nav.er":        "ER Diagram",
   "nav.wide":      "Wide Tables",
   "nav.rules":     "Rules & Skills",
+  "nav.datahub":   "DataHub",
 
   "sidebar.schemas":    "Schemas",
   "sidebar.ai_gen":     "AI Generate",

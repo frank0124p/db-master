@@ -9,8 +9,16 @@ export interface LlmSettings {
   model: string;
 }
 
+export interface DataHubSettings {
+  url: string;
+  token: string;
+  platform: string;
+  env: "PROD" | "DEV" | "STAGING" | "TEST";
+}
+
 interface Settings {
   llm?: Partial<LlmSettings>;
+  datahub?: Partial<DataHubSettings>;
 }
 
 export async function getLlmSettings(): Promise<Partial<LlmSettings>> {
@@ -23,4 +31,16 @@ export async function updateLlmSettings(patch: Partial<LlmSettings>): Promise<Pa
   settings.llm = { ...settings.llm, ...patch };
   await store.writeJson(SETTINGS_FILE(), settings);
   return settings.llm;
+}
+
+export async function getDataHubSettings(): Promise<Partial<DataHubSettings>> {
+  const settings = (await store.readJson<Settings>(SETTINGS_FILE())) ?? {};
+  return settings.datahub ?? {};
+}
+
+export async function updateDataHubSettings(patch: Partial<DataHubSettings>): Promise<Partial<DataHubSettings>> {
+  const settings = (await store.readJson<Settings>(SETTINGS_FILE())) ?? {};
+  settings.datahub = { ...settings.datahub, ...patch };
+  await store.writeJson(SETTINGS_FILE(), settings);
+  return settings.datahub;
 }

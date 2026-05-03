@@ -153,6 +153,25 @@ export interface LlmSettings {
   model: string;
 }
 
+export interface DataHubSettings {
+  url: string;
+  token: string;
+  platform: string;
+  env: "PROD" | "DEV" | "STAGING" | "TEST";
+}
+
+export interface PushRecord {
+  id: string;
+  schemaId: number;
+  schemaName: string;
+  tablesTotal: number;
+  tablesOk: number;
+  tablesFailed: number;
+  errors: string[];
+  pushedAt: string;
+  status: "ok" | "partial" | "failed";
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/v1${path}`, {
     headers: { "Content-Type": "application/json" }, ...init,
@@ -260,6 +279,14 @@ const realApi = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, domain }),
       }),
+  },
+  datahub: {
+    getSettings: () => req<{ settings: Partial<DataHubSettings> }>("/datahub/settings"),
+    updateSettings: (patch: Partial<DataHubSettings>) =>
+      req<{ settings: Partial<DataHubSettings> }>("/datahub/settings", { method: "PATCH", body: JSON.stringify(patch) }),
+    test: () => req<{ ok: boolean; message: string }>("/datahub/test", { method: "POST" }),
+    push: (schemaId: number) => req<PushRecord>(`/datahub/push/${schemaId}`, { method: "POST" }),
+    getPushLog: () => req<PushRecord[]>("/datahub/push-log"),
   },
   reload: () => req<{ ok: boolean; reloadedAt: string }>("/reload", { method: "POST" }),
 };

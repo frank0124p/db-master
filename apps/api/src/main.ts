@@ -22,6 +22,7 @@ import rulesRouter from "./routes/rules.js";
 import skillsRouter from "./routes/skills.js";
 import llmRouter from "./routes/llm.js";
 import settingsRouter from "./routes/settings.js";
+import datahubRouter from "./routes/datahub.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -59,6 +60,7 @@ app.use("/api/v1/rules", rulesRouter);
 app.use("/api/v1/skills", skillsRouter);
 app.use("/api/v1/llm", llmRouter);
 app.use("/api/v1/settings", settingsRouter);
+app.use("/api/v1/datahub", datahubRouter);
 
 async function start() {
   await runMigration();

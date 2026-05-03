@@ -360,5 +360,16 @@ export const mockApi = {
     updateLlm: async (patch: Record<string, unknown>) => ({ settings: { provider: "anthropic" as const, apiKey: "", baseUrl: "", model: "", ...patch } as { provider: "anthropic" | "openai"; apiKey: string; baseUrl: string; model: string } }),
     testLlm: async () => ({ ok: false, message: "Mock mode — no real API" }),
   },
+  datahub: {
+    getSettings: async () => ({ settings: { url: "", token: "", platform: "mysql", env: "PROD" as const } }),
+    updateSettings: async (patch: Record<string, unknown>) => ({ settings: { url: "", token: "", platform: "mysql", env: "PROD" as const, ...patch } as import("../api.js").DataHubSettings }),
+    test: async () => ({ ok: false, message: "Mock mode — no real DataHub" }),
+    push: async (_schemaId: number) => ({
+      id: "mock-" + Date.now(), schemaId: _schemaId, schemaName: "mock-schema",
+      tablesTotal: 0, tablesOk: 0, tablesFailed: 0, errors: ["Mock mode"],
+      pushedAt: new Date().toISOString(), status: "failed" as const,
+    }),
+    getPushLog: async () => [],
+  },
   reload: async () => ({ ok: true, reloadedAt: new Date().toISOString() }),
 };
