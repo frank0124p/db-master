@@ -480,7 +480,7 @@ export default function VersionHistoryPage() {
   });
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 20, overflowY: "auto", gap: 16 }}>
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: 20, overflowY: "auto", gap: 16 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
@@ -599,8 +599,10 @@ export default function VersionHistoryPage() {
                     {/* ── Expanded detail ── */}
                     {isExpanded && (
                       <tr key={`${v.id}-detail`} style={{ borderTop: "1px solid var(--border)" }}>
-                        <td colSpan={8} style={{ padding: "20px 20px 24px", background: "var(--bg-1)" }}>
-                          <VersionDetail version={v} entries={namingEntries} />
+                        <td colSpan={8} style={{ padding: 0, background: "var(--bg-1)" }}>
+                          <div style={{ maxHeight: 520, overflowY: "auto", padding: "20px 20px 24px" }}>
+                            <VersionDetail version={v} entries={namingEntries} />
+                          </div>
                         </td>
                       </tr>
                     )}

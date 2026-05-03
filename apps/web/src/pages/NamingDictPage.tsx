@@ -297,7 +297,7 @@ export default function NamingDictPage() {
   const usedTags = [...new Set(entries?.flatMap(e => e.tags) ?? [])];
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 20, overflowY: "auto", gap: 14 }}>
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: 20, overflowY: "auto", gap: 14 }}>
       {/* Title bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 16, fontWeight: 600 }}>命名字典</div>
