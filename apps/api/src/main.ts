@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import { errorMiddleware } from "./middleware/error.js";
 import { loadSkills } from "./services/skills.js";
 import { loadDdlFiles } from "./services/ddl-loader.js";
+import { runMigration } from "./db/migrate.js";
 import schemasRouter from "./routes/schemas.js";
 import tablesRouter from "./routes/tables.js";
 import fieldsRouter from "./routes/fields.js";
@@ -60,12 +61,18 @@ app.use("/api/v1/llm", llmRouter);
 app.use("/api/v1/settings", settingsRouter);
 
 async function start() {
+  await runMigration();
   await loadSkills();
   await loadDdlFiles();
   if (isDev) {
     const { createServer: createViteServer } = await import("vite");
+    const react = (await import("@vitejs/plugin-react")).default;
+    const tailwindcss = (await import("@tailwindcss/vite")).default;
+    const webRoot = path.resolve(__dirname, "../../web");
     const vite = await createViteServer({
-      root: path.resolve(__dirname, "../../web"),
+      root: webRoot,
+      configFile: false,   // inline config — prevents tsx from creating timestamp files next to vite.config.ts
+      plugins: [react(), tailwindcss()],
       server: { middlewareMode: true },
       appType: "spa",
     });
