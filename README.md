@@ -30,20 +30,14 @@ pnpm install
 pnpm --filter @schema-studio/core build
 pnpm --filter @schema-studio/ddl-parser build
 
-# 3. 設定 API 環境變數
+# 3. 設定 API 環境變數（可選，不設定則 AI 功能不可用）
 cp apps/api/.env.example apps/api/.env.local
-# 編輯 apps/api/.env.local，填入 LLM API Key（可選）
 
-# 4. 啟動 API（port 3005）
-cd apps/api && node --import tsx/esm src/main.ts
-
-# 5. 啟動前端（port 5173，另開終端）
-cd apps/web && pnpm dev
+# 4. 啟動（前端 + 後端 同在 port 3005）
+pnpm dev
 ```
 
-瀏覽器開啟 [http://localhost:5173](http://localhost:5173)
-
-> **Mock 模式**（不需要 API）：在 `apps/web/.env.local` 加入 `VITE_USE_MOCK=true`，可在不啟動後端的狀況下瀏覽 UI。
+瀏覽器開啟 [http://localhost:3005](http://localhost:3005)
 
 > **語言切換**：右上角可切換繁體中文 / English。
 
@@ -214,6 +208,33 @@ domain: semiconductor
 
 ## 資料目錄說明
 
+```
+data/
+├── _sys/                        # 系統檔案（自動管理，勿手動修改）
+│   ├── counters.json            # 自增 ID 計數器
+│   ├── index.json               # 反向查找索引（ID → 路徑）
+│   └── ddl-manifest.json        # DDL 匯入追蹤（mtime 快取）
+├── ddl/                         # ← 放入 .sql 即自動匯入（可版本控制）
+│   ├── plm-core.sql
+│   └── mes-process.sql
+├── schemas/                     # Schema 資料（slug 命名資料夾）
+│   └── plm-core/                # Schema slug（由名稱自動生成）
+│       ├── meta.json            # Schema 名稱、描述、Domain
+│       ├── tables/
+│       │   ├── parts.json       # 每個 Table 一個檔案，以 table name 命名
+│       │   └── bom_items.json
+│       ├── versions/
+│       │   ├── v1.json          # 版本快照，以 v{N} 命名
+│       │   └── v2.json
+│       └── wide-tables/
+│           └── bom-view.json    # 寬表定義，以 slug 命名
+├── naming/                      # 命名字典（以 stdName 命名）
+│   ├── lot_id.json
+│   └── part.json
+├── rules/                       # 規則覆蓋設定（自動生成）
+└── skills/                      # ← 放入 .md 即新增自訂規則（可版本控制）
+```
+
 ### `data/ddl/` — 自動匯入 DDL
 
 放入任何 `.sql` 檔案，啟動（或點擊 **↺ 重新載入**）後自動匯入：
@@ -221,7 +242,7 @@ domain: semiconductor
 - 檔名轉 Schema 名稱：`plm-core.sql` → `Plm Core`
 - 重複匯入保護：以 mtime 追蹤，未修改的檔案不重複匯入
 - 同名 Schema 已存在時更新而非重建
-- 強制重新匯入：刪除 `data/_ddl-manifest.json` 後重啟
+- 強制重新匯入：刪除 `data/_sys/ddl-manifest.json` 後重啟
 
 ### `data/skills/` — 自訂規則 Skill
 
