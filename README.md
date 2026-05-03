@@ -128,7 +128,6 @@ DB Master/
 │   ├── ROADMAP.md               # 功能路線圖
 │   └── PROJECT.md               # 產品背景與架構決策
 ├── tasks/                       # 開發任務清單（15 項，已完成 14 項）
-├── scripts/                     # 一次性工具腳本
 └── CLAUDE.md                    # Claude Code 開發規範
 ```
 

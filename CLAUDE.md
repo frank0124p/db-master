@@ -31,7 +31,6 @@ DB Master/
 │   └── skills/                # .md files defining custom rules
 ├── skills/                    # Built-in Skill knowledge base (read-only)
 ├── prompts/                   # LLM prompt templates (runtime read)
-├── docker-compose.yml         # Legacy — MariaDB for future migration path; NOT used by the app today
 └── pnpm-workspace.yaml
 ```
 
