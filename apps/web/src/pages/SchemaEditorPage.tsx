@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { useT } from "../i18n.js";
@@ -166,6 +167,7 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast 
   const statusIcon = r.status === "exact" ? "✓" : r.status === "alias" ? "⚠" : r.status === "fuzzy" ? "~" : "?";
 
   return (
+    <>
     <tr style={{ borderBottom: "1px solid var(--border)" }}
       onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "var(--bg-2)"}
       onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = "transparent"}>
@@ -216,16 +218,18 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast 
           <button onClick={deleteField} style={{ background: "transparent", border: "none", color: "var(--text-3)", cursor: "pointer", fontSize: 14, opacity: 0 }} className="del-btn">✕</button>
         </div>
       </td>
-      {showDictModal && (
-        <SingleFieldDictModal
-          fieldName={name}
-          comment={field.comment}
-          domain={domain}
-          onClose={() => setShowDictModal(false)}
-          onAdded={() => void qc.invalidateQueries({ queryKey: ["naming"] })}
-        />
-      )}
     </tr>
+    {showDictModal && createPortal(
+      <SingleFieldDictModal
+        fieldName={name}
+        comment={field.comment}
+        domain={domain}
+        onClose={() => setShowDictModal(false)}
+        onAdded={() => void qc.invalidateQueries({ queryKey: ["naming"] })}
+      />,
+      document.body
+    )}
+    </>
   );
 }
 

@@ -318,7 +318,7 @@ export default function NamingDictPage() {
       <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--bg-2)", borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)" }}>
         <thead>
           <tr style={{ background: "var(--bg-3)" }}>
-            {["概念", "標準英文名", "領域", ""].map((h, i) => (
+            {["概念", "標準英文名", "領域", "最後更新", ""].map((h, i) => (
               <th key={i} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid var(--border)" }}>{h}</th>
             ))}
           </tr>
@@ -337,6 +337,9 @@ export default function NamingDictPage() {
                 <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: e.domain === "semiconductor" ? "rgba(123,140,255,0.12)" : "var(--bg-4)", color: e.domain === "semiconductor" ? "var(--accent)" : "var(--text-3)" }}>
                   {e.domain === "semiconductor" ? "半導體" : "通用"}
                 </span>
+              </td>
+              <td style={{ padding: "9px 12px", fontSize: 11, color: "var(--text-3)", whiteSpace: "nowrap" }}>
+                {new Date(e.updatedAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
               </td>
               <td style={{ padding: "9px 12px" }}>
                 <div style={{ display: "flex", gap: 4 }}>

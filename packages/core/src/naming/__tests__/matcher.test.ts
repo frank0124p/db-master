@@ -3,10 +3,10 @@ import { checkFieldName, checkFieldNames } from "../matcher.js";
 import type { NamingEntry } from "../../types.js";
 
 const entries: NamingEntry[] = [
-  { id: 1, concept: "Equipment ID", stdName: "equip_id", aliases: ["equipment_id", "equip_no"], domain: "semiconductor", description: null, tags: [], aiDescription: null },
-  { id: 2, concept: "Lot ID", stdName: "lot_id", aliases: ["lot_number", "lot_no"], domain: "semiconductor", description: null, tags: [], aiDescription: null },
-  { id: 3, concept: "Wafer ID", stdName: "wafer_id", aliases: ["wafer_no"], domain: "semiconductor", description: null, tags: [], aiDescription: null },
-  { id: 4, concept: "Measured Value", stdName: "meas_value", aliases: ["measured_value", "measure_val"], domain: "semiconductor", description: null, tags: [], aiDescription: null },
+  { id: 1, concept: "Equipment ID", stdName: "equip_id", aliases: ["equipment_id", "equip_no"], domain: "semiconductor", description: null, tags: [], aiDescription: null, updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 2, concept: "Lot ID", stdName: "lot_id", aliases: ["lot_number", "lot_no"], domain: "semiconductor", description: null, tags: [], aiDescription: null, updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 3, concept: "Wafer ID", stdName: "wafer_id", aliases: ["wafer_no"], domain: "semiconductor", description: null, tags: [], aiDescription: null, updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 4, concept: "Measured Value", stdName: "meas_value", aliases: ["measured_value", "measure_val"], domain: "semiconductor", description: null, tags: [], aiDescription: null, updatedAt: "2024-01-01T00:00:00.000Z" },
 ];
 
 describe("checkFieldName", () => {

@@ -25,7 +25,7 @@ function toEntry(f: NamingFile): NamingEntry {
   return {
     id: f.id, concept: f.concept, stdName: f.stdName, aliases: f.aliases,
     domain: f.domain, tags: f.tags, aiDescription: f.aiDescription,
-    description: f.description,
+    description: f.description, updatedAt: f.updatedAt,
   };
 }
 

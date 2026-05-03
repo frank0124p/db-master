@@ -13,6 +13,7 @@ export interface SchemaDetail extends Schema { tables: Table[]; }
 export interface NamingEntry {
   id: number; concept: string; stdName: string; aliases: string[];
   domain: string; tags: string[]; aiDescription: string | null; description: string | null;
+  updatedAt: string;
 }
 
 export type MatchStatus = "exact" | "alias" | "fuzzy" | "unknown";
@@ -37,11 +38,17 @@ export interface SchemaVersion {
   createdAt: string; diff: VersionDiff | null; snapshot: VersionSnapshot;
 }
 
+export interface FieldPropChange { prop: string; before: string | null; after: string | null; }
+export interface FieldModifiedDiff { name: string; changes: FieldPropChange[]; }
+export interface TableModifiedDiff {
+  name: string;
+  commentBefore?: string | null; commentAfter?: string | null;
+  fieldsAdded: string[]; fieldsRemoved: string[];
+  /** structured format (new) or legacy string format */
+  fieldsModified: FieldModifiedDiff[] | { before: string; after: string }[];
+}
 export interface VersionDiff {
-  tables: {
-    added: string[]; removed: string[];
-    modified: { name: string; fieldsAdded: string[]; fieldsRemoved: string[]; fieldsModified: { before: string; after: string }[] }[];
-  };
+  tables: { added: string[]; removed: string[]; modified: TableModifiedDiff[] };
   wideTables?: {
     added: string[]; removed: string[];
     modified: { name: string; sourcesAdded: string[]; sourcesRemoved: string[]; columnsAdded: number; columnsRemoved: number }[];
@@ -125,6 +132,16 @@ export interface RuleDetail {
   defaultConfig: Record<string, unknown>;
   severity: "error" | "warning" | "info";
   enabled: boolean; config: Record<string, unknown>;
+  source?: "built-in" | "skill";
+}
+
+export interface SkillRuleSummary {
+  id: string; group: string; severity: string; description: string;
+}
+
+export interface SkillInfo {
+  name: string; domain: string; tags: string[];
+  ruleCount: number; rules: SkillRuleSummary[]; content: string;
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -203,6 +220,9 @@ const realApi = {
     list: () => req<{ rules: RuleDetail[] }>("/rules"),
     update: (ruleId: string, patch: Partial<{ severity: "error" | "warning" | "info"; enabled: boolean; config: Record<string, unknown> }>) =>
       req<{ rule: RuleDetail }>(`/rules/${ruleId}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  },
+  skills: {
+    list: () => req<{ skills: SkillInfo[] }>("/skills"),
   },
   naming: {
     list: (domain?: string) => req<NamingEntry[]>(`/naming-dictionary${domain ? `?domain=${domain}` : ""}`),

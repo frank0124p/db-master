@@ -69,6 +69,7 @@ export interface NamingEntry {
   tags: string[];
   aiDescription: string | null;
   description: string | null;
+  updatedAt: string;
 }
 
 // ── API Input types ──

@@ -286,6 +286,7 @@ export const mockApi = {
         id: uid(), concept: b.concept, stdName: b.std_name,
         aliases: b.aliases, domain: b.domain ?? "semiconductor",
         tags: [], aiDescription: null, description: b.description ?? null,
+        updatedAt: new Date().toISOString(),
       };
       naming = [...naming, entry];
       return entry;
@@ -348,6 +349,9 @@ export const mockApi = {
       });
       return new Response(mockSse, { headers: { "Content-Type": "text/event-stream" } });
     },
+  },
+  skills: {
+    list: async () => ({ skills: [] }),
   },
   reload: async () => ({ ok: true, reloadedAt: new Date().toISOString() }),
 };
