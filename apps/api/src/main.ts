@@ -20,6 +20,7 @@ import importDdlRouter from "./routes/import-ddl.js";
 import rulesRouter from "./routes/rules.js";
 import skillsRouter from "./routes/skills.js";
 import llmRouter from "./routes/llm.js";
+import settingsRouter from "./routes/settings.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -56,6 +57,7 @@ app.use("/api/v1/schemas/:schemaId/import-ddl", importDdlRouter);
 app.use("/api/v1/rules", rulesRouter);
 app.use("/api/v1/skills", skillsRouter);
 app.use("/api/v1/llm", llmRouter);
+app.use("/api/v1/settings", settingsRouter);
 
 async function start() {
   await loadSkills();

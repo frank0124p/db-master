@@ -19,11 +19,43 @@ const PROMPTS_DIR = path.resolve(__dirname, "../../../../prompts");
 const AUDIT_LOG = path.resolve(__dirname, "../../../../data/llm-audit-logs.jsonl");
 
 // ── Provider config ────────────────────────────────────────────────────────────
+// Priority: persisted settings (data/settings.json) > env vars
 
-const PROVIDER = (process.env["LLM_PROVIDER"] ?? "anthropic") as "anthropic" | "openai";
-const API_KEY = process.env["LLM_API_KEY"] ?? process.env["ANTHROPIC_API_KEY"] ?? "";
-const BASE_URL = process.env["LLM_BASE_URL"] ?? "";
-const MODEL_OVERRIDE = process.env["LLM_MODEL"];
+interface ResolvedConfig {
+  provider: "anthropic" | "openai";
+  apiKey: string;
+  baseUrl: string;
+  modelOverride: string | undefined;
+}
+
+let _configCache: ResolvedConfig | null = null;
+
+async function getConfig(): Promise<ResolvedConfig> {
+  if (_configCache) return _configCache;
+  try {
+    const { getLlmSettings } = await import("../repositories/settings.js");
+    const s = await getLlmSettings();
+    _configCache = {
+      provider: (s.provider ?? process.env["LLM_PROVIDER"] ?? "anthropic") as "anthropic" | "openai",
+      apiKey: s.apiKey ?? process.env["LLM_API_KEY"] ?? process.env["ANTHROPIC_API_KEY"] ?? "",
+      baseUrl: s.baseUrl ?? process.env["LLM_BASE_URL"] ?? "",
+      modelOverride: s.model ?? process.env["LLM_MODEL"],
+    };
+  } catch {
+    _configCache = {
+      provider: (process.env["LLM_PROVIDER"] ?? "anthropic") as "anthropic" | "openai",
+      apiKey: process.env["LLM_API_KEY"] ?? process.env["ANTHROPIC_API_KEY"] ?? "",
+      baseUrl: process.env["LLM_BASE_URL"] ?? "",
+      modelOverride: process.env["LLM_MODEL"],
+    };
+  }
+  return _configCache;
+}
+
+export function resetLlmConfig(): void {
+  _configCache = null;
+  _anthropic = null;
+}
 
 const DEFAULT_MODELS = {
   generate: "claude-sonnet-4-6",
@@ -31,16 +63,46 @@ const DEFAULT_MODELS = {
   suggest:  "claude-haiku-4-5-20251001",
 };
 
-function resolveModel(op: keyof typeof DEFAULT_MODELS): string {
-  return MODEL_OVERRIDE ?? DEFAULT_MODELS[op];
+async function resolveModel(op: keyof typeof DEFAULT_MODELS): Promise<string> {
+  const cfg = await getConfig();
+  return cfg.modelOverride ?? DEFAULT_MODELS[op];
 }
 
 // ── Anthropic client (lazy) ────────────────────────────────────────────────────
 
 let _anthropic: Anthropic | null = null;
-function getAnthropicClient(): Anthropic {
-  if (!_anthropic) _anthropic = new Anthropic({ apiKey: API_KEY });
+async function getAnthropicClient(): Promise<Anthropic> {
+  if (!_anthropic) {
+    const cfg = await getConfig();
+    _anthropic = new Anthropic({ apiKey: cfg.apiKey });
+  }
   return _anthropic;
+}
+
+// ── Connection test ────────────────────────────────────────────────────────────
+
+export async function testLlmConnection(): Promise<{ ok: boolean; message: string }> {
+  const cfg = await getConfig();
+  try {
+    if (cfg.provider === "openai") {
+      if (!cfg.baseUrl) return { ok: false, message: "baseUrl is required for openai provider" };
+      const res = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/models`, {
+        headers: { Authorization: `Bearer ${cfg.apiKey}` },
+      });
+      if (!res.ok) return { ok: false, message: `HTTP ${res.status}` };
+      return { ok: true, message: "Connection successful" };
+    } else {
+      const client = await getAnthropicClient();
+      await client.messages.create({
+        model: cfg.modelOverride ?? DEFAULT_MODELS.suggest,
+        max_tokens: 16,
+        messages: [{ role: "user", content: "ping" }],
+      });
+      return { ok: true, message: "Connection successful" };
+    }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unknown error" };
+  }
 }
 
 // ── OpenAI-compatible streaming helper ─────────────────────────────────────────
@@ -53,13 +115,14 @@ async function* streamOpenAI(
   model: string,
   maxTokens: number,
 ): AsyncGenerator<{ text?: string; inputTokens?: number; outputTokens?: number }> {
-  if (!BASE_URL) throw new Error("LLM_BASE_URL must be set when LLM_PROVIDER=openai");
+  const cfg = await getConfig();
+  if (!cfg.baseUrl) throw new Error("LLM_BASE_URL must be set when LLM_PROVIDER=openai");
 
-  const res = await fetch(`${BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+  const res = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${API_KEY}`,
+      "Authorization": `Bearer ${cfg.apiKey}`,
     },
     body: JSON.stringify({
       model,
@@ -105,13 +168,14 @@ async function* streamOpenAI(
 }
 
 async function completeOpenAI(prompt: string, model: string, maxTokens: number): Promise<string> {
-  if (!BASE_URL) throw new Error("LLM_BASE_URL must be set when LLM_PROVIDER=openai");
+  const cfg = await getConfig();
+  if (!cfg.baseUrl) throw new Error("LLM_BASE_URL must be set when LLM_PROVIDER=openai");
 
-  const res = await fetch(`${BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+  const res = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${API_KEY}`,
+      "Authorization": `Bearer ${cfg.apiKey}`,
     },
     body: JSON.stringify({
       model,
@@ -171,20 +235,21 @@ export async function* generateSchemaStream(
     .replace("{{skills}}", skills)
     .replace("{{user_prompt}}", userPrompt);
 
-  const model = resolveModel("generate");
+  const cfg = await getConfig();
+  const model = await resolveModel("generate");
   const startMs = Date.now();
   let fullText = "";
   let inputTokens = 0;
   let outputTokens = 0;
 
   try {
-    if (PROVIDER === "openai") {
+    if (cfg.provider === "openai") {
       for await (const chunk of streamOpenAI(systemPrompt, model, 4096)) {
         if (chunk.text) { fullText += chunk.text; yield { type: "token", text: chunk.text }; }
         if (chunk.outputTokens) outputTokens = chunk.outputTokens;
       }
     } else {
-      const stream = await getAnthropicClient().messages.stream({
+      const stream = await (await getAnthropicClient()).messages.stream({
         model, max_tokens: 4096,
         messages: [{ role: "user", content: systemPrompt }],
       });
@@ -205,7 +270,7 @@ export async function* generateSchemaStream(
     const parsed = JSON.parse(jsonMatch[0]) as GenerateSchemaResult;
 
     await writeAuditLog({
-      ts: new Date().toISOString(), provider: PROVIDER, model,
+      ts: new Date().toISOString(), provider: cfg.provider, model,
       prompt: userPrompt.slice(0, 200), inputTokens, responseTokens: outputTokens,
       latencyMs: Date.now() - startMs, costUsd: 0, operation: "generate-schema",
     });
@@ -243,19 +308,20 @@ export async function* analyzeSchemaStream(
     .replace("{{naming_issues}}", namingText)
     .replace("{{schema_json}}", schemaJson);
 
-  const model = resolveModel("analyze");
+  const cfg = await getConfig();
+  const model = await resolveModel("analyze");
   const startMs = Date.now();
   let inputTokens = 0;
   let outputTokens = 0;
 
   try {
-    if (PROVIDER === "openai") {
+    if (cfg.provider === "openai") {
       for await (const chunk of streamOpenAI(systemPrompt, model, 2048)) {
         if (chunk.text) yield { type: "token", text: chunk.text };
         if (chunk.outputTokens) outputTokens = chunk.outputTokens;
       }
     } else {
-      const stream = await getAnthropicClient().messages.stream({
+      const stream = await (await getAnthropicClient()).messages.stream({
         model, max_tokens: 2048,
         messages: [{ role: "user", content: systemPrompt }],
       });
@@ -270,7 +336,7 @@ export async function* analyzeSchemaStream(
     }
 
     await writeAuditLog({
-      ts: new Date().toISOString(), provider: PROVIDER, model,
+      ts: new Date().toISOString(), provider: cfg.provider, model,
       prompt: schemaJson.slice(0, 200), inputTokens, responseTokens: outputTokens,
       latencyMs: Date.now() - startMs, costUsd: 0, operation: "analyze-schema",
     });
@@ -321,13 +387,15 @@ ${ALLOWED_TAGS.join("、")}
 
 只回覆 JSON，不要其他文字。`;
 
-  const model = resolveModel("suggest");
+  const cfg = await getConfig();
+  const model = await resolveModel("suggest");
   let text: string;
 
-  if (PROVIDER === "openai") {
+  if (cfg.provider === "openai") {
     text = await completeOpenAI(prompt, model, 512);
   } else {
-    const message = await getAnthropicClient().messages.create({
+    const client = await getAnthropicClient();
+    const message = await client.messages.create({
       model, max_tokens: 512,
       messages: [{ role: "user", content: prompt }],
     });

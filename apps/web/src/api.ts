@@ -145,6 +145,13 @@ export interface SkillInfo {
   ruleCount: number; rules: SkillRuleSummary[]; content: string;
 }
 
+export interface LlmSettings {
+  provider: "anthropic" | "openai";
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/v1${path}`, {
     headers: { "Content-Type": "application/json" }, ...init,
@@ -224,6 +231,12 @@ const realApi = {
   },
   skills: {
     list: () => req<{ skills: SkillInfo[] }>("/skills"),
+  },
+  settings: {
+    getLlm: () => req<{ settings: LlmSettings }>("/settings/llm"),
+    updateLlm: (patch: Partial<LlmSettings>) =>
+      req<{ settings: LlmSettings }>("/settings/llm", { method: "PATCH", body: JSON.stringify(patch) }),
+    testLlm: () => req<{ ok: boolean; message: string }>("/settings/llm/test", { method: "POST" }),
   },
   naming: {
     list: (domain?: string) => req<NamingEntry[]>(`/naming-dictionary${domain ? `?domain=${domain}` : ""}`),

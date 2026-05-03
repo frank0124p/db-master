@@ -353,5 +353,10 @@ export const mockApi = {
   skills: {
     list: async () => ({ skills: [] }),
   },
+  settings: {
+    getLlm: async () => ({ settings: { provider: "anthropic" as const, apiKey: "", baseUrl: "", model: "" } }),
+    updateLlm: async (patch: Record<string, unknown>) => ({ settings: { provider: "anthropic" as const, apiKey: "", baseUrl: "", model: "", ...patch } as { provider: "anthropic" | "openai"; apiKey: string; baseUrl: string; model: string } }),
+    testLlm: async () => ({ ok: false, message: "Mock mode — no real API" }),
+  },
   reload: async () => ({ ok: true, reloadedAt: new Date().toISOString() }),
 };

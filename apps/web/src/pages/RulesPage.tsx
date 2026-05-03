@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type RuleDetail, type SkillInfo } from "../api.js";
+import React, { useState } from "react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { api, type RuleDetail, type SkillInfo, type LlmSettings } from "../api.js";
 import { useStore } from "../store.js";
 
 // ── shared helpers ────────────────────────────────────────────────────────────
@@ -417,9 +417,138 @@ function SkillsTab({ skills }: { skills: SkillInfo[] }) {
   );
 }
 
+// ── LLM Settings tab ─────────────────────────────────────────────────────────
+function FieldRow({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 20 }}>
+      <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", letterSpacing: "0.3px" }}>{label}</label>
+      {children}
+      {hint && <span style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.5 }}>{hint}</span>}
+    </div>
+  );
+}
+
+function LlmSettingsTab({ initial }: { initial: Partial<LlmSettings> }) {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const [form, setForm] = useState<Partial<LlmSettings>>(initial);
+  const [showKey, setShowKey] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const save = useMutation({
+    mutationFn: (patch: Partial<LlmSettings>) => api.settings.updateLlm(patch),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["llm-settings"] });
+      showToast("✓ LLM 設定已儲存");
+      setTestResult(null);
+    },
+    onError: (e) => showToast(`儲存失敗: ${String(e)}`),
+  });
+
+  const test = useMutation({
+    mutationFn: () => api.settings.testLlm(),
+    onSuccess: (r) => {
+      setTestResult(r);
+      showToast(r.ok ? "✓ 連線成功" : `連線失敗: ${r.message}`);
+    },
+    onError: (e) => showToast(`測試失敗: ${String(e)}`),
+  });
+
+  const set = <K extends keyof LlmSettings>(k: K, v: LlmSettings[K]) =>
+    setForm(f => ({ ...f, [k]: v }));
+
+  const provider = form.provider ?? "anthropic";
+  const isOpenAI = provider === "openai";
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px", maxWidth: 560 }}>
+      <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 0, marginBottom: 24, lineHeight: 1.6 }}>
+        設定 AI 分析與命名建議所使用的語言模型 API。儲存後立即生效，無需重啟伺服器。
+        留空的欄位將使用 <code style={{ background: "var(--bg-3)", padding: "1px 5px", borderRadius: 3 }}>.env.local</code> 設定。
+      </p>
+
+      {/* Provider */}
+      <FieldRow label="API 類型" hint={isOpenAI ? "相容 OpenAI 格式的 API（如 Azure、Ollama、私有部署模型）" : "Anthropic Claude API（預設）"}>
+        <div style={{ display: "flex", borderRadius: 6, border: "1px solid var(--border)", overflow: "hidden", width: "fit-content" }}>
+          {(["anthropic", "openai"] as const).map(p => (
+            <button key={p} onClick={() => set("provider", p)}
+              style={{ padding: "6px 18px", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
+                background: provider === p ? "var(--accent)" : "var(--bg-3)",
+                color: provider === p ? "#fff" : "var(--text-3)", transition: "all 0.12s" }}>
+              {p === "anthropic" ? "Anthropic" : "OpenAI 相容"}
+            </button>
+          ))}
+        </div>
+      </FieldRow>
+
+      {/* Base URL (only for openai) */}
+      {isOpenAI && (
+        <FieldRow label="API Base URL" hint="例如：https://your-company-api.com/v1">
+          <input value={form.baseUrl ?? ""} onChange={e => set("baseUrl", e.target.value)}
+            placeholder="https://..."
+            style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)",
+              background: "var(--bg-3)", color: "var(--text-1)", fontSize: 13,
+              fontFamily: "var(--font-mono)", outline: "none", width: "100%", boxSizing: "border-box" }} />
+        </FieldRow>
+      )}
+
+      {/* API Key */}
+      <FieldRow label="API Key" hint="輸入新值即可覆蓋；留空保持現有設定不變">
+        <div style={{ display: "flex", gap: 6 }}>
+          <input value={form.apiKey ?? ""} onChange={e => set("apiKey", e.target.value)}
+            type={showKey ? "text" : "password"}
+            placeholder={initial.apiKey ? "••••••（已設定，輸入覆蓋）" : "sk-..."}
+            style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)",
+              background: "var(--bg-3)", color: "var(--text-1)", fontSize: 13,
+              fontFamily: "var(--font-mono)", outline: "none" }} />
+          <button onClick={() => setShowKey(v => !v)}
+            style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+              background: "var(--bg-3)", color: "var(--text-3)", cursor: "pointer", fontSize: 11 }}>
+            {showKey ? "隱藏" : "顯示"}
+          </button>
+        </div>
+      </FieldRow>
+
+      {/* Model */}
+      <FieldRow label="模型名稱" hint={isOpenAI ? "輸入你的 API 支援的模型 ID" : "例如：claude-sonnet-4-6（留空使用預設）"}>
+        <input value={form.model ?? ""} onChange={e => set("model", e.target.value)}
+          placeholder={isOpenAI ? "gpt-4o / your-model-id" : "claude-sonnet-4-6"}
+          style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)",
+            background: "var(--bg-3)", color: "var(--text-1)", fontSize: 13,
+            fontFamily: "var(--font-mono)", outline: "none", width: "100%", boxSizing: "border-box" }} />
+      </FieldRow>
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={() => void save.mutate(form)} disabled={save.isPending}
+          style={{ padding: "8px 20px", borderRadius: 7, border: "none",
+            background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 700,
+            cursor: save.isPending ? "not-allowed" : "pointer", opacity: save.isPending ? 0.7 : 1 }}>
+          {save.isPending ? "儲存中…" : "儲存設定"}
+        </button>
+
+        <button onClick={() => void test.mutate()} disabled={test.isPending || save.isPending}
+          style={{ padding: "8px 20px", borderRadius: 7,
+            border: "1px solid var(--border)", background: "var(--bg-3)",
+            color: "var(--text-2)", fontSize: 13, fontWeight: 600,
+            cursor: test.isPending ? "not-allowed" : "pointer", opacity: test.isPending ? 0.7 : 1 }}>
+          {test.isPending ? "測試中…" : "測試連線"}
+        </button>
+
+        {testResult && (
+          <span style={{ fontSize: 12, fontWeight: 600,
+            color: testResult.ok ? "#4ade80" : "#f87171" }}>
+            {testResult.ok ? "✓ 連線成功" : `✗ ${testResult.message}`}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function RulesPage() {
-  const [tab, setTab] = useState<"rules" | "skills">("rules");
+  const [tab, setTab] = useState<"rules" | "skills" | "llm">("rules");
 
   const { data: rulesData, isLoading: rulesLoading } = useQuery({
     queryKey: ["rules"],
@@ -429,9 +558,14 @@ export default function RulesPage() {
     queryKey: ["skills"],
     queryFn: () => api.skills.list(),
   });
+  const { data: llmData, isLoading: llmLoading } = useQuery({
+    queryKey: ["llm-settings"],
+    queryFn: () => api.settings.getLlm(),
+  });
 
   const rules  = rulesData?.rules   ?? [];
   const skills = skillsData?.skills ?? [];
+  const llmSettings: Partial<LlmSettings> = llmData?.settings ?? {};
 
   const disabledCount  = rules.filter(r => !r.enabled).length;
   const skillRuleCount = rules.filter(r => r.source === "skill").length;
@@ -458,6 +592,10 @@ export default function RulesPage() {
               userSkillCount > 0 && `${userSkillCount} 自訂`,
             ].filter(Boolean).join(" · "),
           },
+          {
+            id: "llm" as const, label: "LLM 設定",
+            meta: llmSettings.provider ? llmSettings.provider : "",
+          },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ padding: "12px 0", marginRight: 28, border: "none", background: "transparent",
@@ -479,10 +617,14 @@ export default function RulesPage() {
           rulesLoading
             ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>載入中…</div>
             : <RulesTab rules={rules} />
-        ) : (
+        ) : tab === "skills" ? (
           skillsLoading
             ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>載入中…</div>
             : <SkillsTab skills={skills} />
+        ) : (
+          llmLoading
+            ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>載入中…</div>
+            : <LlmSettingsTab key={JSON.stringify(llmSettings)} initial={llmSettings} />
         )}
       </div>
     </div>
