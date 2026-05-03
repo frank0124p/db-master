@@ -145,17 +145,16 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
           <colgroup>
-            <col style={{ width: 52 }} />   {/* toggle */}
-            <col style={{ width: "25%" }} /> {/* id */}
+            <col style={{ width: 48 }} />   {/* toggle */}
+            <col />                          {/* id + description (fills remaining width) */}
             <col style={{ width: 68 }} />   {/* group */}
-            <col />                          {/* description */}
             <col style={{ width: 116 }} />  {/* severity */}
             <col style={{ width: 32 }} />   {/* expand */}
             <col style={{ width: 68 }} />   {/* reset */}
           </colgroup>
           <thead>
             <tr style={{ borderBottom: "2px solid var(--border)", background: "var(--bg-2)", position: "sticky", top: 0, zIndex: 2 }}>
-              {["", "規則 ID", "分組", "說明", "嚴重度", "", ""].map((h, i) => (
+              {["", "規則 ID / 說明", "分組", "嚴重度", "", ""].map((h, i) => (
                 <th key={i} style={{ padding: "8px 12px", textAlign: "left", fontSize: 10, fontWeight: 700,
                   color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.6px" }}>{h}</th>
               ))}
@@ -178,17 +177,17 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
                     onMouseLeave={e => { if (!isExpanded) (e.currentTarget.style.background = "transparent"); }}>
 
                     {/* Toggle */}
-                    <td style={{ padding: "10px 12px", verticalAlign: "middle" }}
+                    <td style={{ padding: "12px 12px", verticalAlign: "top", paddingTop: 14 }}
                         onClick={e => e.stopPropagation()}>
                       <Toggle on={r.enabled} onChange={() => void toggleRule(r)} disabled={isBusy} />
                     </td>
 
-                    {/* ID */}
-                    <td style={{ padding: "10px 12px", verticalAlign: "middle" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11,
-                          color: r.enabled ? "var(--accent)" : "var(--text-3)",
-                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {/* ID + Description merged */}
+                    <td style={{ padding: "11px 12px 11px 0", verticalAlign: "top" }}>
+                      {/* ID row */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600,
+                          color: r.enabled ? "var(--accent)" : "var(--text-3)" }}>
                           {r.id}
                         </span>
                         {(r.source ?? "built-in") === "skill" && (
@@ -196,22 +195,24 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
                             background: "rgba(251,191,36,0.15)", color: "#fbbf24",
                             border: "1px solid rgba(251,191,36,0.4)", flexShrink: 0 }}>SKILL</span>
                         )}
+                        {hasConfig && !isExpanded && (
+                          <span style={{ fontSize: 9, color: "var(--text-3)", flexShrink: 0 }}>⚙ 有設定</span>
+                        )}
+                      </div>
+                      {/* Description — full text, wraps naturally */}
+                      <div style={{ fontSize: 12, color: r.enabled ? "var(--text-2)" : "var(--text-3)",
+                        lineHeight: 1.6 }}>
+                        {r.description}
                       </div>
                     </td>
 
                     {/* Group */}
-                    <td style={{ padding: "10px 12px", verticalAlign: "middle" }}>
+                    <td style={{ padding: "12px 12px", verticalAlign: "top", paddingTop: 14 }}>
                       <GroupPill g={r.group} />
                     </td>
 
-                    {/* Description */}
-                    <td style={{ padding: "10px 12px", verticalAlign: "middle", fontSize: 12,
-                      color: r.enabled ? "var(--text-2)" : "var(--text-3)", lineHeight: 1.4 }}>
-                      {r.description}
-                    </td>
-
                     {/* Severity */}
-                    <td style={{ padding: "10px 12px", verticalAlign: "middle" }}
+                    <td style={{ padding: "12px 12px", verticalAlign: "top", paddingTop: 13 }}
                         onClick={e => e.stopPropagation()}>
                       <select value={r.severity} disabled={isBusy || !r.enabled}
                         onChange={e => void setSeverity(r, e.target.value as "error" | "warning" | "info")}
@@ -228,14 +229,14 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
                     </td>
 
                     {/* Expand arrow */}
-                    <td style={{ padding: "10px 4px", verticalAlign: "middle", textAlign: "center" }}>
+                    <td style={{ padding: "12px 4px", verticalAlign: "top", paddingTop: 14, textAlign: "center" }}>
                       <span style={{ fontSize: 10, color: isExpanded ? "var(--accent)" : "var(--text-3)",
                         display: "inline-block", transition: "transform 0.2s",
                         transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
                     </td>
 
                     {/* Reset */}
-                    <td style={{ padding: "10px 8px", verticalAlign: "middle" }}
+                    <td style={{ padding: "12px 8px", verticalAlign: "top", paddingTop: 13 }}
                         onClick={e => e.stopPropagation()}>
                       {isModified && (
                         <button onClick={() => void reset(r)} disabled={isBusy}
@@ -250,39 +251,36 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
                     </td>
                   </tr>
 
-                  {/* ── Expandable detail row ── */}
+                  {/* ── Expandable config detail row ── */}
                   {isExpanded && (
                     <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                      <td colSpan={7} style={{ padding: 0, background: "var(--bg-1)" }}>
-                        <div style={{ padding: "14px 16px 16px 52px", maxHeight: 240, overflowY: "auto" }}>
-                          {/* Full description */}
-                          <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.8,
-                            marginBottom: hasConfig ? 12 : 0, whiteSpace: "pre-wrap" }}>
-                            {r.description}
-                          </div>
-
-                          {/* Config params */}
-                          {hasConfig && (
+                      <td colSpan={6} style={{ padding: 0, background: "var(--bg-1)" }}>
+                        <div style={{ padding: "12px 16px 14px 48px", borderTop: "1px dashed var(--border)" }}>
+                          {hasConfig ? (
                             <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                              <div style={{ minWidth: 180 }}>
+                              <div style={{ minWidth: 200, maxWidth: 400 }}>
                                 <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)",
                                   textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>目前設定</div>
                                 <pre style={{ margin: 0, fontSize: 11, fontFamily: "var(--font-mono)",
                                   color: "var(--text-2)", background: "var(--bg-3)", border: "1px solid var(--border)",
-                                  padding: "8px 10px", borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                  padding: "8px 10px", borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                                  maxHeight: 160, overflowY: "auto" }}>
                                   {JSON.stringify(r.config, null, 2)}
                                 </pre>
                               </div>
-                              <div style={{ minWidth: 180 }}>
+                              <div style={{ minWidth: 200, maxWidth: 400 }}>
                                 <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)",
                                   textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>預設值</div>
                                 <pre style={{ margin: 0, fontSize: 11, fontFamily: "var(--font-mono)",
                                   color: "var(--text-3)", background: "var(--bg-3)", border: "1px solid var(--border)",
-                                  padding: "8px 10px", borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                  padding: "8px 10px", borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                                  maxHeight: 160, overflowY: "auto" }}>
                                   {JSON.stringify(r.defaultConfig, null, 2)}
                                 </pre>
                               </div>
                             </div>
+                          ) : (
+                            <span style={{ fontSize: 11, color: "var(--text-3)" }}>此規則無額外設定參數</span>
                           )}
                         </div>
                       </td>
