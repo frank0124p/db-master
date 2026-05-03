@@ -141,6 +141,7 @@ export interface SkillRuleSummary {
 
 export interface SkillInfo {
   name: string; domain: string; tags: string[];
+  source: "built-in" | "user";
   ruleCount: number; rules: SkillRuleSummary[]; content: string;
 }
 

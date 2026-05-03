@@ -60,11 +60,15 @@ function computeWideTableDiff(prev: WideTableSnapshot[], curr: WideTableSnapshot
   return { added, removed, modified };
 }
 
+type FieldPropChange = { prop: string; before: string | null; after: string | null };
+type FieldModified = { name: string; changes: FieldPropChange[] };
+type TableModified = { name: string; commentBefore?: string | null; commentAfter?: string | null; fieldsAdded: string[]; fieldsRemoved: string[]; fieldsModified: FieldModified[] };
+
 function computeDiff(prev: VersionSnapshot, curr: VersionSnapshot) {
   const prevMap = new Map(prev.tables.map(t => [t.name, t]));
   const currMap = new Map(curr.tables.map(t => [t.name, t]));
   const added: string[] = [], removed: string[] = [];
-  const modified: { name: string; fieldsAdded: string[]; fieldsRemoved: string[]; fieldsModified: { before: string; after: string }[] }[] = [];
+  const modified: TableModified[] = [];
   for (const [n] of currMap) { if (!prevMap.has(n)) added.push(n); }
   for (const [n] of prevMap) { if (!currMap.has(n)) removed.push(n); }
   for (const [name, ct] of currMap) {
@@ -73,19 +77,28 @@ function computeDiff(prev: VersionSnapshot, curr: VersionSnapshot) {
     const pf = new Map(pt.fields.map(f => [f.name, f]));
     const cf = new Map(ct.fields.map(f => [f.name, f]));
     const fa: string[] = [], fr: string[] = [];
-    const fm: { before: string; after: string }[] = [];
+    const fm: FieldModified[] = [];
     for (const [fn, fd] of cf) {
       if (!pf.has(fn)) { fa.push(fn); continue; }
       const pd = pf.get(fn)!;
-      if (pd.dataType !== fd.dataType || pd.nullable !== fd.nullable)
-        fm.push({
-          before: `${fn} ${pd.dataType}${pd.nullable ? "" : " NOT NULL"}`,
-          after: `${fn} ${fd.dataType}${fd.nullable ? "" : " NOT NULL"}`,
-        });
+      const changes: FieldPropChange[] = [];
+      if (pd.dataType     !== fd.dataType)     changes.push({ prop: "dataType",     before: pd.dataType,                   after: fd.dataType });
+      if (pd.nullable     !== fd.nullable)     changes.push({ prop: "nullable",     before: pd.nullable ? "NULL" : "NOT NULL", after: fd.nullable ? "NULL" : "NOT NULL" });
+      if ((pd.defaultValue ?? null) !== (fd.defaultValue ?? null))
+        changes.push({ prop: "defaultValue", before: pd.defaultValue ?? null,       after: fd.defaultValue ?? null });
+      if ((pd.comment ?? null) !== (fd.comment ?? null))
+        changes.push({ prop: "comment",      before: pd.comment ?? null,            after: fd.comment ?? null });
+      if (pd.isPrimaryKey !== fd.isPrimaryKey) changes.push({ prop: "isPrimaryKey", before: pd.isPrimaryKey ? "是" : "否",   after: fd.isPrimaryKey ? "是" : "否" });
+      if (pd.isUnique     !== fd.isUnique)     changes.push({ prop: "isUnique",     before: pd.isUnique ? "是" : "否",       after: fd.isUnique ? "是" : "否" });
+      if (changes.length) fm.push({ name: fn, changes });
     }
     for (const [fn] of pf) { if (!cf.has(fn)) fr.push(fn); }
-    if (fa.length || fr.length || fm.length)
-      modified.push({ name, fieldsAdded: fa, fieldsRemoved: fr, fieldsModified: fm });
+    const commentChanged = (pt.comment ?? null) !== (ct.comment ?? null);
+    if (fa.length || fr.length || fm.length || commentChanged) {
+      const entry: TableModified = { name, fieldsAdded: fa, fieldsRemoved: fr, fieldsModified: fm };
+      if (commentChanged) { entry.commentBefore = pt.comment ?? null; entry.commentAfter = ct.comment ?? null; }
+      modified.push(entry);
+    }
   }
   const wideTables = computeWideTableDiff(prev.wideTables ?? [], curr.wideTables ?? []);
   return { tables: { added, removed, modified }, wideTables };

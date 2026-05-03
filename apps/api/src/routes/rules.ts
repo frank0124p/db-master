@@ -1,31 +1,26 @@
 import { Router, type Request, type Response } from "express";
 import { type Router as RouterType } from "express";
 import { z } from "zod";
-import { BUILT_IN_RULES } from "@schema-studio/core";
-import { listRules, updateRule } from "../repositories/rules.js";
+import { listRules, updateRule, getAllRules } from "../repositories/rules.js";
 
 const router: RouterType = Router();
 
-// GET /api/v1/rules — list all rules with their current settings
+// GET /api/v1/rules — list all rules (built-in + skill) with current settings
 router.get("/", async (_req: Request, res: Response) => {
-  const settings = await listRules();
-  const settingsMap = new Map(settings.map(s => [s.ruleId, s]));
-
-  const rules = BUILT_IN_RULES.map(r => {
-    const s = settingsMap.get(r.id);
-    return {
-      id: r.id,
+  const rules = await listRules();
+  res.json({
+    rules: rules.map(r => ({
+      id: r.ruleId,
       group: r.group,
       description: r.description,
-      defaultSeverity: r.defaultSeverity,
-      defaultConfig: r.defaultConfig,
-      severity: s?.severity ?? r.defaultSeverity,
-      enabled: s?.enabled ?? true,
-      config: s?.config ?? r.defaultConfig,
-    };
+      defaultSeverity: getAllRules().find(x => x.id === r.ruleId)?.defaultSeverity ?? r.severity,
+      defaultConfig: getAllRules().find(x => x.id === r.ruleId)?.defaultConfig ?? {},
+      severity: r.severity,
+      enabled: r.enabled,
+      config: r.config,
+      source: r.source,
+    })),
   });
-
-  res.json({ rules });
 });
 
 const PatchBody = z.object({
@@ -43,8 +38,8 @@ router.patch("/:ruleId", async (req: Request, res: Response) => {
     return;
   }
 
-  const rule = BUILT_IN_RULES.find(r => r.id === ruleId);
-  if (!rule) {
+  const allRules = getAllRules();
+  if (!allRules.find(r => r.id === ruleId)) {
     res.status(404).json({ error: { code: "NOT_FOUND", message: `Rule ${ruleId} not found` } });
     return;
   }

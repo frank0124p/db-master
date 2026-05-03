@@ -12,6 +12,7 @@
 - [核心工作流程](#核心工作流程)
 - [專案結構](#專案結構)
 - [功能總覽](#功能總覽)
+- [規則與 Skills](#規則與-skills)
 - [資料目錄說明](#資料目錄說明)
 - [LLM 設定](#llm-設定)
 - [API 端點](#api-端點)
@@ -91,17 +92,18 @@ DB Master/
 │   │   │   │   ├── ddl.ts       # GET /schemas/:id/ddl
 │   │   │   │   ├── import-ddl.ts# POST /schemas/:id/import-ddl
 │   │   │   │   ├── naming.ts    # /naming-dictionary
-│   │   │   │   ├── rules.ts     # /rules
+│   │   │   │   ├── rules.ts     # GET/PATCH /rules（含 Skill 規則）
+│   │   │   │   ├── skills.ts    # GET /skills（Skill 清單與元資料）
 │   │   │   │   ├── wide-tables.ts
 │   │   │   │   └── llm.ts       # POST /llm/generate (SSE)
-│   │   │   ├── repositories/    # 檔案 I/O 層（取代 ORM）
+│   │   │   ├── repositories/    # 檔案 I/O 層
 │   │   │   │   ├── schemas.ts / tables.ts / fields.ts
 │   │   │   │   ├── naming.ts / rules.ts
 │   │   │   │   ├── versions.ts / wide-tables.ts
 │   │   │   │   └── ddl-import.ts
 │   │   │   ├── services/
 │   │   │   │   ├── llm.ts       # LLM 抽象層（Anthropic / OpenAI 相容）
-│   │   │   │   ├── skills.ts    # Skill 檔案載入 + 規則解析
+│   │   │   │   ├── skills.ts    # Skill 載入（內建 + 自訂）+ 規則解析
 │   │   │   │   └── ddl-loader.ts# DDL 自動匯入服務
 │   │   │   ├── db/
 │   │   │   │   └── fileStore.ts # 底層 JSON 檔案讀寫 + ID 計數器
@@ -115,12 +117,13 @@ DB Master/
 │           ├── api.ts            # API 客戶端（real / mock 切換）
 │           ├── store.ts          # Zustand 全域狀態
 │           ├── pages/
-│           │   ├── SchemaEditorPage.tsx # 欄位編輯器 + DDL 匯入 + 版本儲存
-│           │   ├── AnalysisPage.tsx     # AI 分析 + 規則檢查
-│           │   ├── NamingDictPage.tsx   # 命名字典管理
+│           │   ├── SchemaEditorPage.tsx  # 欄位編輯器 + DDL 匯入 + 版本儲存
+│           │   ├── AnalysisPage.tsx      # AI 分析 + 規則檢查
+│           │   ├── NamingDictPage.tsx    # 命名字典管理
 │           │   ├── VersionHistoryPage.tsx
-│           │   ├── ErDiagramPage.tsx    # ER 圖 (Mermaid)
-│           │   └── WideTablePage.tsx    # 寬表 JOIN 建構器
+│           │   ├── ErDiagramPage.tsx     # ER 圖 (Mermaid)
+│           │   ├── WideTablePage.tsx     # 寬表 JOIN 建構器
+│           │   └── RulesPage.tsx         # 規則設定 + Skills 管理
 │           └── mock/             # Mock API（VITE_USE_MOCK=true）
 │
 ├── packages/
@@ -134,21 +137,18 @@ DB Master/
 │   ├── ddl-parser/              # SQL DDL 解析器 parseDDL() / emitDDL()
 │   └── eslint-config/
 │
-├── data/                        # 執行期資料（檔案資料庫，無需 MariaDB）
-│   ├── _counters.json           # 自動遞增 ID 計數器
-│   ├── _index.json              # 反向查詢索引
-│   ├── _ddl-manifest.json       # DDL 匯入狀態追蹤
+├── data/                        # 執行期資料（檔案資料庫，無需外部 DB）
 │   ├── ddl/                     ← 放入 .sql 即自動匯入
 │   │   ├── plm-core.sql
 │   │   ├── mes-process.sql
-│   │   └── test-quality.sql     ← 測試用（品質管理）
-│   ├── schemas/{id}/            # meta.json + tables/ + versions/ + wide-tables/
-│   ├── naming/                  # 命名字典條目
-│   ├── rules/overrides.json     # 規則嚴重度覆蓋
+│   │   └── mes_equipment.sql
 │   └── skills/                  ← 放入 .md 即新增自訂規則
 │       └── semiconductor-naming.md
 │
-├── skills/                      # 內建 Skill 知識庫（唯讀）
+├── skills/                      # 內建 Skill 知識庫（唯讀，隨專案版本控制）
+│   ├── ddl-parser/SKILL.md
+│   ├── naming-dictionary/SKILL.md
+│   └── schema-design/SKILL.md   # 含 2 條內建 Skill 規則
 ├── prompts/                     # LLM 提示詞範本（runtime 讀取）
 ├── docs/SPEC.md                 # 功能規格書
 └── CLAUDE.md                    # Claude Code 開發規範
@@ -161,17 +161,76 @@ DB Master/
 | 功能 | 說明 | 入口 |
 |------|------|------|
 | **DDL 自動匯入** | 放入 `.sql` → 啟動/Reload 自動建立 Schema | `data/ddl/` |
-| **Schema 編輯** | 手動管理 Table / Field / 資料型別 | UI > Schema 頁 |
+| **Schema 編輯** | 手動管理 Table / Field / 資料型別，命名建議即時提示 | UI > Schema 編輯器 |
 | **DDL 匯入** | 貼入 SQL 文字，dry-run 預覽後匯入 | UI > 匯入 DDL |
-| **DDL 匯出** | 匯出標準 CREATE TABLE 語句 | UI > DDL 頁籤 |
-| **AI 分析** | 規則檢查 + 命名比對 + LLM 建議（SSE） | UI > 分析頁 |
+| **DDL 匯出** | 匯出 MariaDB / Oracle / ClickHouse 標準語句 | UI > DDL 頁籤 |
+| **AI 分析** | 規則檢查 + 命名比對 + LLM 建議（SSE 串流） | UI > 分析 |
 | **命名字典** | 管理標準欄位名 / 別名 / AI 建議定義 | UI > 命名字典 |
-| **命名檢查** | 批次比對 Schema 欄位與字典 | UI > 命名一致性 |
 | **版本管理** | 儲存快照 + Diff 比較 | UI > 版本歷史 |
 | **ER 圖** | 自動生成 Mermaid ER 圖 | UI > ER 圖 |
-| **寬表建構** | 多表 JOIN 定義 + SQL VIEW 產生 | UI > 寬表 |
-| **自訂規則** | 放入 `.md` Skill 檔案即可新增規則 | `data/skills/` |
+| **寬表建構** | 多表 JOIN 定義 + SQL VIEW 產生 + JOIN 關聯圖 | UI > 寬表 |
+| **規則設定** | 即時啟用/停用規則、調整嚴重度、一鍵還原預設 | UI > 規則 & Skills |
+| **Skills 管理** | 查看已載入 Skill、展開說明、一鍵重新載入 | UI > 規則 & Skills |
+| **自訂規則** | 放入 `.md` Skill 檔案即可新增規則，無需重啟 | `data/skills/` |
 | **外部 LLM** | 支援 OpenRouter / Ollama 等相容 API | `.env.local` |
+
+---
+
+## 規則與 Skills
+
+### 內建規則（11 條）
+
+規則分三組，可在「**規則 & Skills**」頁面即時調整：
+
+| 分組 | 規則 ID | 預設嚴重度 | 說明 |
+|------|---------|-----------|------|
+| 命名 | `naming.snake_case` | error | 欄位名必須為 snake_case |
+| 命名 | `naming.reserved_words` | error | 不可使用 SQL 保留字 |
+| 命名 | `naming.max_length` | warning | 名稱不超過設定長度（預設 64） |
+| 命名 | `naming.table_singular` | warning | Table 名建議用複數 |
+| 命名 | `naming.fk_convention` | warning | FK 欄位應遵循 `{table}_id` 命名 |
+| 語意 | `semantic.field_comment` | warning | 欄位應有 COMMENT |
+| 語意 | `semantic.table_comment` | info | Table 應有 COMMENT |
+| 語意 | `semantic.blob_needs_comment` | warning | TEXT/BLOB 欄位必須有 COMMENT |
+| 結構 | `structure.has_primary_key` | error | Table 必須有 Primary Key |
+| 結構 | `structure.timestamp_columns` | warning | 應有 created_at / updated_at |
+| 結構 | `structure.no_double_underscore` | warning | 名稱不可含雙底線 |
+
+### Skill 規則（自動從 skills/ 與 data/skills/ 載入）
+
+目前已載入的 Skill 規則（來自 `skills/schema-design/SKILL.md` 與 `data/skills/`）：
+
+| Skill | 規則 ID | 說明 |
+|-------|---------|------|
+| schema-design | `skill.no_generic_name_field` | 禁用 `name`、`type`、`status` 等通用欄位名 |
+| Semiconductor Naming Rules | `user.semi.lot_id_in_process_tables` | 製程相關 Table 必須有 `lot_id` |
+| Semiconductor Naming Rules | `user.semi.equip_id_required` | 設備相關 Table 必須有 `equip_id` |
+| Semiconductor Naming Rules | `user.semi.no_status_field` | 禁用 `status` 欄位（應用更具體名稱） |
+
+### 新增自訂規則
+
+在 `data/skills/` 新增 `.md` 檔案，格式如下：
+
+```markdown
+---
+name: my-rules
+domain: semiconductor
+---
+
+## Rules
+
+\`\`\`rules
+- id: user.my_rule
+  description: 規則說明
+  severity: warning
+  requiredFields: [lot_id, equip_id]
+  tablePattern: .*process.*
+\`\`\`
+```
+
+支援欄位：`requiredFields`、`forbiddenFields`、`fieldPattern`（regex）、`forbiddenFieldPattern`（regex）、`tablePattern`（套用條件 regex）
+
+新增後在 UI「規則 & Skills > Skills」頁點擊「↺ 重新載入」即生效，**無需重啟伺服器**。
 
 ---
 
@@ -187,26 +246,9 @@ DB Master/
 
 ### `data/skills/` — 自訂規則 Skill
 
-新增 `.md` 檔案定義自訂規則：
+放入 `.md` 檔案後點擊重新載入即生效。詳見[規則與 Skills](#規則與-skills) 章節。
 
-```markdown
----
-name: my-rules
-domain: semiconductor
----
-
-## Rules
-
-\`\`\`rules
-- id: user.my_rule
-  description: 規則說明
-  severity: warning
-  requiredFields: [lot_id, equip_id]
-  appliesTo: 含製程
-\`\`\`
-```
-
-支援：`requiredFields`、`forbiddenFields`、`fieldPattern`（regex）、`tablePattern`（套用條件）
+> `data/` 目錄下的執行期資料（schemas、naming、versions 等）不納入版本控制。
 
 ---
 
@@ -259,8 +301,9 @@ LLM_MODEL=llama3.2
 | DELETE | `/api/v1/naming-dictionary/:id` | 刪除詞條 |
 | POST | `/api/v1/naming-dictionary/:id/suggest` | AI 建議定義與標籤 |
 | POST | `/api/v1/naming-dictionary/check` | 批次欄位名稱檢查 |
-| GET | `/api/v1/rules` | 規則設定列表 |
-| PATCH | `/api/v1/rules/:id` | 更新規則嚴重度/啟用 |
+| GET | `/api/v1/rules` | 規則設定列表（含 Skill 規則與 source 欄位） |
+| PATCH | `/api/v1/rules/:id` | 更新規則嚴重度/啟用（支援 Skill 規則） |
+| GET | `/api/v1/skills` | 已載入 Skill 清單（含 source: built-in/user） |
 | POST | `/api/v1/llm/generate` | AI 自然語言生成 Schema（SSE） |
 | POST | `/api/v1/reload` | 重新載入 DDL + Skills |
 
@@ -277,4 +320,4 @@ pnpm --filter @schema-studio/api typecheck
 pnpm --filter @schema-studio/web typecheck
 ```
 
-**規則 ID 命名慣例**：內建 `naming.*` / `structure.*` / `semantic.*`；Skill 內建 `skill.*`；使用者自訂 `user.*`
+**規則 ID 命名慣例**：內建 `naming.*` / `structure.*` / `semantic.*`；Skills 目錄 `skill.*`；使用者自訂 `user.*`

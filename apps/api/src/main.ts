@@ -18,6 +18,7 @@ import analyzeRouter from "./routes/analyze.js";
 import wideTablesRouter from "./routes/wide-tables.js";
 import importDdlRouter from "./routes/import-ddl.js";
 import rulesRouter from "./routes/rules.js";
+import skillsRouter from "./routes/skills.js";
 import llmRouter from "./routes/llm.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -53,6 +54,7 @@ app.use("/api/v1/schemas/:schemaId/analyze", analyzeRouter);
 app.use("/api/v1/schemas/:schemaId/wide-tables", wideTablesRouter);
 app.use("/api/v1/schemas/:schemaId/import-ddl", importDdlRouter);
 app.use("/api/v1/rules", rulesRouter);
+app.use("/api/v1/skills", skillsRouter);
 app.use("/api/v1/llm", llmRouter);
 
 async function start() {

@@ -9,6 +9,7 @@ import VersionHistoryPage from "./pages/VersionHistoryPage.js";
 import AnalysisPage from "./pages/AnalysisPage.js";
 import ErDiagramPage from "./pages/ErDiagramPage.js";
 import WideTablePage from "./pages/WideTablePage.js";
+import RulesPage from "./pages/RulesPage.js";
 
 const NAV_KEYS: { id: Page; key: string }[] = [
   { id: "editor",   key: "nav.editor" },
@@ -17,6 +18,7 @@ const NAV_KEYS: { id: Page; key: string }[] = [
   { id: "analysis", key: "nav.analysis" },
   { id: "er",       key: "nav.er" },
   { id: "wide",     key: "nav.wide" },
+  { id: "rules",    key: "nav.rules" },
 ];
 
 function FormRow({ label, children }: { label: string; children: ReactNode }) {
@@ -304,6 +306,7 @@ export default function App() {
           {page === "analysis" && <AnalysisPage />}
           {page === "er" && <ErDiagramPage />}
           {page === "wide" && <WideTablePage />}
+          {page === "rules" && <RulesPage />}
         </div>
       </div>
 

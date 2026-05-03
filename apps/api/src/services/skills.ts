@@ -32,6 +32,7 @@ interface Skill {
   meta: SkillMeta;
   content: string;             // body without the ## Rules section
   rules: SkillRuleDef[];
+  source: "built-in" | "user";
 }
 
 let cache = new Map<string, Skill>();
@@ -163,7 +164,7 @@ function buildRuleDefinition(def: SkillRuleDef): RuleDefinition {
   };
 }
 
-async function loadFromDir(dir: string, flatMd = false): Promise<void> {
+async function loadFromDir(dir: string, flatMd = false, source: "built-in" | "user" = "built-in"): Promise<void> {
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
@@ -180,7 +181,7 @@ async function loadFromDir(dir: string, flatMd = false): Promise<void> {
         const { meta, body } = parseFrontmatter(text);
         const { rules, content } = parseRulesBlock(body);
         const key = `${meta.name}:${skillFile}`;
-        cache.set(key, { meta, content, rules });
+        cache.set(key, { meta, content, rules, source });
         const ruleTag = rules.length ? ` + ${rules.length} rules` : "";
         console.warn(`[skills] loaded: ${meta.name} (${meta.domain}${ruleTag})`);
       } catch {
@@ -194,8 +195,8 @@ async function loadFromDir(dir: string, flatMd = false): Promise<void> {
 
 export async function loadSkills(): Promise<void> {
   cache = new Map();
-  await loadFromDir(BUILTIN_SKILLS_DIR, false);   // skills/*/SKILL.md
-  await loadFromDir(USER_SKILLS_DIR, true);        // data/skills/*.md
+  await loadFromDir(BUILTIN_SKILLS_DIR, false, "built-in");  // skills/*/SKILL.md
+  await loadFromDir(USER_SKILLS_DIR, true, "user");           // data/skills/*.md
 }
 
 export function getSkillsForDomain(domain: string): Skill[] {
