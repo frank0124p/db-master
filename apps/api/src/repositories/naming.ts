@@ -19,7 +19,15 @@ interface NamingFile {
   description: string | null; createdAt: string; updatedAt: string;
 }
 
-function namingFile(id: number) { return store.dataPath("naming", `${id}.json`); }
+function namingFile(stdName: string): string {
+  return store.dataPath("naming", `${stdName}.json`);
+}
+
+async function resolveNamingFile(id: number): Promise<string> {
+  const stdName = await store.indexGetStr("namingIdToStdName", id);
+  if (!stdName) throw new NotFoundError("NamingEntry", id);
+  return namingFile(stdName);
+}
 
 function toEntry(f: NamingFile): NamingEntry {
   return {
@@ -30,10 +38,10 @@ function toEntry(f: NamingFile): NamingEntry {
 }
 
 export async function listNamingEntries(domain?: string): Promise<NamingEntry[]> {
-  const ids = await store.listJsonFileIds(store.dataPath("naming"));
+  const slugs = await store.listJsonFileSlugs(store.dataPath("naming"));
   const entries: NamingEntry[] = [];
-  for (const id of ids) {
-    const f = await store.readJson<NamingFile>(namingFile(id));
+  for (const slug of slugs) {
+    const f = await store.readJson<NamingFile>(namingFile(slug));
     if (!f) continue;
     if (domain && f.domain !== domain) continue;
     entries.push(toEntry(f));
@@ -42,7 +50,8 @@ export async function listNamingEntries(domain?: string): Promise<NamingEntry[]>
 }
 
 export async function getNamingEntry(id: number): Promise<NamingEntry> {
-  const f = await store.readJson<NamingFile>(namingFile(id));
+  const filePath = await resolveNamingFile(id);
+  const f = await store.readJson<NamingFile>(filePath);
   if (!f) throw new NotFoundError("NamingEntry", id);
   return toEntry(f);
 }
@@ -56,13 +65,17 @@ export async function createNamingEntry(input: CreateNamingEntryInput): Promise<
     tags: input.tags ?? [], aiDescription: input.ai_description ?? null,
     description: input.description ?? null, createdAt: now, updatedAt: now,
   };
-  await store.writeJson(namingFile(id), f);
+  await store.writeJson(namingFile(input.std_name), f);
+  await store.indexSetStr("namingIdToStdName", id, input.std_name);
   return toEntry(f);
 }
 
 export async function updateNamingEntry(id: number, input: Partial<CreateNamingEntryInput>): Promise<NamingEntry> {
-  const f = await store.readJson<NamingFile>(namingFile(id));
+  const oldPath = await resolveNamingFile(id);
+  const f = await store.readJson<NamingFile>(oldPath);
   if (!f) throw new NotFoundError("NamingEntry", id);
+
+  const stdNameChanged = input.std_name !== undefined && input.std_name !== f.stdName;
   if (input.concept !== undefined) f.concept = input.concept;
   if (input.std_name !== undefined) f.stdName = input.std_name;
   if (input.aliases !== undefined) f.aliases = input.aliases;
@@ -71,12 +84,21 @@ export async function updateNamingEntry(id: number, input: Partial<CreateNamingE
   if (input.ai_description !== undefined) f.aiDescription = input.ai_description ?? null;
   if (input.description !== undefined) f.description = input.description ?? null;
   f.updatedAt = new Date().toISOString();
-  await store.writeJson(namingFile(id), f);
+
+  if (stdNameChanged) {
+    await store.writeJson(namingFile(f.stdName), f);
+    await store.deleteFile(oldPath);
+    await store.indexSetStr("namingIdToStdName", id, f.stdName);
+  } else {
+    await store.writeJson(oldPath, f);
+  }
   return toEntry(f);
 }
 
 export async function deleteNamingEntry(id: number): Promise<void> {
-  const f = await store.readJson<NamingFile>(namingFile(id));
+  const filePath = await resolveNamingFile(id);
+  const f = await store.readJson<NamingFile>(filePath);
   if (!f) throw new NotFoundError("NamingEntry", id);
-  await store.deleteFile(namingFile(id));
+  await store.deleteFile(filePath);
+  await store.indexDelete("namingIdToStdName", id);
 }

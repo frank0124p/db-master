@@ -1,5 +1,5 @@
 import * as store from "../db/fileStore.js";
-import { getSchemaById, versionFile, versionsDir, type SchemaWithTables } from "./schemas.js";
+import { getSchemaById, versionFile, versionsDir, getSchemaSlug, type SchemaWithTables } from "./schemas.js";
 import { listWideTables, getWideTable, type WideTableDetail } from "./wide-tables.js";
 
 type WideTableSnapshot = {
@@ -105,10 +105,14 @@ function computeDiff(prev: VersionSnapshot, curr: VersionSnapshot) {
 }
 
 export async function listVersions(schemaId: number) {
-  const ids = await store.listJsonFileIds(versionsDir(schemaId));
+  const slug = await getSchemaSlug(schemaId);
+  const slugs = await store.listJsonFileSlugs(versionsDir(slug));
   const versions = [];
-  for (const id of ids) {
-    const v = await store.readJson<VersionFile>(versionFile(schemaId, id));
+  for (const s of slugs) {
+    // s is like "v1", "v2", etc.
+    const vno = parseInt(s.slice(1), 10);
+    if (isNaN(vno)) continue;
+    const v = await store.readJson<VersionFile>(versionFile(slug, vno));
     if (!v) continue;
     versions.push({
       id: v.id, schemaId: v.schemaId, versionNo: v.versionNo,
@@ -140,12 +144,13 @@ export async function saveVersion(schemaId: number, message?: string) {
   if (versions.length > 0) diff = computeDiff(versions[0]!.snapshot, currentSnapshot);
 
   const id = await store.nextId("versions");
+  const slug = await getSchemaSlug(schemaId);
   const vf: VersionFile = {
     id, schemaId, versionNo, message: message ?? null,
     createdAt: new Date().toISOString(),
     snapshot: currentSnapshot, diff,
   };
-  await store.writeJson(versionFile(schemaId, id), vf);
+  await store.writeJson(versionFile(slug, versionNo), vf);
 
   return {
     id, versionNo, schemaId, message: message ?? null,

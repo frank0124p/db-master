@@ -1,6 +1,6 @@
 import { z } from "zod";
 import * as store from "../db/fileStore.js";
-import { wideTableFile, wideTablesDir, loadTables } from "./schemas.js";
+import { wideTableFile, wideTablesDir, loadTables, getSchemaSlug, toSlug } from "./schemas.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -62,11 +62,32 @@ function toSummary(f: WideTableFile): WideTableSummary {
     createdAt: new Date(f.createdAt), updatedAt: new Date(f.updatedAt) };
 }
 
+async function resolveWideTableFile(id: number): Promise<{ schemaId: number; filePath: string } | null> {
+  const schemaId = await store.indexGet("wideTableSchema", id);
+  if (schemaId === null) return null;
+  const nameSlug = await store.indexGetStr("wideTableIdToName", id);
+  if (!nameSlug) return null;
+  const schemaSlug = await store.indexGetStr("schemaIdToSlug", schemaId);
+  if (!schemaSlug) return null;
+  return { schemaId, filePath: wideTableFile(schemaSlug, nameSlug) };
+}
+
+async function uniqueWideTableSlug(schemaSlug: string, base: string): Promise<string> {
+  const existing = await store.listJsonFileSlugs(wideTablesDir(schemaSlug));
+  const set = new Set(existing);
+  if (!set.has(base)) return base;
+  let i = 2;
+  while (set.has(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
+}
+
 export async function listWideTables(schemaId: number): Promise<WideTableSummary[]> {
-  const ids = await store.listJsonFileIds(wideTablesDir(schemaId));
+  const schemaSlug = await store.indexGetStr("schemaIdToSlug", schemaId);
+  if (!schemaSlug) return [];
+  const slugs = await store.listJsonFileSlugs(wideTablesDir(schemaSlug));
   const result: WideTableSummary[] = [];
-  for (const id of ids) {
-    const f = await store.readJson<WideTableFile>(wideTableFile(schemaId, id));
+  for (const slug of slugs) {
+    const f = await store.readJson<WideTableFile>(wideTableFile(schemaSlug, slug));
     if (!f) continue;
     result.push(toSummary(f));
   }
@@ -74,15 +95,16 @@ export async function listWideTables(schemaId: number): Promise<WideTableSummary
 }
 
 export async function getWideTable(id: number): Promise<WideTableDetail | null> {
-  const schemaId = await store.indexGet("wideTableSchema", id);
-  if (schemaId === null) return null;
-  const f = await store.readJson<WideTableFile>(wideTableFile(schemaId, id));
+  const resolved = await resolveWideTableFile(id);
+  if (!resolved) return null;
+  const f = await store.readJson<WideTableFile>(resolved.filePath);
   if (!f) return null;
   return { ...toSummary(f), sources: f.sources, columns: f.columns };
 }
 
 export async function createWideTable(schemaId: number, input: CreateWideTableInput): Promise<WideTableDetail> {
   const wtId = await store.nextId("wideTables");
+  const schemaSlug = await getSchemaSlug(schemaId);
   const now = new Date().toISOString();
 
   // Resolve sourceIds by position
@@ -92,7 +114,6 @@ export async function createWideTable(schemaId: number, input: CreateWideTableIn
   for (const src of input.sources) {
     const srcId = await store.nextId("wideSources");
     sourceIdByPosition.set(src.position, srcId);
-    // Look up tableName from the schema's table files
     const tables = await loadTables(schemaId);
     const tbl = tables.find(t => t.id === src.tableId);
     sources.push({
@@ -110,7 +131,6 @@ export async function createWideTable(schemaId: number, input: CreateWideTableIn
     const srcId = sourceIdByPosition.get(col.sourcePosition);
     if (!srcId) continue;
     const colId = await store.nextId("wideColumns");
-    // Look up fieldName and fieldType
     const tables = await loadTables(schemaId);
     let fieldName = String(col.fieldId);
     let fieldType = "VARCHAR(255)";
@@ -132,20 +152,25 @@ export async function createWideTable(schemaId: number, input: CreateWideTableIn
     });
   }
 
+  const nameSlug = await uniqueWideTableSlug(schemaSlug, toSlug(input.name));
   const wf: WideTableFile = {
     id: wtId, schemaId, name: input.name, description: input.description ?? null,
     createdAt: now, updatedAt: now, sources, columns,
   };
-  await store.writeJson(wideTableFile(schemaId, wtId), wf);
+  await store.writeJson(wideTableFile(schemaSlug, nameSlug), wf);
   await store.indexSet("wideTableSchema", wtId, schemaId);
+  await store.indexSetStr("wideTableIdToName", wtId, nameSlug);
   return { ...toSummary(wf), sources, columns };
 }
 
 export async function deleteWideTable(id: number): Promise<void> {
-  const schemaId = await store.indexGet("wideTableSchema", id);
-  if (schemaId === null) return;
-  await store.deleteFile(wideTableFile(schemaId, id));
-  await store.indexDelete("wideTableSchema", id);
+  const resolved = await resolveWideTableFile(id);
+  if (!resolved) return;
+  await store.deleteFile(resolved.filePath);
+  const idx = await store.getIndex();
+  delete idx.wideTableSchema[String(id)];
+  delete idx.wideTableIdToName[String(id)];
+  await store.writeIndex(idx);
 }
 
 // ── Preview (stateless, no DB) ─────────────────────────────────────────────────

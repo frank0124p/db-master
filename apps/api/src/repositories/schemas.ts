@@ -29,30 +29,69 @@ export interface SchemaWithTables {
   }[];
 }
 
-// ── Paths ──────────────────────────────────────────────────────────────────────
+// ── Slug helpers ───────────────────────────────────────────────────────────────
 
-export function schemaDir(id: number) { return store.dataPath("schemas", String(id)); }
-export function metaFile(id: number) { return store.dataPath("schemas", String(id), "meta.json"); }
-export function tablesDir(id: number) { return store.dataPath("schemas", String(id), "tables"); }
-export function tableFile(schemaId: number, tableId: number) {
-  return store.dataPath("schemas", String(schemaId), "tables", `${tableId}.json`);
+export function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "schema";
 }
-export function versionsDir(id: number) { return store.dataPath("schemas", String(id), "versions"); }
-export function versionFile(schemaId: number, versionId: number) {
-  return store.dataPath("schemas", String(schemaId), "versions", `${versionId}.json`);
+
+async function uniqueSlug(base: string): Promise<string> {
+  const existing = new Set(await store.listDirSlugs(store.dataPath("schemas")));
+  if (!existing.has(base)) return base;
+  let i = 2;
+  while (existing.has(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
 }
-export function wideTablesDir(id: number) { return store.dataPath("schemas", String(id), "wide-tables"); }
-export function wideTableFile(schemaId: number, wtId: number) {
-  return store.dataPath("schemas", String(schemaId), "wide-tables", `${wtId}.json`);
+
+// ── Path functions (take slug/name strings, synchronous) ──────────────────────
+
+export function schemaDir(slug: string): string { return store.dataPath("schemas", slug); }
+export function metaFile(slug: string): string { return store.dataPath("schemas", slug, "meta.json"); }
+export function tablesDir(slug: string): string { return store.dataPath("schemas", slug, "tables"); }
+export function tableFile(schemaSlug: string, tableName: string): string {
+  return store.dataPath("schemas", schemaSlug, "tables", `${tableName}.json`);
+}
+export function versionsDir(slug: string): string { return store.dataPath("schemas", slug, "versions"); }
+export function versionFile(schemaSlug: string, versionNo: number): string {
+  return store.dataPath("schemas", schemaSlug, "versions", `v${versionNo}.json`);
+}
+export function wideTablesDir(slug: string): string { return store.dataPath("schemas", slug, "wide-tables"); }
+export function wideTableFile(schemaSlug: string, wtNameSlug: string): string {
+  return store.dataPath("schemas", schemaSlug, "wide-tables", `${wtNameSlug}.json`);
+}
+
+// ── Async resolvers (ID → path) ────────────────────────────────────────────────
+
+export async function getSchemaSlug(id: number): Promise<string> {
+  const slug = await store.indexGetStr("schemaIdToSlug", id);
+  if (!slug) throw new NotFoundError("Schema", id);
+  return slug;
+}
+
+// Returns the full table file path for a given schemaId + tableId
+export async function getTableFilePath(schemaId: number, tableId: number): Promise<string> {
+  const idx = await store.getIndex();
+  const slug = idx.schemaIdToSlug[String(schemaId)];
+  if (!slug) throw new NotFoundError("Schema", schemaId);
+  const name = idx.tableIdToName[String(tableId)];
+  if (!name) throw new NotFoundError("Table", tableId);
+  return tableFile(slug, name);
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 export async function loadTables(schemaId: number): Promise<SchemaWithTables["tables"]> {
-  const ids = await store.listJsonFileIds(tablesDir(schemaId));
+  const slug = await getSchemaSlug(schemaId);
+  const names = await store.listJsonFileSlugs(tablesDir(slug));
   const tables: SchemaWithTables["tables"] = [];
-  for (const tid of ids) {
-    const t = await store.readJson<TableFile>(tableFile(schemaId, tid));
+  for (const name of names) {
+    const t = await store.readJson<TableFile>(tableFile(slug, name));
     if (!t) continue;
     tables.push({
       id: t.id,
@@ -67,10 +106,10 @@ export async function loadTables(schemaId: number): Promise<SchemaWithTables["ta
 // ── CRUD ───────────────────────────────────────────────────────────────────────
 
 export async function listSchemas() {
-  const ids = await store.listDirIds(store.dataPath("schemas"));
+  const slugs = await store.listDirSlugs(store.dataPath("schemas"));
   const schemas = [];
-  for (const id of ids) {
-    const meta = await store.readJson<SchemaMeta>(metaFile(id));
+  for (const slug of slugs) {
+    const meta = await store.readJson<SchemaMeta>(metaFile(slug));
     if (!meta) continue;
     schemas.push({
       id: meta.id, name: meta.name, description: meta.description, domain: meta.domain,
@@ -81,17 +120,18 @@ export async function listSchemas() {
 }
 
 export async function getSchemaByName(name: string): Promise<{ id: number } | null> {
-  const ids = await store.listDirIds(store.dataPath("schemas"));
+  const slugs = await store.listDirSlugs(store.dataPath("schemas"));
   const lower = name.toLowerCase();
-  for (const id of ids) {
-    const meta = await store.readJson<SchemaMeta>(metaFile(id));
+  for (const slug of slugs) {
+    const meta = await store.readJson<SchemaMeta>(metaFile(slug));
     if (meta?.name.toLowerCase() === lower) return { id: meta.id };
   }
   return null;
 }
 
 export async function getSchemaById(id: number): Promise<SchemaWithTables> {
-  const meta = await store.readJson<SchemaMeta>(metaFile(id));
+  const slug = await getSchemaSlug(id);
+  const meta = await store.readJson<SchemaMeta>(metaFile(slug));
   if (!meta) throw new NotFoundError("Schema", id);
   const tables = await loadTables(id);
   return {
@@ -103,31 +143,34 @@ export async function getSchemaById(id: number): Promise<SchemaWithTables> {
 
 export async function createSchema(input: { name: string; description?: string | null; domain?: string }) {
   const id = await store.nextId("schemas");
+  const slug = await uniqueSlug(toSlug(input.name));
   const now = new Date().toISOString();
   const meta: SchemaMeta = {
     id, name: input.name, description: input.description ?? null,
     domain: input.domain ?? "semiconductor", createdAt: now, updatedAt: now,
   };
-  await store.writeJson(metaFile(id), meta);
+  await store.writeJson(metaFile(slug), meta);
+  await store.indexSetStr("schemaIdToSlug", id, slug);
   return getSchemaById(id);
 }
 
 export async function updateSchema(id: number, input: Partial<{ name: string; description: string | null; domain: string }>) {
-  const meta = await store.readJson<SchemaMeta>(metaFile(id));
+  const slug = await getSchemaSlug(id);
+  const meta = await store.readJson<SchemaMeta>(metaFile(slug));
   if (!meta) throw new NotFoundError("Schema", id);
   if (input.name !== undefined) meta.name = input.name;
   if (input.description !== undefined) meta.description = input.description;
   if (input.domain !== undefined) meta.domain = input.domain;
   meta.updatedAt = new Date().toISOString();
-  await store.writeJson(metaFile(id), meta);
+  await store.writeJson(metaFile(slug), meta);
   return getSchemaById(id);
 }
 
 export async function deleteSchema(id: number) {
-  const meta = await store.readJson<SchemaMeta>(metaFile(id));
+  const slug = await getSchemaSlug(id);
+  const meta = await store.readJson<SchemaMeta>(metaFile(slug));
   if (!meta) throw new NotFoundError("Schema", id);
 
-  // Clean up index entries for all tables and fields
   const idx = await store.getIndex();
   const tableIds = Object.entries(idx.tableSchema)
     .filter(([, sid]) => sid === id)
@@ -135,7 +178,9 @@ export async function deleteSchema(id: number) {
 
   const fieldIds: number[] = [];
   for (const tid of tableIds) {
-    const t = await store.readJson<TableFile>(tableFile(id, tid));
+    const tName = idx.tableIdToName[String(tid)];
+    if (!tName) continue;
+    const t = await store.readJson<TableFile>(tableFile(slug, tName));
     if (t) for (const f of t.fields) fieldIds.push(f.id);
   }
 
@@ -144,10 +189,17 @@ export async function deleteSchema(id: number) {
     .map(([wtid]) => Number(wtid));
 
   // Batch update index
-  for (const tid of tableIds) delete idx.tableSchema[String(tid)];
+  for (const tid of tableIds) {
+    delete idx.tableSchema[String(tid)];
+    delete idx.tableIdToName[String(tid)];
+  }
   for (const fid of fieldIds) delete idx.fieldTable[String(fid)];
-  for (const wtid of wtIds) delete idx.wideTableSchema[String(wtid)];
-  await store.writeJson(store.dataPath("_index.json"), idx);
+  for (const wtid of wtIds) {
+    delete idx.wideTableSchema[String(wtid)];
+    delete idx.wideTableIdToName[String(wtid)];
+  }
+  delete idx.schemaIdToSlug[String(id)];
+  await store.writeIndex(idx);
 
-  await store.deleteDir(schemaDir(id));
+  await store.deleteDir(schemaDir(slug));
 }

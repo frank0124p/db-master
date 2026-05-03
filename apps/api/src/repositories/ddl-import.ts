@@ -2,7 +2,7 @@ import { parseDDL } from "@schema-studio/ddl-parser";
 import { runRules } from "@schema-studio/core";
 import { getRuleSettingsMap, getAllRules } from "./rules.js";
 import * as store from "../db/fileStore.js";
-import { loadTables, tableFile, TableFile } from "./schemas.js";
+import { loadTables, tableFile, getSchemaSlug, TableFile } from "./schemas.js";
 
 export interface ImportCheckResult {
   tables: ParsedTableSummary[];
@@ -44,6 +44,7 @@ export async function importDDL(
   const parsed = parseDDL(sql);
   if (parsed.tables.length === 0) throw new Error("No tables found in DDL");
 
+  const schemaSlug = await getSchemaSlug(schemaId);
   const existingTables = await loadTables(schemaId);
   const tableByName = new Map(existingTables.map(t => [t.name, t]));
 
@@ -55,9 +56,7 @@ export async function importDDL(
 
     if (existing) {
       // Upsert: merge fields into existing table file
-      const schemaIdForTable = await store.indexGet("tableSchema", existing.id);
-      if (schemaIdForTable === null) continue;
-      const tbl = await store.readJson<TableFile>(tableFile(schemaId, existing.id));
+      const tbl = await store.readJson<TableFile>(tableFile(schemaSlug, existing.name));
       if (!tbl) continue;
 
       const existingFieldNames = new Map(tbl.fields.map(f => [f.name, f]));
@@ -87,7 +86,7 @@ export async function importDDL(
         }
       }
       tbl.updatedAt = new Date().toISOString();
-      await store.writeJson(tableFile(schemaId, tbl.id), tbl);
+      await store.writeJson(tableFile(schemaSlug, tbl.name), tbl);
       tablesCreated++;
     } else {
       // Create new table
@@ -109,8 +108,9 @@ export async function importDDL(
         id: tableId, schemaId, name: parsedTable.name, comment: parsedTable.comment ?? null,
         createdAt: now, updatedAt: now, fields,
       };
-      await store.writeJson(tableFile(schemaId, tableId), newTable);
+      await store.writeJson(tableFile(schemaSlug, parsedTable.name), newTable);
       await store.indexSet("tableSchema", tableId, schemaId);
+      await store.indexSetStr("tableIdToName", tableId, parsedTable.name);
       tablesCreated++;
     }
   }

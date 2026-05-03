@@ -2,10 +2,10 @@ import fs from "fs/promises";
 import path from "path";
 import { createSchema, getSchemaByName } from "../repositories/schemas.js";
 import { importDDL } from "../repositories/ddl-import.js";
-import { DATA_DIR, readJson, writeJson } from "../db/fileStore.js";
+import { DATA_DIR, sysPath, readJson, writeJson } from "../db/fileStore.js";
 
 const DDL_INPUT_DIR = path.join(DATA_DIR, "ddl");
-const MANIFEST_FILE = path.join(DATA_DIR, "_ddl-manifest.json");
+const MANIFEST_FILE = sysPath("ddl-manifest.json");
 
 interface ManifestEntry {
   schemaId: number;

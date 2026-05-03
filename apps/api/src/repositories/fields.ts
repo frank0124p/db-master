@@ -1,6 +1,6 @@
 import { NotFoundError } from "@schema-studio/core";
 import * as store from "../db/fileStore.js";
-import { tableFile, TableFile } from "./schemas.js";
+import { TableFile, getTableFilePath } from "./schemas.js";
 
 export async function createField(tableId: number, input: {
   name: string; data_type: string; nullable?: boolean; default_value?: string | null;
@@ -8,7 +8,8 @@ export async function createField(tableId: number, input: {
 }) {
   const schemaId = await store.indexGet("tableSchema", tableId);
   if (schemaId === null) throw new NotFoundError("Table", tableId);
-  const tbl = await store.readJson<TableFile>(tableFile(schemaId, tableId));
+  const filePath = await getTableFilePath(schemaId, tableId);
+  const tbl = await store.readJson<TableFile>(filePath);
   if (!tbl) throw new NotFoundError("Table", tableId);
 
   const id = await store.nextId("fields");
@@ -27,7 +28,7 @@ export async function createField(tableId: number, input: {
 
   tbl.fields.push(field);
   tbl.updatedAt = new Date().toISOString();
-  await store.writeJson(tableFile(schemaId, tableId), tbl);
+  await store.writeJson(filePath, tbl);
   await store.indexSet("fieldTable", id, tableId);
   return field;
 }
@@ -40,7 +41,8 @@ export async function updateField(id: number, input: Partial<{
   if (tableId === null) throw new NotFoundError("Field", id);
   const schemaId = await store.indexGet("tableSchema", tableId);
   if (schemaId === null) throw new NotFoundError("Table", tableId);
-  const tbl = await store.readJson<TableFile>(tableFile(schemaId, tableId));
+  const filePath = await getTableFilePath(schemaId, tableId);
+  const tbl = await store.readJson<TableFile>(filePath);
   if (!tbl) throw new NotFoundError("Table", tableId);
 
   const f = tbl.fields.find(f => f.id === id);
@@ -56,7 +58,7 @@ export async function updateField(id: number, input: Partial<{
   if (input.position !== undefined) f.position = input.position;
 
   tbl.updatedAt = new Date().toISOString();
-  await store.writeJson(tableFile(schemaId, tableId), tbl);
+  await store.writeJson(filePath, tbl);
 }
 
 export async function deleteField(id: number) {
@@ -64,11 +66,12 @@ export async function deleteField(id: number) {
   if (tableId === null) throw new NotFoundError("Field", id);
   const schemaId = await store.indexGet("tableSchema", tableId);
   if (schemaId === null) throw new NotFoundError("Table", tableId);
-  const tbl = await store.readJson<TableFile>(tableFile(schemaId, tableId));
+  const filePath = await getTableFilePath(schemaId, tableId);
+  const tbl = await store.readJson<TableFile>(filePath);
   if (!tbl) throw new NotFoundError("Table", tableId);
 
   tbl.fields = tbl.fields.filter(f => f.id !== id);
   tbl.updatedAt = new Date().toISOString();
-  await store.writeJson(tableFile(schemaId, tableId), tbl);
+  await store.writeJson(filePath, tbl);
   await store.indexDelete("fieldTable", id);
 }
