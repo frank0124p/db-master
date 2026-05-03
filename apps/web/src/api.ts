@@ -285,7 +285,8 @@ const realApi = {
     updateSettings: (patch: Partial<DataHubSettings>) =>
       req<{ settings: Partial<DataHubSettings> }>("/datahub/settings", { method: "PATCH", body: JSON.stringify(patch) }),
     test: () => req<{ ok: boolean; message: string }>("/datahub/test", { method: "POST" }),
-    push: (schemaId: number) => req<PushRecord>(`/datahub/push/${schemaId}`, { method: "POST" }),
+    push: (schemaId: number, opts?: { tableIds?: number[]; wideTableIds?: number[] }) =>
+      req<PushRecord>(`/datahub/push/${schemaId}`, { method: "POST", body: JSON.stringify(opts ?? {}) }),
     getPushLog: () => req<PushRecord[]>("/datahub/push-log"),
   },
   reload: () => req<{ ok: boolean; reloadedAt: string }>("/reload", { method: "POST" }),

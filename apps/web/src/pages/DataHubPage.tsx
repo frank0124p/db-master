@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type DataHubSettings, type PushRecord } from "../api.js";
 import { useStore } from "../store.js";
@@ -37,13 +37,17 @@ export default function DataHubPage() {
 
 // ── Push Tab ──────────────────────────────────────────────────────────────────
 
+type SchemaSelection = { tables: Set<number>; wideTables: Set<number> };
+
 function PushTab() {
   const { showToast } = useStore();
   const qc = useQueryClient();
   const { data: schemas } = useQuery({ queryKey: ["schemas"], queryFn: () => api.schemas.list() });
   const { data: settings } = useQuery({ queryKey: ["datahub-settings"], queryFn: () => api.datahub.getSettings() });
   const { data: log } = useQuery({ queryKey: ["datahub-log"], queryFn: () => api.datahub.getPushLog() });
-  const [pushing, setPushing] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [selections, setSelections] = useState<Map<number, SchemaSelection>>(new Map());
+  const [pushing, setPushing] = useState(false);
 
   const isConfigured = !!(settings?.settings?.url && settings?.settings?.token);
 
@@ -52,28 +56,50 @@ function PushTab() {
     if (!lastPushBySchema.has(r.schemaId)) lastPushBySchema.set(r.schemaId, r);
   }
 
-  async function push(schemaId: number, schemaName: string) {
-    setPushing(schemaId);
+  const totalSelected = [...selections.values()].reduce((n, s) => n + s.tables.size + s.wideTables.size, 0);
+
+  function toggleExpand(id: number) {
+    setExpanded(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  }
+
+  const updateSel = useCallback((schemaId: number, updater: (s: SchemaSelection) => SchemaSelection) => {
+    setSelections(prev => {
+      const next = new Map(prev);
+      const cur = next.get(schemaId) ?? { tables: new Set(), wideTables: new Set() };
+      next.set(schemaId, updater({ tables: new Set(cur.tables), wideTables: new Set(cur.wideTables) }));
+      return next;
+    });
+  }, []);
+
+  async function doPush(schemaId: number, opts?: { tableIds?: number[]; wideTableIds?: number[] }) {
+    const schemaName = schemas?.find(s => s.id === schemaId)?.name ?? String(schemaId);
+    const result = await api.datahub.push(schemaId, opts);
+    await qc.invalidateQueries({ queryKey: ["datahub-log"] });
+    if (result.status === "ok") showToast(`✓ ${schemaName} 推送成功（${result.tablesOk}/${result.tablesTotal}）`);
+    else showToast(`⚠ ${schemaName} 完成，${result.tablesFailed} 個失敗`);
+  }
+
+  async function pushSelected() {
+    if (!totalSelected || pushing) return;
+    setPushing(true);
     try {
-      const result = await api.datahub.push(schemaId);
-      await qc.invalidateQueries({ queryKey: ["datahub-log"] });
-      if (result.status === "ok") {
-        showToast(`✓ ${schemaName} 推送成功（${result.tablesOk} 張表）`);
-      } else {
-        showToast(`⚠ ${schemaName} 推送完成，有 ${result.tablesFailed} 張表失敗`);
+      for (const [schemaId, sel] of selections) {
+        if (!sel.tables.size && !sel.wideTables.size) continue;
+        await doPush(schemaId, { tableIds: [...sel.tables], wideTableIds: [...sel.wideTables] });
       }
     } catch (e) {
       showToast(`✗ 推送失敗：${e instanceof Error ? e.message : String(e)}`);
     } finally {
-      setPushing(null);
+      setPushing(false);
     }
   }
 
-  async function pushAll() {
-    if (!schemas?.length) return;
-    for (const s of schemas) {
-      await push(s.id, s.name);
-    }
+  async function pushAllInSchema(schemaId: number) {
+    if (pushing) return;
+    setPushing(true);
+    try { await doPush(schemaId); }
+    catch (e) { showToast(`✗ 推送失敗：${e instanceof Error ? e.message : String(e)}`); }
+    finally { setPushing(false); }
   }
 
   return (
@@ -93,50 +119,209 @@ function PushTab() {
       <div style={{ padding: "10px 14px", borderRadius: 8, fontSize: 12, color: "var(--text-3)",
         background: "var(--bg-3)", border: "1px solid var(--border)" }}>
         <b style={{ color: "var(--text-2)" }}>⚙ 整合狀態：框架已就緒，等待 API 串接</b>
-        <div style={{ marginTop: 4 }}>Schema metadata 已可正確轉換為 DataHub Dataset 格式（URN、欄位型別映射、主鍵標記）。
-        提供 DataHub REST API 端點後，更新 <code style={{ fontFamily: "var(--font-mono)" }}>apps/api/src/services/datahub.ts</code> 中的 <code style={{ fontFamily: "var(--font-mono)" }}>pushSchema()</code> 與 <code style={{ fontFamily: "var(--font-mono)" }}>testConnection()</code> 函式即可啟用。</div>
+        <div style={{ marginTop: 4 }}>
+          支援推送單張 Table、寬表，或整個 Schema。提供 DataHub REST API 端點後，更新{" "}
+          <code style={{ fontFamily: "var(--font-mono)" }}>apps/api/src/services/datahub.ts</code> 即可啟用。
+        </div>
       </div>
 
-      {/* Schema list */}
+      {/* Schema list with accordion */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>Schema 清單（{schemas?.length ?? 0} 個）</span>
-        <button className="btn btn-primary" onClick={pushAll} disabled={pushing !== null || !schemas?.length}>
-          {pushing !== null ? "推送中..." : "⬆ 全部推送"}
-        </button>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>
+          Schema 清單（{schemas?.length ?? 0} 個）
+          {totalSelected > 0 && <span style={{ marginLeft: 8, color: "var(--accent)" }}>· {totalSelected} 個已選取</span>}
+        </span>
+        {totalSelected > 0 && (
+          <button className="btn btn-primary" onClick={pushSelected} disabled={pushing} style={{ fontSize: 12 }}>
+            {pushing ? "推送中..." : `⬆ 推送已選取 (${totalSelected})`}
+          </button>
+        )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {schemas?.map(s => {
-          const last = lastPushBySchema.get(s.id);
-          const isPushing = pushing === s.id;
-          return (
-            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px",
-              background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--accent)" }}>{s.name}</span>
-                  <span style={{ fontSize: 11, color: "var(--text-3)" }}>{s.domain}</span>
-                </div>
-                {last ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
-                    <StatusBadge status={last.status} />
-                    <span style={{ color: "var(--text-3)" }}>{last.tablesOk}/{last.tablesTotal} 張表</span>
-                    <span style={{ color: "var(--text-3)" }}>·</span>
-                    <span style={{ color: "var(--text-3)" }}>{new Date(last.pushedAt).toLocaleString("zh-TW")}</span>
-                  </div>
-                ) : (
-                  <span style={{ fontSize: 11, color: "var(--text-3)" }}>尚未推送過</span>
+        {schemas?.map(s => (
+          <SchemaAccordion
+            key={s.id}
+            schemaId={s.id}
+            schemaName={s.name}
+            domain={s.domain}
+            lastPush={lastPushBySchema.get(s.id)}
+            isExpanded={expanded.has(s.id)}
+            selection={selections.get(s.id)}
+            pushing={pushing}
+            onToggleExpand={() => toggleExpand(s.id)}
+            onUpdateSel={updateSel}
+            onPushAll={() => pushAllInSchema(s.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Schema Accordion ──────────────────────────────────────────────────────────
+
+function SchemaAccordion({
+  schemaId, schemaName, domain, lastPush, isExpanded, selection, pushing,
+  onToggleExpand, onUpdateSel, onPushAll,
+}: {
+  schemaId: number; schemaName: string; domain: string;
+  lastPush: PushRecord | undefined; isExpanded: boolean;
+  selection: SchemaSelection | undefined; pushing: boolean;
+  onToggleExpand: () => void;
+  onUpdateSel: (id: number, updater: (s: SchemaSelection) => SchemaSelection) => void;
+  onPushAll: () => void;
+}) {
+  const { data: schema } = useQuery({
+    queryKey: ["schema", schemaId],
+    queryFn: () => api.schemas.get(schemaId),
+    enabled: isExpanded,
+  });
+  const { data: wideTables } = useQuery({
+    queryKey: ["wide-tables", schemaId],
+    queryFn: () => api.wideTables.list(schemaId),
+    enabled: isExpanded,
+  });
+
+  const sel = selection ?? { tables: new Set<number>(), wideTables: new Set<number>() };
+  const tableCount = schema?.tables.length ?? 0;
+  const wideCount = wideTables?.length ?? 0;
+  const selCount = sel.tables.size + sel.wideTables.size;
+
+  function toggleTable(id: number) {
+    onUpdateSel(schemaId, s => {
+      s.tables.has(id) ? s.tables.delete(id) : s.tables.add(id);
+      return s;
+    });
+  }
+  function toggleWide(id: number) {
+    onUpdateSel(schemaId, s => {
+      s.wideTables.has(id) ? s.wideTables.delete(id) : s.wideTables.add(id);
+      return s;
+    });
+  }
+  function selectAllTables(tables: { id: number }[]) {
+    onUpdateSel(schemaId, s => {
+      const allSelected = tables.every(t => s.tables.has(t.id));
+      if (allSelected) tables.forEach(t => s.tables.delete(t.id));
+      else tables.forEach(t => s.tables.add(t.id));
+      return s;
+    });
+  }
+  function selectAllWide(wts: { id: number }[]) {
+    onUpdateSel(schemaId, s => {
+      const allSelected = wts.every(w => s.wideTables.has(w.id));
+      if (allSelected) wts.forEach(w => s.wideTables.delete(w.id));
+      else wts.forEach(w => s.wideTables.add(w.id));
+      return s;
+    });
+  }
+
+  return (
+    <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--accent)" }}>{schemaName}</span>
+            <span style={{ fontSize: 11, color: "var(--text-3)" }}>{domain}</span>
+            {selCount > 0 && (
+              <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4,
+                background: "var(--accent-dim)", color: "var(--accent)" }}>{selCount} 已選</span>
+            )}
+          </div>
+          {lastPush ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+              <StatusBadge status={lastPush.status} />
+              <span style={{ color: "var(--text-3)" }}>{lastPush.tablesOk}/{lastPush.tablesTotal} 個物件</span>
+              <span style={{ color: "var(--text-3)" }}>· {new Date(lastPush.pushedAt).toLocaleString("zh-TW")}</span>
+            </div>
+          ) : (
+            <span style={{ fontSize: 11, color: "var(--text-3)" }}>尚未推送過</span>
+          )}
+        </div>
+        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 9px", flexShrink: 0 }}
+          disabled={pushing} onClick={onPushAll} title="推送此 Schema 全部 Tables">
+          ⬆ 全推
+        </button>
+        <button onClick={onToggleExpand}
+          style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid var(--border-light)",
+            background: isExpanded ? "var(--accent-dim)" : "var(--bg-3)",
+            color: isExpanded ? "var(--accent)" : "var(--text-3)",
+            cursor: "pointer", fontSize: 11, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {isExpanded ? "▲" : "▼"}
+        </button>
+      </div>
+
+      {/* Expanded panel */}
+      {isExpanded && (
+        <div style={{ borderTop: "1px solid var(--border)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Tables section */}
+          {!schema ? (
+            <div style={{ fontSize: 12, color: "var(--text-3)" }}>載入中...</div>
+          ) : (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Tables（{tableCount}）
+                </span>
+                {tableCount > 0 && (
+                  <button onClick={() => selectAllTables(schema.tables)}
+                    style={{ fontSize: 10, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    {schema.tables.every(t => sel.tables.has(t.id)) ? "全部取消" : "全選"}
+                  </button>
                 )}
               </div>
-              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 10px", flexShrink: 0 }}
-                disabled={isPushing || pushing !== null}
-                onClick={() => push(s.id, s.name)}>
-                {isPushing ? "推送中..." : "⬆ 推送"}
-              </button>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {schema.tables.map(t => (
+                  <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
+                    padding: "4px 9px", borderRadius: 6, fontSize: 12,
+                    background: sel.tables.has(t.id) ? "var(--accent-dim)" : "var(--bg-3)",
+                    border: `1px solid ${sel.tables.has(t.id) ? "var(--accent)" : "var(--border)"}`,
+                    color: sel.tables.has(t.id) ? "var(--accent)" : "var(--text-2)" }}>
+                    <input type="checkbox" checked={sel.tables.has(t.id)} onChange={() => toggleTable(t.id)}
+                      style={{ width: 12, height: 12, accentColor: "var(--accent)", cursor: "pointer" }} />
+                    <span style={{ fontFamily: "var(--font-mono)" }}>{t.name}</span>
+                  </label>
+                ))}
+                {tableCount === 0 && <span style={{ fontSize: 11, color: "var(--text-3)" }}>此 Schema 無 Tables</span>}
+              </div>
             </div>
-          );
-        })}
-      </div>
+          )}
+
+          {/* Wide tables section */}
+          {wideTables !== undefined && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  寬表（{wideCount}）
+                </span>
+                {wideCount > 0 && (
+                  <button onClick={() => selectAllWide(wideTables)}
+                    style={{ fontSize: 10, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    {wideTables.every(w => sel.wideTables.has(w.id)) ? "全部取消" : "全選"}
+                  </button>
+                )}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {wideTables.map(w => (
+                  <label key={w.id} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
+                    padding: "4px 9px", borderRadius: 6, fontSize: 12,
+                    background: sel.wideTables.has(w.id) ? "rgba(139,92,246,0.12)" : "var(--bg-3)",
+                    border: `1px solid ${sel.wideTables.has(w.id) ? "rgba(139,92,246,0.6)" : "var(--border)"}`,
+                    color: sel.wideTables.has(w.id) ? "rgb(167,139,250)" : "var(--text-2)" }}>
+                    <input type="checkbox" checked={sel.wideTables.has(w.id)} onChange={() => toggleWide(w.id)}
+                      style={{ width: 12, height: 12, cursor: "pointer" }} />
+                    <span style={{ fontFamily: "var(--font-mono)" }}>{w.name}</span>
+                    <span style={{ fontSize: 10, opacity: 0.7 }}>寬</span>
+                  </label>
+                ))}
+                {wideCount === 0 && <span style={{ fontSize: 11, color: "var(--text-3)" }}>無寬表</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

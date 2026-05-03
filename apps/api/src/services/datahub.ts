@@ -1,5 +1,6 @@
 import type { DataHubSettings } from "../repositories/settings.js";
 import { getSchemaById } from "../repositories/schemas.js";
+import { listWideTables, getWideTable } from "../repositories/wide-tables.js";
 import * as store from "../db/fileStore.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -79,11 +80,17 @@ export async function testConnection(settings: Partial<DataHubSettings>): Promis
   return { ok: false, message: "STUB：API URL 尚未實作，請提供 DataHub REST API 端點後更新此函式" };
 }
 
+export interface PushOpts {
+  tableIds?: number[];     // if omitted → all tables in schema
+  wideTableIds?: number[]; // if omitted → no wide tables
+}
+
 // ── Push one schema (stub — implement when DataHub REST API is known) ─────────
 
 export async function pushSchema(
   schemaId: number,
   settings: Partial<DataHubSettings>,
+  opts?: PushOpts,
 ): Promise<PushRecord> {
   const record: PushRecord = {
     id: `${Date.now()}-${schemaId}`,
@@ -105,15 +112,20 @@ export async function pushSchema(
 
   const schema = await getSchemaById(schemaId);
   record.schemaName = schema.name;
-  record.tablesTotal = schema.tables.length;
 
   const platform = settings.platform ?? "mariadb";
   const env = settings.env ?? "DEV";
+  const schemaSlug = schema.name.toLowerCase().replace(/\s+/g, "_");
 
-  const datasets: DataHubDataset[] = schema.tables.map(table => ({
-    urn: buildUrn(platform, env, schema.name.toLowerCase().replace(/\s+/g, "_"), table.name),
+  // ── Build table datasets ──────────────────────────────────────────────────
+  const tables = opts?.tableIds
+    ? schema.tables.filter(t => opts.tableIds!.includes(t.id))
+    : schema.tables;
+
+  const tableDatasets: DataHubDataset[] = tables.map(table => ({
+    urn: buildUrn(platform, env, schemaSlug, table.name),
     platform,
-    name: `${schema.name.toLowerCase().replace(/\s+/g, "_")}.${table.name}`,
+    name: `${schemaSlug}.${table.name}`,
     description: table.comment,
     env,
     fields: table.fields.map(f => ({
@@ -126,6 +138,34 @@ export async function pushSchema(
     })),
   }));
 
+  // ── Build wide table datasets ─────────────────────────────────────────────
+  const wideDatasets: DataHubDataset[] = [];
+  if (opts?.wideTableIds?.length) {
+    for (const wid of opts.wideTableIds) {
+      const wt = await getWideTable(wid);
+      if (!wt) continue;
+      const includedCols = wt.columns.filter(c => c.included);
+      wideDatasets.push({
+        urn: buildUrn(platform, env, schemaSlug, wt.name),
+        platform,
+        name: `${schemaSlug}.${wt.name}`,
+        description: wt.description,
+        env,
+        fields: includedCols.map(c => ({
+          fieldPath: c.outputName,
+          type: sqlTypeToDataHubType(c.fieldType),
+          nativeDataType: c.fieldType,
+          nullable: true,
+          description: null,
+          isPrimaryKey: false,
+        })),
+      });
+    }
+  }
+
+  const allDatasets = [...tableDatasets, ...wideDatasets];
+  record.tablesTotal = allDatasets.length;
+
   // TODO: replace loop below with real DataHub REST calls
   // Real impl (DataHub GMS):
   //   POST {url}/entities?action=ingest
@@ -134,9 +174,7 @@ export async function pushSchema(
   //
   // Or using newer OpenAPI v3:
   //   POST {url}/openapi/v2/entity/dataset
-  //
-  // For now, simulate all tables failing with a stub message
-  for (const dataset of datasets) {
+  for (const dataset of allDatasets) {
     record.errors.push(`STUB [${dataset.name}]：API 呼叫尚未實作 — urn=${dataset.urn}`);
     record.tablesFailed++;
   }
