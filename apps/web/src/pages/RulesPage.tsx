@@ -371,8 +371,9 @@ function SkillCard({ skill }: { skill: SkillInfo }) {
 
       {/* Expanded description */}
       {open && skill.content && (
-        <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", background: "var(--bg-1)" }}>
-          <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: "var(--text-2)",
+        <div style={{ borderTop: "1px solid var(--border)", background: "var(--bg-1)",
+          maxHeight: 360, overflowY: "auto" }}>
+          <pre style={{ margin: 0, padding: "12px 16px", fontSize: 12, lineHeight: 1.7, color: "var(--text-2)",
             fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
             {skill.content}
           </pre>
@@ -458,8 +459,8 @@ function SkillsTab({ skills }: { skills: SkillInfo[] }) {
       </div>
 
       {/* ── Skill list ── */}
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px",
-        display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
         {visible.length === 0 ? (
           <div style={{ textAlign: "center", color: "var(--text-3)", fontSize: 13, paddingTop: 40 }}>
             <div style={{ fontSize: 32, marginBottom: 8, opacity: 0.4 }}>✦</div>
@@ -468,6 +469,7 @@ function SkillsTab({ skills }: { skills: SkillInfo[] }) {
         ) : (
           visible.map(s => <SkillCard key={s.name} skill={s} />)
         )}
+      </div>
       </div>
     </div>
   );
