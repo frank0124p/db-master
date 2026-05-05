@@ -240,7 +240,8 @@
   "wideTableSchema": {
     "1": 1,
     "2": 1,
-    "3": 5
+    "3": 5,
+    "4": 5
   },
   "schemaIdToSlug": {
     "1": "plm-core",
@@ -322,6 +323,7 @@
   "wideTableIdToName": {
     "1": "vbomflat",
     "2": "xxx",
-    "3": "lot"
+    "3": "lot",
+    "4": "vwiplotfull"
   }
 }

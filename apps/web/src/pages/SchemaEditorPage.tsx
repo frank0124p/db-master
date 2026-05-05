@@ -517,6 +517,7 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
 
   const schemaId = schema.id;
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [fieldViewMode, setFieldViewMode] = useState<"list" | "classified">("list");
   const [dialectStatus, setDialectStatus] = useState<"idle" | "loading" | "ok" | "warn" | "error">("idle");
   const [dialectCheckResult, setDialectCheckResult] = useState<ImportCheckResult | null>(null);
   const [showDialectPopover, setShowDialectPopover] = useState(false);
@@ -681,26 +682,40 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
               </div>
             );
           })()}
+          <div style={{ display: "flex", borderRadius: 4, overflow: "hidden", border: "1px solid var(--border)" }}>
+            {(["list", "classified"] as const).map(mode => (
+              <button key={mode} onClick={() => setFieldViewMode(mode)}
+                style={{ padding: "3px 9px", border: "none", cursor: "pointer", fontSize: 10, fontWeight: 600, letterSpacing: "0.3px", transition: "all 0.15s",
+                  background: fieldViewMode === mode ? "var(--accent)" : "var(--bg-3)",
+                  color: fieldViewMode === mode ? "#fff" : "var(--text-3)" }}>
+                {mode === "list" ? "列表" : "分類"}
+              </button>
+            ))}
+          </div>
           <button className="btn btn-ghost" onClick={exportDDL}>↓ 匯出 DDL</button>
           <button className="btn btn-primary" onClick={openSaveModal}>儲存版本</button>
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              {[t("col.field_name"), t("col.type"), t("col.nullable"), t("col.default"), t("col.naming"), t("col.comment"), ""].map((h, i) => (
-                <th key={i} style={{ textAlign: "left", padding: "6px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid var(--border)" }}>{h}</th>
+        {fieldViewMode === "list" ? (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {[t("col.field_name"), t("col.type"), t("col.nullable"), t("col.default"), t("col.naming"), t("col.comment"), ""].map((h, i) => (
+                  <th key={i} style={{ textAlign: "left", padding: "6px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {table.fields.sort((a, b) => a.position - b.position).map(f => (
+                <FieldRow key={f.id} field={f} tableId={table.id} domain={schema.domain} namingEntries={namingEntries} onRefresh={refresh} showToast={showToast} />
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {table.fields.sort((a, b) => a.position - b.position).map(f => (
-              <FieldRow key={f.id} field={f} tableId={table.id} domain={schema.domain} namingEntries={namingEntries} onRefresh={refresh} showToast={showToast} />
-            ))}
-            <AddFieldRow tableId={table.id} onRefresh={refresh} />
-          </tbody>
-        </table>
+              <AddFieldRow tableId={table.id} onRefresh={refresh} />
+            </tbody>
+          </table>
+        ) : (
+          <ClassifiedFieldView table={table} schema={schema} namingEntries={namingEntries} onRefresh={refresh} />
+        )}
       </div>
       <style>{`.del-btn { opacity: 0 !important; } tr:hover .del-btn { opacity: 1 !important; }`}</style>
 
@@ -723,6 +738,64 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
           onSaved={() => setShowSaveModal(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Classified Field View ─────────────────────────────────────────────────────
+type FieldCategory = { key: string; label: string; icon: string; color: string; bg: string };
+const FIELD_CATEGORIES: FieldCategory[] = [
+  { key: "pk",        label: "主鍵",   icon: "🔑", color: "var(--warning)",         bg: "rgba(251,191,36,0.08)" },
+  { key: "unique",    label: "唯一鍵", icon: "🔒", color: "var(--info)",             bg: "rgba(96,165,250,0.08)" },
+  { key: "timestamp", label: "時間戳", icon: "🕐", color: "var(--text-2)",           bg: "rgba(139,92,246,0.08)" },
+  { key: "boolean",   label: "布林值", icon: "☑",  color: "var(--success)",          bg: "rgba(74,222,128,0.08)" },
+  { key: "numeric",   label: "數值",   icon: "🔢", color: "#5EEAD4",                 bg: "rgba(94,234,212,0.08)" },
+  { key: "text",      label: "文字",   icon: "📝", color: "var(--text-1)",           bg: "rgba(255,255,255,0.04)" },
+  { key: "other",     label: "其他",   icon: "📦", color: "var(--text-3)",           bg: "rgba(255,255,255,0.02)" },
+];
+
+function classifyField(f: Field): string {
+  if (f.isPrimaryKey) return "pk";
+  if (f.isUnique) return "unique";
+  const dt = f.dataType.toUpperCase();
+  const nm = f.name.toLowerCase();
+  if (dt.includes("DATETIME") || dt.includes("TIMESTAMP") || dt.includes("DATE") || nm.endsWith("_at") || nm.endsWith("_date") || nm.endsWith("_time")) return "timestamp";
+  if (dt === "TINYINT(1)" || nm.startsWith("is_") || nm.startsWith("has_") || nm.startsWith("on_")) return "boolean";
+  if (dt.includes("INT") || dt.includes("DECIMAL") || dt.includes("DOUBLE") || dt.includes("FLOAT") || dt.includes("NUMERIC")) return "numeric";
+  if (dt.includes("VARCHAR") || dt.includes("TEXT") || dt.includes("CHAR")) return "text";
+  return "other";
+}
+
+function ClassifiedFieldView({ table, schema, namingEntries, onRefresh }: { table: Table; schema: SchemaDetail; namingEntries: NamingEntry[]; onRefresh: () => void }) {
+  const { showToast } = useStore();
+  const grouped = new Map<string, Field[]>();
+  for (const cat of FIELD_CATEGORIES) grouped.set(cat.key, []);
+  for (const f of table.fields.slice().sort((a, b) => a.position - b.position)) {
+    grouped.get(classifyField(f))!.push(f);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {FIELD_CATEGORIES.map(cat => {
+        const fields = grouped.get(cat.key) ?? [];
+        if (fields.length === 0) return null;
+        return (
+          <div key={cat.key} style={{ borderRadius: 8, border: "1px solid var(--border)", overflow: "hidden" }}>
+            <div style={{ padding: "7px 12px", background: cat.bg, borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13 }}>{cat.icon}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: cat.color, textTransform: "uppercase", letterSpacing: "0.5px" }}>{cat.label}</span>
+              <span style={{ fontSize: 10, color: "var(--text-3)", background: "var(--bg-4)", padding: "0 6px", borderRadius: 8, border: "1px solid var(--border)" }}>{fields.length}</span>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <tbody>
+                {fields.map(f => (
+                  <FieldRow key={f.id} field={f} tableId={table.id} domain={schema.domain} namingEntries={namingEntries} onRefresh={onRefresh} showToast={showToast} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -928,7 +1001,13 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
   const [showApplyConfirm, setShowApplyConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [ddlScope, setDdlScope] = useState<"table" | "schema">("table");
+  const [ddlScope, setDdlScope] = useState<"table" | "schema" | "history">("table");
+
+  const { data: versions } = useQuery({
+    queryKey: ["versions", schemaId],
+    queryFn: () => api.schemas.versions.list(schemaId),
+    enabled: ddlScope === "history",
+  });
 
   // Single table DDL from live data
   const tableDdl = table ? generateTableDdl(table) : null;
@@ -949,8 +1028,8 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
 
   // When the active table switches, exit edit mode
   useEffect(() => { setEditMode(false); }, [table?.id]);
-  // Schema view is always read-only
-  useEffect(() => { if (ddlScope === "schema") setEditMode(false); }, [ddlScope]);
+  // Schema / history views are always read-only
+  useEffect(() => { if (ddlScope !== "table") setEditMode(false); }, [ddlScope]);
 
   function enterEdit() { setEditSql(ddl ?? ""); setEditMode(true); }
   function cancelEdit() { setEditMode(false); }
@@ -1005,12 +1084,12 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
       <div style={{ padding: "9px 12px", borderBottom: "1px solid var(--border)", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
         {/* Scope toggle */}
         <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)", flexShrink: 0 }}>
-          {(["table", "schema"] as const).map(s => (
-            <button key={s} onClick={() => setDdlScope(s)}
+          {(["table", "schema", "history"] as const).map(s => (
+            <button key={s} onClick={() => { setDdlScope(s); if (s !== "table" && s !== "schema") setEditMode(false); }}
               style={{ padding: "2px 9px", border: "none", cursor: "pointer", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", transition: "all 0.15s",
                 background: ddlScope === s ? "var(--accent)" : "var(--bg-3)",
                 color: ddlScope === s ? "#fff" : "var(--text-3)" }}>
-              {s === "table" ? "此表" : "全 Schema"}
+              {s === "table" ? "此表" : s === "schema" ? "全 Schema" : "版本歷史"}
             </button>
           ))}
         </div>
@@ -1027,8 +1106,13 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
               {schema.tables.length} tables · {schema.tables.reduce((n, t) => n + t.fields.length, 0)} fields
             </div>
           )}
+          {ddlScope === "history" && (
+            <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+              {versions ? `${versions.length} 個版本` : "載入中…"}
+            </div>
+          )}
         </div>
-        {!editMode ? (
+        {!editMode && ddlScope !== "history" ? (
           <>
             <button onClick={copy} disabled={!ddl}
               style={{ padding: "3px 9px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: copied ? "var(--success)" : "var(--text-2)", fontSize: 11, cursor: ddl ? "pointer" : "not-allowed", opacity: ddl ? 1 : 0.4, transition: "all 0.15s" }}>
@@ -1041,7 +1125,7 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
               </button>
             )}
           </>
-        ) : (
+        ) : editMode ? (
           <>
             <span style={{ fontSize: 10, color: "var(--warning)", background: "rgba(251,191,36,0.12)", padding: "2px 7px", borderRadius: 8, border: "1px solid rgba(251,191,36,0.3)" }}>編輯中</span>
             <button onClick={cancelEdit}
@@ -1053,7 +1137,7 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
               {preChecking ? "檢查中…" : applying ? "套用中…" : "套用"}
             </button>
           </>
-        )}
+        ) : null}
         <button onClick={() => { setEditMode(false); setCollapsed(true); }} title="收合"
           style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 13, padding: "2px 2px", lineHeight: 1 }}
           onMouseEnter={e => (e.currentTarget.style.color = "var(--text-1)")}
@@ -1081,7 +1165,58 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
       )}
 
       {/* Body */}
-      {!ddl ? (
+      {ddlScope === "history" ? (
+        <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
+          {!versions ? (
+            <div style={{ color: "var(--text-3)", fontSize: 12, paddingTop: 20, textAlign: "center" }}>載入中…</div>
+          ) : versions.length === 0 ? (
+            <div style={{ color: "var(--text-3)", fontSize: 12, paddingTop: 40, textAlign: "center" }}>尚無版本記錄</div>
+          ) : versions.map((v: SchemaVersion) => (
+            <div key={v.id} style={{ marginBottom: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-2)", overflow: "hidden" }}>
+              {/* Version header */}
+              <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8, background: "var(--bg-3)" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>v{v.versionNo}</span>
+                <span style={{ flex: 1, fontSize: 12, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.message ?? "（無說明）"}</span>
+                <span style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0 }}>{new Date(v.createdAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+              {/* Diff summary */}
+              {v.diff ? (
+                <div style={{ padding: "8px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+                  {v.diff.tables.added.map((name: string) => (
+                    <div key={name} style={{ fontSize: 11, color: "var(--success)", display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontFamily: "var(--font-mono)", background: "var(--success-dim)", padding: "0 5px", borderRadius: 3 }}>+ {name}</span>
+                      <span>新增 Table</span>
+                    </div>
+                  ))}
+                  {v.diff.tables.removed.map((name: string) => (
+                    <div key={name} style={{ fontSize: 11, color: "var(--error)", display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontFamily: "var(--font-mono)", background: "var(--error-dim)", padding: "0 5px", borderRadius: 3 }}>− {name}</span>
+                      <span>移除 Table</span>
+                    </div>
+                  ))}
+                  {v.diff.tables.modified.map((mod) => (
+                    <div key={mod.name} style={{ fontSize: 11, color: "var(--text-2)", background: "var(--bg-3)", borderRadius: 4, padding: "4px 8px" }}>
+                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--warning)", fontSize: 11 }}>{mod.name}</span>
+                      <span style={{ color: "var(--text-3)", marginLeft: 6 }}>
+                        {[
+                          mod.fieldsAdded.length > 0 && `+${mod.fieldsAdded.length} 欄位`,
+                          mod.fieldsRemoved.length > 0 && `−${mod.fieldsRemoved.length} 欄位`,
+                          mod.fieldsModified.length > 0 && `~${mod.fieldsModified.length} 修改`,
+                        ].filter(Boolean).join(" · ")}
+                      </span>
+                    </div>
+                  ))}
+                  {v.diff.tables.added.length === 0 && v.diff.tables.removed.length === 0 && v.diff.tables.modified.length === 0 && (
+                    <div style={{ fontSize: 11, color: "var(--text-3)" }}>無 Table 結構變更</div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-3)" }}>初始版本（無 diff）</div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : !ddl ? (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", fontSize: 12 }}>
           {ddlScope === "table" ? "選擇左側 Table 查看 DDL" : "尚無 Table 資料"}
         </div>
