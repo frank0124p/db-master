@@ -1,0 +1,15 @@
+[
+  {
+    "id": "1777812723547-5",
+    "schemaId": 5,
+    "schemaName": "",
+    "tablesTotal": 0,
+    "tablesOk": 0,
+    "tablesFailed": 0,
+    "errors": [
+      "DataHub URL 或 Token 未設定，請先在設定頁填寫"
+    ],
+    "pushedAt": "2026-05-03T12:52:03.547Z",
+    "status": "failed"
+  }
+]

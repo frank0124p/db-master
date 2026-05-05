@@ -1,0 +1,32 @@
+{
+  "mes-process.sql": {
+    "schemaId": 2,
+    "mtimeMs": 1777708848296.8276,
+    "importedAt": "2026-05-02T08:03:13.945Z"
+  },
+  "plm-core.sql": {
+    "schemaId": 1,
+    "mtimeMs": 1777708838643.593,
+    "importedAt": "2026-05-02T08:03:13.950Z"
+  },
+  "mes_equipment.sql": {
+    "schemaId": 3,
+    "mtimeMs": 1777712459729.3398,
+    "importedAt": "2026-05-02T09:02:32.318Z"
+  },
+  "mes_process.sql": {
+    "schemaId": 2,
+    "mtimeMs": 1777712475363.0078,
+    "importedAt": "2026-05-02T09:02:32.417Z"
+  },
+  "test-quality.sql": {
+    "schemaId": 4,
+    "mtimeMs": 1777712463874.5442,
+    "importedAt": "2026-05-02T09:02:32.466Z"
+  },
+  "wip-tracking.sql": {
+    "schemaId": 5,
+    "mtimeMs": 1777799247380.1528,
+    "importedAt": "2026-05-03T09:07:29.993Z"
+  }
+}

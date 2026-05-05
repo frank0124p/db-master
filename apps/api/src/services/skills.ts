@@ -33,6 +33,7 @@ interface Skill {
   content: string;             // body without the ## Rules section
   rules: SkillRuleDef[];
   source: "built-in" | "user";
+  filePath: string;
 }
 
 let cache = new Map<string, Skill>();
@@ -181,7 +182,7 @@ async function loadFromDir(dir: string, flatMd = false, source: "built-in" | "us
         const { meta, body } = parseFrontmatter(text);
         const { rules, content } = parseRulesBlock(body);
         const key = `${meta.name}:${skillFile}`;
-        cache.set(key, { meta, content, rules, source });
+        cache.set(key, { meta, content, rules, source, filePath: skillFile });
         const ruleTag = rules.length ? ` + ${rules.length} rules` : "";
         console.warn(`[skills] loaded: ${meta.name} (${meta.domain}${ruleTag})`);
       } catch {
@@ -217,4 +218,11 @@ export function getAllSkills(): Skill[] {
 // Returns all skill-defined rules as RuleDefinition objects (usable by the engine).
 export function getSkillRules(): RuleDefinition[] {
   return [...cache.values()].flatMap(s => s.rules.map(buildRuleDefinition));
+}
+
+export function getUserSkillFilePath(name: string): string | null {
+  for (const skill of cache.values()) {
+    if (skill.source === "user" && skill.meta.name === name) return skill.filePath;
+  }
+  return null;
 }

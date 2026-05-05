@@ -1,6 +1,7 @@
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs/promises";
+import { uploadFileAsync } from "../services/minio.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = path.resolve(__dirname, "../../../../data");
@@ -30,7 +31,9 @@ export async function readJson<T>(filePath: string): Promise<T | null> {
 
 export async function writeJson(filePath: string, data: unknown): Promise<void> {
   await ensureDir(path.dirname(filePath));
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
+  const content = JSON.stringify(data, null, 2);
+  await fs.writeFile(filePath, content, "utf-8");
+  uploadFileAsync(filePath, content); // async MinIO backup — never blocks
 }
 
 export async function deleteFile(filePath: string): Promise<void> {

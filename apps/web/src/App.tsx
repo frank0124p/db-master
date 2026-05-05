@@ -11,6 +11,7 @@ import ErDiagramPage from "./pages/ErDiagramPage.js";
 import WideTablePage from "./pages/WideTablePage.js";
 import RulesPage from "./pages/RulesPage.js";
 import DataHubPage from "./pages/DataHubPage.js";
+import SettingsPanel from "./pages/SettingsPanel.js";
 
 const NAV_KEYS: { id: Page; key: string }[] = [
   { id: "editor",   key: "nav.editor" },
@@ -281,6 +282,7 @@ function LangToggle() {
 export default function App() {
   const { page, setPage } = useStore();
   const t = useT();
+  const [showSettings, setShowSettings] = useState(false);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
@@ -295,6 +297,12 @@ export default function App() {
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <LangToggle />
           <ThemeToggle />
+          <button onClick={() => setShowSettings(true)} title="系統設定"
+            style={{ ...iconBtnStyle, fontSize: 15 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-4)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-3)"; }}>
+            ⚙
+          </button>
         </div>
       </div>
 
@@ -314,6 +322,7 @@ export default function App() {
       </div>
 
       <Toast />
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
 
       <style>{`
         .btn { padding: 5px 12px; border-radius: var(--radius); border: none; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.15s; font-family: inherit; }

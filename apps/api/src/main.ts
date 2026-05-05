@@ -9,6 +9,9 @@ import { errorMiddleware } from "./middleware/error.js";
 import { loadSkills } from "./services/skills.js";
 import { loadDdlFiles } from "./services/ddl-loader.js";
 import { runMigration } from "./db/migrate.js";
+import { initMinio, setDataDir } from "./services/minio.js";
+import { DATA_DIR } from "./db/fileStore.js";
+import { getMinioSettings } from "./repositories/settings.js";
 import schemasRouter from "./routes/schemas.js";
 import tablesRouter from "./routes/tables.js";
 import fieldsRouter from "./routes/fields.js";
@@ -66,6 +69,14 @@ async function start() {
   await runMigration();
   await loadSkills();
   await loadDdlFiles();
+
+  // Init MinIO from persisted settings
+  setDataDir(DATA_DIR);
+  const minioSettings = await getMinioSettings();
+  initMinio(minioSettings);
+  if (minioSettings.endpoint) {
+    console.warn(`[minio] configured → ${minioSettings.endpoint}:${minioSettings.port ?? 9000}/${minioSettings.bucket ?? ""}`);
+  }
   if (isDev) {
     const { createServer: createViteServer } = await import("vite");
     const react = (await import("@vitejs/plugin-react")).default;

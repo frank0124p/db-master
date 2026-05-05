@@ -354,11 +354,17 @@ export const mockApi = {
   },
   skills: {
     list: async () => ({ skills: [] }),
+    update: async (_name: string, _content: string) => ({ ok: true }),
   },
   settings: {
     getLlm: async () => ({ settings: { provider: "anthropic" as const, apiKey: "", baseUrl: "", model: "" } }),
     updateLlm: async (patch: Record<string, unknown>) => ({ settings: { provider: "anthropic" as const, apiKey: "", baseUrl: "", model: "", ...patch } as { provider: "anthropic" | "openai"; apiKey: string; baseUrl: string; model: string } }),
     testLlm: async () => ({ ok: false, message: "Mock mode — no real API" }),
+    getStorage: async () => ({ minio: {}, ready: false }),
+    updateStorage: async (_patch: Record<string, unknown>) => ({ minio: {}, ready: false }),
+    testStorage: async () => ({ ok: false, message: "Mock mode" }),
+    pushToStorage: async () => ({ pushed: 0, errors: 0 }),
+    restoreFromStorage: async () => ({ restored: 0, errors: 0 }),
   },
   datahub: {
     getSettings: async () => ({ settings: { url: "", token: "", platform: "mysql", env: "PROD" as const } }),

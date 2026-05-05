@@ -144,6 +144,7 @@ export interface SkillInfo {
   name: string; domain: string; tags: string[];
   source: "built-in" | "user";
   ruleCount: number; rules: SkillRuleSummary[]; content: string;
+  filePath?: string;
 }
 
 export interface LlmSettings {
@@ -158,6 +159,16 @@ export interface DataHubSettings {
   token: string;
   platform: string;
   env: "PROD" | "DEV" | "STAGING" | "TEST";
+}
+
+export interface MinioSettings {
+  endpoint: string;
+  port: number;
+  useSSL: boolean;
+  accessKey: string;
+  secretKey: string;
+  bucket: string;
+  pathPrefix: string;
 }
 
 export interface PushRecord {
@@ -251,12 +262,20 @@ const realApi = {
   },
   skills: {
     list: () => req<{ skills: SkillInfo[] }>("/skills"),
+    update: (name: string, content: string) =>
+      req<{ ok: boolean }>(`/skills/${encodeURIComponent(name)}`, { method: "PUT", body: JSON.stringify({ content }) }),
   },
   settings: {
     getLlm: () => req<{ settings: LlmSettings }>("/settings/llm"),
     updateLlm: (patch: Partial<LlmSettings>) =>
       req<{ settings: LlmSettings }>("/settings/llm", { method: "PATCH", body: JSON.stringify(patch) }),
     testLlm: () => req<{ ok: boolean; message: string }>("/settings/llm/test", { method: "POST" }),
+    getStorage: () => req<{ minio: Partial<MinioSettings>; ready: boolean }>("/settings/storage"),
+    updateStorage: (patch: Partial<MinioSettings>) =>
+      req<{ minio: Partial<MinioSettings>; ready: boolean }>("/settings/storage", { method: "PATCH", body: JSON.stringify(patch) }),
+    testStorage: () => req<{ ok: boolean; message: string }>("/settings/storage/test", { method: "POST" }),
+    pushToStorage: () => req<{ pushed: number; errors: number }>("/settings/storage/push", { method: "POST" }),
+    restoreFromStorage: () => req<{ restored: number; errors: number }>("/settings/storage/restore", { method: "POST" }),
   },
   naming: {
     list: (domain?: string) => req<NamingEntry[]>(`/naming-dictionary${domain ? `?domain=${domain}` : ""}`),

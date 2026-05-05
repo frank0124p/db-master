@@ -1,4 +1,5 @@
 import * as store from "../db/fileStore.js";
+import type { MinioConfig } from "../services/minio.js";
 
 const SETTINGS_FILE = () => store.dataPath("settings.json");
 
@@ -16,9 +17,12 @@ export interface DataHubSettings {
   env: "PROD" | "DEV" | "STAGING" | "TEST";
 }
 
+export type { MinioConfig };
+
 interface Settings {
   llm?: Partial<LlmSettings>;
   datahub?: Partial<DataHubSettings>;
+  minio?: Partial<MinioConfig>;
 }
 
 export async function getLlmSettings(): Promise<Partial<LlmSettings>> {
@@ -43,4 +47,16 @@ export async function updateDataHubSettings(patch: Partial<DataHubSettings>): Pr
   settings.datahub = { ...settings.datahub, ...patch };
   await store.writeJson(SETTINGS_FILE(), settings);
   return settings.datahub;
+}
+
+export async function getMinioSettings(): Promise<Partial<MinioConfig>> {
+  const settings = (await store.readJson<Settings>(SETTINGS_FILE())) ?? {};
+  return settings.minio ?? {};
+}
+
+export async function updateMinioSettings(patch: Partial<MinioConfig>): Promise<Partial<MinioConfig>> {
+  const settings = (await store.readJson<Settings>(SETTINGS_FILE())) ?? {};
+  settings.minio = { ...settings.minio, ...patch };
+  await store.writeJson(SETTINGS_FILE(), settings);
+  return settings.minio;
 }

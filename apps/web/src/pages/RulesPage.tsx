@@ -1,6 +1,6 @@
 import React, { useState, Fragment } from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { api, type RuleDetail, type SkillInfo, type LlmSettings } from "../api.js";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type RuleDetail, type SkillInfo } from "../api.js";
 import { useStore } from "../store.js";
 
 // ── shared helpers ────────────────────────────────────────────────────────────
@@ -41,6 +41,88 @@ function Toggle({ on, onChange, disabled }: { on: boolean; onChange: () => void;
     <div style={{ position: "absolute", width: 12, height: 12, borderRadius: "50%",
       background: on ? "#fff" : "var(--text-3)", top: 2, left: on ? 18 : 2, transition: "left 0.2s" }} />
   </div>;
+}
+
+// ── Rule config inline editor ─────────────────────────────────────────────────
+function RuleConfigEditor({ r, onClose }: { r: RuleDetail; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const [draft, setDraft] = useState(() => JSON.stringify(r.config, null, 2));
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    let parsed: Record<string, unknown>;
+    try { parsed = JSON.parse(draft) as Record<string, unknown>; }
+    catch { setErr("JSON 格式有誤"); return; }
+    setErr(null);
+    setSaving(true);
+    try {
+      await api.rules.update(r.id, { config: parsed });
+      await qc.invalidateQueries({ queryKey: ["rules"] });
+      showToast(`✓ ${r.id} 設定已更新`);
+      onClose();
+    } catch (e) { showToast(`失敗: ${String(e)}`); }
+    finally { setSaving(false); }
+  }
+
+  const hasConfig = Object.keys(r.defaultConfig ?? {}).length > 0;
+
+  return (
+    <div style={{ padding: "12px 16px 14px 48px", borderTop: "1px dashed var(--border)" }}>
+      {hasConfig ? (
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div style={{ minWidth: 220, flex: 1, maxWidth: 420 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)",
+              textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>目前設定</div>
+            <textarea
+              value={draft}
+              onChange={e => { setDraft(e.target.value); setErr(null); }}
+              spellCheck={false}
+              style={{ width: "100%", boxSizing: "border-box", fontSize: 11,
+                fontFamily: "var(--font-mono)", color: "var(--text-1)",
+                background: "var(--bg-3)", border: `1px solid ${err ? "#f87171" : "var(--border)"}`,
+                padding: "8px 10px", borderRadius: 6, resize: "vertical",
+                minHeight: 80, outline: "none", lineHeight: 1.5 }}
+            />
+            {err && <div style={{ fontSize: 10, color: "#f87171", marginTop: 3 }}>{err}</div>}
+            <div style={{ display: "flex", gap: 8, marginTop: 7, alignItems: "center" }}>
+              <button onClick={() => void save()} disabled={saving}
+                style={{ fontSize: 11, padding: "3px 12px", borderRadius: 5,
+                  border: "none", background: "var(--accent)", color: "#fff",
+                  cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, fontWeight: 700 }}>
+                {saving ? "儲存中…" : "✓ 套用"}
+              </button>
+              <button onClick={onClose}
+                style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5,
+                  border: "1px solid var(--border)", background: "transparent",
+                  color: "var(--text-3)", cursor: "pointer" }}>
+                取消
+              </button>
+              <button onClick={() => setDraft(JSON.stringify(r.defaultConfig, null, 2))}
+                style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5,
+                  border: "1px solid var(--border)", background: "transparent",
+                  color: "var(--text-3)", cursor: "pointer" }}>
+                重設預設
+              </button>
+            </div>
+          </div>
+          <div style={{ minWidth: 180, maxWidth: 300 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)",
+              textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>預設值</div>
+            <pre style={{ margin: 0, fontSize: 11, fontFamily: "var(--font-mono)",
+              color: "var(--text-3)", background: "var(--bg-3)", border: "1px solid var(--border)",
+              padding: "8px 10px", borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word",
+              maxHeight: 160, overflowY: "auto" }}>
+              {JSON.stringify(r.defaultConfig, null, 2)}
+            </pre>
+          </div>
+        </div>
+      ) : (
+        <span style={{ fontSize: 11, color: "var(--text-3)" }}>此規則無額外設定參數</span>
+      )}
+    </div>
+  );
 }
 
 // ── Rules tab ─────────────────────────────────────────────────────────────────
@@ -255,34 +337,7 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
                   {isExpanded && (
                     <tr style={{ borderBottom: "1px solid var(--border)" }}>
                       <td colSpan={6} style={{ padding: 0, background: "var(--bg-1)" }}>
-                        <div style={{ padding: "12px 16px 14px 48px", borderTop: "1px dashed var(--border)" }}>
-                          {hasConfig ? (
-                            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                              <div style={{ minWidth: 200, maxWidth: 400 }}>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)",
-                                  textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>目前設定</div>
-                                <pre style={{ margin: 0, fontSize: 11, fontFamily: "var(--font-mono)",
-                                  color: "var(--text-2)", background: "var(--bg-3)", border: "1px solid var(--border)",
-                                  padding: "8px 10px", borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word",
-                                  maxHeight: 160, overflowY: "auto" }}>
-                                  {JSON.stringify(r.config, null, 2)}
-                                </pre>
-                              </div>
-                              <div style={{ minWidth: 200, maxWidth: 400 }}>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)",
-                                  textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>預設值</div>
-                                <pre style={{ margin: 0, fontSize: 11, fontFamily: "var(--font-mono)",
-                                  color: "var(--text-3)", background: "var(--bg-3)", border: "1px solid var(--border)",
-                                  padding: "8px 10px", borderRadius: 6, whiteSpace: "pre-wrap", wordBreak: "break-word",
-                                  maxHeight: 160, overflowY: "auto" }}>
-                                  {JSON.stringify(r.defaultConfig, null, 2)}
-                                </pre>
-                              </div>
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: 11, color: "var(--text-3)" }}>此規則無額外設定參數</span>
-                          )}
-                        </div>
+                        <RuleConfigEditor r={r} onClose={() => setExpandedId(null)} />
                       </td>
                     </tr>
                   )}
@@ -304,8 +359,32 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
 
 // ── Skills tab ────────────────────────────────────────────────────────────────
 function SkillCard({ skill }: { skill: SkillInfo }) {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(skill.content ?? "");
+  const [saving, setSaving] = useState(false);
   const isUser = skill.source === "user";
+
+  async function saveEdit() {
+    setSaving(true);
+    try {
+      await api.skills.update(skill.name, draft);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["skills"] }),
+        qc.invalidateQueries({ queryKey: ["rules"] }),
+      ]);
+      showToast(`✓ ${skill.name} 已儲存`);
+      setEditing(false);
+    } catch (e) { showToast(`儲存失敗: ${String(e)}`); }
+    finally { setSaving(false); }
+  }
+
+  function cancelEdit() {
+    setDraft(skill.content ?? "");
+    setEditing(false);
+  }
 
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", background: "var(--bg-1)" }}>
@@ -334,24 +413,36 @@ function SkillCard({ skill }: { skill: SkillInfo }) {
           </div>
 
           {/* Stats */}
-          <div style={{ display: "flex", gap: 10, alignItems: "center', flexWrap: 'wrap" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 11, color: skill.ruleCount > 0 ? "var(--warning)" : "var(--text-3)" }}>
               {skill.ruleCount > 0 ? `${skill.ruleCount} 條規則` : "無規則定義"}
             </span>
           </div>
         </div>
 
-        {/* Expand button */}
-        {skill.content && (
-          <button onClick={() => setOpen(v => !v)}
-            style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5, flexShrink: 0,
-              border: "1px solid var(--border)", background: "transparent",
-              color: "var(--text-3)", cursor: "pointer", transition: "all 0.15s" }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-1)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}>
-            {open ? "收合 ▲" : "說明 ▼"}
-          </button>
-        )}
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          {isUser && skill.content && !editing && (
+            <button onClick={() => { setOpen(true); setEditing(true); }}
+              style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5,
+                border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.08)",
+                color: "#fbbf24", cursor: "pointer", transition: "all 0.15s" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(251,191,36,0.18)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(251,191,36,0.08)"; }}>
+              ✎ 編輯
+            </button>
+          )}
+          {skill.content && !editing && (
+            <button onClick={() => setOpen(v => !v)}
+              style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5,
+                border: "1px solid var(--border)", background: "transparent",
+                color: "var(--text-3)", cursor: "pointer", transition: "all 0.15s" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-1)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}>
+              {open ? "收合 ▲" : "說明 ▼"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Rules chips */}
@@ -369,14 +460,48 @@ function SkillCard({ skill }: { skill: SkillInfo }) {
         </div>
       )}
 
-      {/* Expanded description */}
+      {/* Expanded / Edit section */}
       {open && skill.content && (
-        <div style={{ borderTop: "1px solid var(--border)", background: "var(--bg-1)",
-          maxHeight: 360, overflowY: "auto" }}>
-          <pre style={{ margin: 0, padding: "12px 16px", fontSize: 12, lineHeight: 1.7, color: "var(--text-2)",
-            fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-            {skill.content}
-          </pre>
+        <div style={{ borderTop: "1px solid var(--border)", background: "var(--bg-1)" }}>
+          {editing ? (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <textarea
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                spellCheck={false}
+                style={{ margin: 0, padding: "12px 16px", fontSize: 12, lineHeight: 1.7,
+                  color: "var(--text-1)", background: "var(--bg-2)",
+                  fontFamily: "var(--font-mono)", whiteSpace: "pre", resize: "vertical",
+                  border: "none", borderBottom: "1px solid var(--border)",
+                  outline: "none", minHeight: 260, width: "100%", boxSizing: "border-box" }}
+              />
+              <div style={{ display: "flex", gap: 8, padding: "8px 12px",
+                background: "var(--bg-2)", alignItems: "center" }}>
+                <button onClick={() => void saveEdit()} disabled={saving}
+                  style={{ fontSize: 11, padding: "4px 14px", borderRadius: 5,
+                    border: "none", background: "var(--accent)", color: "#fff",
+                    cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, fontWeight: 700 }}>
+                  {saving ? "儲存中…" : "✓ 儲存"}
+                </button>
+                <button onClick={cancelEdit} disabled={saving}
+                  style={{ fontSize: 11, padding: "4px 12px", borderRadius: 5,
+                    border: "1px solid var(--border)", background: "transparent",
+                    color: "var(--text-3)", cursor: "pointer" }}>
+                  取消
+                </button>
+                <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 4 }}>
+                  儲存後自動重新載入規則
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div style={{ maxHeight: 360, overflowY: "auto" }}>
+              <pre style={{ margin: 0, padding: "12px 16px", fontSize: 12, lineHeight: 1.7, color: "var(--text-2)",
+                fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {skill.content}
+              </pre>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -475,138 +600,9 @@ function SkillsTab({ skills }: { skills: SkillInfo[] }) {
   );
 }
 
-// ── LLM Settings tab ─────────────────────────────────────────────────────────
-function FieldRow({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 20 }}>
-      <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", letterSpacing: "0.3px" }}>{label}</label>
-      {children}
-      {hint && <span style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.5 }}>{hint}</span>}
-    </div>
-  );
-}
-
-function LlmSettingsTab({ initial }: { initial: Partial<LlmSettings> }) {
-  const qc = useQueryClient();
-  const { showToast } = useStore();
-  const [form, setForm] = useState<Partial<LlmSettings>>(initial);
-  const [showKey, setShowKey] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-
-  const save = useMutation({
-    mutationFn: (patch: Partial<LlmSettings>) => api.settings.updateLlm(patch),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["llm-settings"] });
-      showToast("✓ LLM 設定已儲存");
-      setTestResult(null);
-    },
-    onError: (e) => showToast(`儲存失敗: ${String(e)}`),
-  });
-
-  const test = useMutation({
-    mutationFn: () => api.settings.testLlm(),
-    onSuccess: (r) => {
-      setTestResult(r);
-      showToast(r.ok ? "✓ 連線成功" : `連線失敗: ${r.message}`);
-    },
-    onError: (e) => showToast(`測試失敗: ${String(e)}`),
-  });
-
-  const set = <K extends keyof LlmSettings>(k: K, v: LlmSettings[K]) =>
-    setForm(f => ({ ...f, [k]: v }));
-
-  const provider = form.provider ?? "anthropic";
-  const isOpenAI = provider === "openai";
-
-  return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px", maxWidth: 560 }}>
-      <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 0, marginBottom: 24, lineHeight: 1.6 }}>
-        設定 AI 分析與命名建議所使用的語言模型 API。儲存後立即生效，無需重啟伺服器。
-        留空的欄位將使用 <code style={{ background: "var(--bg-3)", padding: "1px 5px", borderRadius: 3 }}>.env.local</code> 設定。
-      </p>
-
-      {/* Provider */}
-      <FieldRow label="API 類型" hint={isOpenAI ? "相容 OpenAI 格式的 API（如 Azure、Ollama、私有部署模型）" : "Anthropic Claude API（預設）"}>
-        <div style={{ display: "flex", borderRadius: 6, border: "1px solid var(--border)", overflow: "hidden", width: "fit-content" }}>
-          {(["anthropic", "openai"] as const).map(p => (
-            <button key={p} onClick={() => set("provider", p)}
-              style={{ padding: "6px 18px", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
-                background: provider === p ? "var(--accent)" : "var(--bg-3)",
-                color: provider === p ? "#fff" : "var(--text-3)", transition: "all 0.12s" }}>
-              {p === "anthropic" ? "Anthropic" : "OpenAI 相容"}
-            </button>
-          ))}
-        </div>
-      </FieldRow>
-
-      {/* Base URL (only for openai) */}
-      {isOpenAI && (
-        <FieldRow label="API Base URL" hint="例如：https://your-company-api.com/v1">
-          <input value={form.baseUrl ?? ""} onChange={e => set("baseUrl", e.target.value)}
-            placeholder="https://..."
-            style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)",
-              background: "var(--bg-3)", color: "var(--text-1)", fontSize: 13,
-              fontFamily: "var(--font-mono)", outline: "none", width: "100%", boxSizing: "border-box" }} />
-        </FieldRow>
-      )}
-
-      {/* API Key */}
-      <FieldRow label="API Key" hint="輸入新值即可覆蓋；留空保持現有設定不變">
-        <div style={{ display: "flex", gap: 6 }}>
-          <input value={form.apiKey ?? ""} onChange={e => set("apiKey", e.target.value)}
-            type={showKey ? "text" : "password"}
-            placeholder={initial.apiKey ? "••••••（已設定，輸入覆蓋）" : "sk-..."}
-            style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)",
-              background: "var(--bg-3)", color: "var(--text-1)", fontSize: 13,
-              fontFamily: "var(--font-mono)", outline: "none" }} />
-          <button onClick={() => setShowKey(v => !v)}
-            style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
-              background: "var(--bg-3)", color: "var(--text-3)", cursor: "pointer", fontSize: 11 }}>
-            {showKey ? "隱藏" : "顯示"}
-          </button>
-        </div>
-      </FieldRow>
-
-      {/* Model */}
-      <FieldRow label="模型名稱" hint={isOpenAI ? "輸入你的 API 支援的模型 ID" : "例如：claude-sonnet-4-6（留空使用預設）"}>
-        <input value={form.model ?? ""} onChange={e => set("model", e.target.value)}
-          placeholder={isOpenAI ? "gpt-4o / your-model-id" : "claude-sonnet-4-6"}
-          style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)",
-            background: "var(--bg-3)", color: "var(--text-1)", fontSize: 13,
-            fontFamily: "var(--font-mono)", outline: "none", width: "100%", boxSizing: "border-box" }} />
-      </FieldRow>
-
-      {/* Actions */}
-      <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <button onClick={() => void save.mutate(form)} disabled={save.isPending}
-          style={{ padding: "8px 20px", borderRadius: 7, border: "none",
-            background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 700,
-            cursor: save.isPending ? "not-allowed" : "pointer", opacity: save.isPending ? 0.7 : 1 }}>
-          {save.isPending ? "儲存中…" : "儲存設定"}
-        </button>
-
-        <button onClick={() => void test.mutate()} disabled={test.isPending || save.isPending}
-          style={{ padding: "8px 20px", borderRadius: 7,
-            border: "1px solid var(--border)", background: "var(--bg-3)",
-            color: "var(--text-2)", fontSize: 13, fontWeight: 600,
-            cursor: test.isPending ? "not-allowed" : "pointer", opacity: test.isPending ? 0.7 : 1 }}>
-          {test.isPending ? "測試中…" : "測試連線"}
-        </button>
-
-        {testResult && (
-          <span style={{ fontSize: 12, fontWeight: 600,
-            color: testResult.ok ? "#4ade80" : "#f87171" }}>
-            {testResult.ok ? "✓ 連線成功" : `✗ ${testResult.message}`}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function RulesPage() {
-  const [tab, setTab] = useState<"rules" | "skills" | "llm">("rules");
+  const [tab, setTab] = useState<"rules" | "skills">("rules");
 
   const { data: rulesData, isLoading: rulesLoading } = useQuery({
     queryKey: ["rules"],
@@ -616,14 +612,9 @@ export default function RulesPage() {
     queryKey: ["skills"],
     queryFn: () => api.skills.list(),
   });
-  const { data: llmData, isLoading: llmLoading } = useQuery({
-    queryKey: ["llm-settings"],
-    queryFn: () => api.settings.getLlm(),
-  });
 
   const rules  = rulesData?.rules   ?? [];
   const skills = skillsData?.skills ?? [];
-  const llmSettings: Partial<LlmSettings> = llmData?.settings ?? {};
 
   const disabledCount  = rules.filter(r => !r.enabled).length;
   const skillRuleCount = rules.filter(r => r.source === "skill").length;
@@ -650,10 +641,6 @@ export default function RulesPage() {
               userSkillCount > 0 && `${userSkillCount} 自訂`,
             ].filter(Boolean).join(" · "),
           },
-          {
-            id: "llm" as const, label: "LLM 設定",
-            meta: llmSettings.provider ? llmSettings.provider : "",
-          },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ padding: "12px 0", marginRight: 28, border: "none", background: "transparent",
@@ -675,14 +662,10 @@ export default function RulesPage() {
           rulesLoading
             ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>載入中…</div>
             : <RulesTab rules={rules} />
-        ) : tab === "skills" ? (
+        ) : (
           skillsLoading
             ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>載入中…</div>
             : <SkillsTab skills={skills} />
-        ) : (
-          llmLoading
-            ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>載入中…</div>
-            : <LlmSettingsTab key={JSON.stringify(llmSettings)} initial={llmSettings} />
         )}
       </div>
     </div>

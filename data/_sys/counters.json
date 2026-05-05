@@ -1,0 +1,10 @@
+{
+  "schemas": 5,
+  "tables": 39,
+  "fields": 2456,
+  "namingEntries": 40,
+  "versions": 8,
+  "wideTables": 3,
+  "wideSources": 11,
+  "wideColumns": 55
+}
