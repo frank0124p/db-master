@@ -197,7 +197,6 @@ const LAYER_LABELS: Record<SchemaLayer, string> = {
   r2u:         "寬表層 R2U",
   unified:     "寬表層 Unified Layer",
 };
-const LAYER_ORDER: (SchemaLayer | null)[] = ["transaction", "r2u", "unified", null];
 
 // ── Schema list (shared between Sidebar and mobile drawer) ────────────────────
 const LAYER_BADGE: Record<SchemaLayer, string> = { transaction: "TX", r2u: "R2U", unified: "UL" };
@@ -376,13 +375,13 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
     ? (schemas ?? [])
     : (schemas ?? []).filter(s => s.suiteId === activeSuiteId);
 
-  const groupedByLayer = activeSuiteId !== null
-    ? LAYER_ORDER.map(layer => ({
-        layer,
-        label: layer ? LAYER_LABELS[layer] : "未分類",
-        items: filteredSchemas.filter(s => s.layerType === layer),
-      })).filter(g => g.items.length > 0)
-    : null;
+  const wideTableSubs = ["r2u", "unified"] as const;
+  const hierarchicalGroups = activeSuiteId !== null ? (() => {
+    const txItems = filteredSchemas.filter(s => s.layerType === "transaction");
+    const wideItems = filteredSchemas.filter(s => s.layerType === "r2u" || s.layerType === "unified");
+    const noneItems = filteredSchemas.filter(s => s.layerType === null);
+    return { txItems, wideItems, noneItems };
+  })() : null;
 
   return (
     <>
@@ -423,19 +422,49 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
       )}
 
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
-        {groupedByLayer ? (
-          groupedByLayer.map(g => (
-            <div key={g.layer ?? "__none__"}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.6px", padding: "8px 4px 3px" }}>{g.label}</div>
-              {g.items.map(s => (
-                <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
-                  suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
-                  layerType={s.layerType}
-                  onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
-              ))}
-            </div>
-          ))
-        ) : (
+        {hierarchicalGroups ? (() => {
+          const { txItems, wideItems, noneItems } = hierarchicalGroups;
+          const renderItem = (s: import("./api.js").Schema) => (
+            <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
+              suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
+              layerType={s.layerType}
+              onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
+          );
+          const sectionHeader = (label: string, indent = false) => (
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.6px", padding: `${indent ? 4 : 8}px ${indent ? 12 : 4}px 3px` }}>{label}</div>
+          );
+          return (
+            <>
+              {txItems.length > 0 && (
+                <div>
+                  {sectionHeader("交易層 Transaction")}
+                  {txItems.map(renderItem)}
+                </div>
+              )}
+              {wideItems.length > 0 && (
+                <div>
+                  {sectionHeader("寬表層 Wide Table")}
+                  {wideTableSubs.map(sub => {
+                    const items = wideItems.filter(s => s.layerType === sub);
+                    if (items.length === 0) return null;
+                    return (
+                      <div key={sub}>
+                        {sectionHeader(sub === "r2u" ? "R2U（Ready to Use）" : "Unified Layer", true)}
+                        {items.map(renderItem)}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {noneItems.length > 0 && (
+                <div>
+                  {sectionHeader("未分類")}
+                  {noneItems.map(renderItem)}
+                </div>
+              )}
+            </>
+          );
+        })() : (
           filteredSchemas.map(s => (
             <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
               suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
