@@ -2,7 +2,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore, type Page, type Theme } from "./store.js";
 import { useT } from "./i18n.js";
-import { api, type ProductSuite, type SchemaLayer } from "./api.js";
+import { api, type ProductSuite, type SchemaLayer, type SchemaEnvironment } from "./api.js";
 import { useBreakpoint } from "./hooks/useBreakpoint.js";
 import SchemaEditorPage from "./pages/SchemaEditorPage.js";
 import NamingDictPage from "./pages/NamingDictPage.js";
@@ -200,8 +200,9 @@ const LAYER_LABELS: Record<SchemaLayer, string> = {
 
 // ── Schema list (shared between Sidebar and mobile drawer) ────────────────────
 const LAYER_BADGE: Record<SchemaLayer, string> = { transaction: "TX", r2u: "R2U", unified: "UL" };
+const ENV_COLOR: Record<SchemaEnvironment, string> = { DEV: "#60a5fa", TEST: "#4ade80", STAGING: "#fbbf24", PROD: "#f87171" };
 
-function SchemaItem({ name, active, suiteColor, layerType, onClick }: { name: string; active: boolean; suiteColor?: string | null; layerType?: SchemaLayer | null; onClick: () => void }) {
+function SchemaItem({ name, active, suiteColor, layerType, environment, onClick }: { name: string; active: boolean; suiteColor?: string | null; layerType?: SchemaLayer | null; environment?: SchemaEnvironment | null; onClick: () => void }) {
   const [hover, setHover] = useState(false);
   return (
     <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
@@ -210,6 +211,11 @@ function SchemaItem({ name, active, suiteColor, layerType, onClick }: { name: st
         background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent" }}>
       <div style={{ width: 6, height: 6, borderRadius: "50%", background: suiteColor ?? (active ? "var(--accent)" : "var(--text-3)"), flexShrink: 0 }} />
       <div style={{ fontSize: 12, color: active ? "var(--accent)" : "var(--text-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+      {environment && (
+        <span style={{ fontSize: 9, fontWeight: 700, color: ENV_COLOR[environment], background: `${ENV_COLOR[environment]}22`, borderRadius: 3, padding: "1px 4px", flexShrink: 0, letterSpacing: "0.3px", border: `1px solid ${ENV_COLOR[environment]}44` }}>
+          {environment}
+        </span>
+      )}
       {layerType && (
         <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", background: "var(--bg-4)", borderRadius: 3, padding: "1px 4px", flexShrink: 0, letterSpacing: "0.3px" }}>
           {LAYER_BADGE[layerType]}
@@ -341,7 +347,7 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
   const [showNl, setShowNl] = useState(false);
   const [showSuiteModal, setShowSuiteModal] = useState(false);
   const [reloading, setReloading] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", domain: "semiconductor", suiteId: "", layerType: "" });
+  const [form, setForm] = useState({ name: "", description: "", domain: "semiconductor", suiteId: "", layerType: "", environment: "" });
   const t = useT();
 
   async function reloadDdl() {
@@ -356,17 +362,19 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
     if (!form.name.trim()) return;
     const suiteId = form.suiteId ? Number(form.suiteId) : (activeSuiteId ?? undefined);
     const layerType = form.layerType ? (form.layerType as SchemaLayer) : null;
+    const environment = form.environment ? (form.environment as SchemaEnvironment) : null;
     const s = await api.schemas.create({
       name: form.name,
       ...(form.description ? { description: form.description } : {}),
       domain: form.domain,
       ...(suiteId != null ? { suiteId } : {}),
       ...(layerType ? { layerType } : {}),
+      ...(environment ? { environment } : {}),
     });
     await qc.invalidateQueries({ queryKey: ["schemas"] });
     setSelectedSchemaId(s.id);
     setShowModal(false);
-    setForm({ name: "", description: "", domain: "semiconductor", suiteId: "", layerType: "" });
+    setForm({ name: "", description: "", domain: "semiconductor", suiteId: "", layerType: "", environment: "" });
     showToast(t("toast.schema_created"));
   }
 
@@ -427,7 +435,7 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
           const renderItem = (s: import("./api.js").Schema) => (
             <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
               suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
-              layerType={s.layerType}
+              layerType={s.layerType} environment={s.environment}
               onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
           );
           const sectionHeader = (label: string, indent = false) => (
@@ -468,7 +476,7 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
           filteredSchemas.map(s => (
             <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
               suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
-              layerType={s.layerType}
+              layerType={s.layerType} environment={s.environment}
               onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
           ))
         )}
@@ -515,6 +523,15 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
                 <option value="transaction">交易層 Transaction</option>
                 <option value="r2u">寬表層 R2U（Ready to Use）</option>
                 <option value="unified">寬表層 Unified Layer</option>
+              </select>
+            </FormRow>
+            <FormRow label="環境 Environment">
+              <select className="form-input" value={form.environment} onChange={e => setForm({ ...form, environment: e.target.value })}>
+                <option value="">（未指定）</option>
+                <option value="DEV">DEV</option>
+                <option value="TEST">TEST</option>
+                <option value="STAGING">STAGING</option>
+                <option value="PROD">PROD</option>
               </select>
             </FormRow>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>

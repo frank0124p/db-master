@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { useT } from "../i18n.js";
-import { api, type Field, type Table, type SchemaDetail, type NamingEntry, type MatchResult, type ImportCheckResult, type ViolationSummary, type SchemaVersion, type TableNamingCheck } from "../api.js";
+import { api, type Field, type Table, type SchemaDetail, type NamingEntry, type MatchResult, type ImportCheckResult, type ViolationSummary, type SchemaVersion, type TableNamingCheck, type SchemaEnvironment } from "../api.js";
 
 const DATA_TYPES = ["BIGINT", "INT", "SMALLINT", "TINYINT", "DECIMAL(15,4)", "DOUBLE", "FLOAT",
   "VARCHAR(32)", "VARCHAR(64)", "VARCHAR(128)", "VARCHAR(255)", "TEXT", "MEDIUMTEXT",
@@ -1277,6 +1277,94 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+const ENV_COLORS: Record<SchemaEnvironment, string> = { DEV: "#60a5fa", TEST: "#4ade80", STAGING: "#fbbf24", PROD: "#f87171" };
+const ALL_ENVS: SchemaEnvironment[] = ["DEV", "TEST", "STAGING", "PROD"];
+
+function SchemaMetaBar({ schema }: { schema: SchemaDetail }) {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const [tagInput, setTagInput] = useState("");
+  const [showEnvMenu, setShowEnvMenu] = useState(false);
+
+  async function setEnv(env: SchemaEnvironment | null) {
+    await api.schemas.update(schema.id, { environment: env });
+    await qc.invalidateQueries({ queryKey: ["schema", schema.id] });
+    await qc.invalidateQueries({ queryKey: ["schemas"] });
+    setShowEnvMenu(false);
+    showToast(env ? `環境已設為 ${env}` : "已清除環境標記");
+  }
+
+  async function addTag(tag: string) {
+    const t = tag.trim();
+    if (!t || schema.tags.includes(t)) return;
+    await api.schemas.update(schema.id, { tags: [...schema.tags, t] });
+    await qc.invalidateQueries({ queryKey: ["schema", schema.id] });
+    await qc.invalidateQueries({ queryKey: ["schemas"] });
+    setTagInput("");
+  }
+
+  async function removeTag(tag: string) {
+    await api.schemas.update(schema.id, { tags: schema.tags.filter(t => t !== tag) });
+    await qc.invalidateQueries({ queryKey: ["schema", schema.id] });
+    await qc.invalidateQueries({ queryKey: ["schemas"] });
+  }
+
+  const env = schema.environment as SchemaEnvironment | null;
+
+  return (
+    <div style={{ padding: "6px 10px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+      {/* Environment */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", flexShrink: 0 }}>ENV</span>
+        <div style={{ position: "relative" }}>
+          <button onClick={() => setShowEnvMenu(v => !v)}
+            style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, border: `1px solid ${env ? `${ENV_COLORS[env]}44` : "var(--border)"}`,
+              background: env ? `${ENV_COLORS[env]}22` : "var(--bg-3)", color: env ? ENV_COLORS[env] : "var(--text-3)",
+              cursor: "pointer", letterSpacing: "0.3px" }}>
+            {env ?? "未指定"} ▾
+          </button>
+          {showEnvMenu && (
+            <>
+              <div style={{ position: "fixed", inset: 0, zIndex: 98 }} onClick={() => setShowEnvMenu(false)} />
+              <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 99, background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 6, padding: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.4)", minWidth: 100 }}>
+                <div onClick={() => void setEnv(null)}
+                  style={{ padding: "5px 10px", fontSize: 11, borderRadius: 4, cursor: "pointer", color: "var(--text-3)" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-3)")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                  未指定
+                </div>
+                {ALL_ENVS.map(e => (
+                  <div key={e} onClick={() => void setEnv(e)}
+                    style={{ padding: "5px 10px", fontSize: 11, borderRadius: 4, cursor: "pointer", color: ENV_COLORS[e], fontWeight: 700 }}
+                    onMouseEnter={el => (el.currentTarget.style.background = "var(--bg-3)")}
+                    onMouseLeave={el => (el.currentTarget.style.background = "transparent")}>
+                    {e}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      {/* Tags */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", flexShrink: 0 }}>TAG</span>
+        {schema.tags.map(tag => (
+          <span key={tag} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent)", display: "flex", alignItems: "center", gap: 3 }}>
+            {tag}
+            <button onClick={() => void removeTag(tag)}
+              style={{ border: "none", background: "none", color: "var(--accent)", cursor: "pointer", fontSize: 10, padding: 0, lineHeight: 1, opacity: 0.7 }}>✕</button>
+          </span>
+        ))}
+        <input value={tagInput} onChange={e => setTagInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); void addTag(tagInput); } }}
+          placeholder="+ 新增標籤"
+          style={{ fontSize: 10, border: "1px dashed var(--border)", borderRadius: 4, padding: "2px 6px", background: "transparent", color: "var(--text-2)", outline: "none", width: 70, minWidth: 0 }} />
+      </div>
+    </div>
+  );
+}
+
 export default function SchemaEditorPage() {
   const qc = useQueryClient();
   const { selectedSchemaId, selectedTableId, setSelectedTableId, showToast } = useStore();
@@ -1328,6 +1416,7 @@ export default function SchemaEditorPage() {
             <button className="icon-btn" title="新增 Table" onClick={() => setAddTableModal(true)}>＋</button>
           </div>
         </div>
+        {schema && <SchemaMetaBar schema={schema} />}
         <div style={{ flex: 1, overflowY: "auto", padding: 6 }}>
           {schema?.tables.map(t => (
             <TableItem key={t.id} table={t} active={t.id === activeTableId}

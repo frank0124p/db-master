@@ -88,12 +88,17 @@ export const SCHEMA_LAYERS = ["transaction", "r2u", "unified"] as const;
 export type SchemaLayer = typeof SCHEMA_LAYERS[number];
 
 // ── API Input types ──
+export const SCHEMA_ENVIRONMENTS = ["DEV", "TEST", "STAGING", "PROD"] as const;
+export type SchemaEnvironment = typeof SCHEMA_ENVIRONMENTS[number];
+
 export const CreateSchemaInput = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
   domain: z.string().default("semiconductor"),
   suiteId: z.number().int().nullable().optional(),
   layerType: z.enum(SCHEMA_LAYERS).nullable().optional(),
+  tags: z.array(z.string()).optional(),
+  environment: z.enum(SCHEMA_ENVIRONMENTS).nullable().optional(),
 });
 export type CreateSchemaInput = z.infer<typeof CreateSchemaInput>;
 

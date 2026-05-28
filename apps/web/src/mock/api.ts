@@ -72,22 +72,22 @@ export const mockApi = {
       return getDetail(id);
     },
 
-    create: async (b: { name: string; description?: string; domain?: string; suiteId?: number | null; layerType?: import("../api.js").SchemaLayer | null }): Promise<SchemaDetail> => {
+    create: async (b: { name: string; description?: string; domain?: string; suiteId?: number | null; layerType?: import("../api.js").SchemaLayer | null; tags?: string[]; environment?: import("../api.js").SchemaEnvironment | null }): Promise<SchemaDetail> => {
       await delay(100);
       const id = uid();
       const now = new Date().toISOString();
       const detail: SchemaDetail = {
         id, name: b.name, description: b.description ?? null,
         domain: b.domain ?? "semiconductor", suiteId: b.suiteId ?? null,
-        layerType: b.layerType ?? null,
+        layerType: b.layerType ?? null, tags: b.tags ?? [], environment: b.environment ?? null,
         createdAt: now, updatedAt: now, tables: [],
       };
       schemaDetails[id] = detail;
-      schemas = [...schemas, { id, name: b.name, description: b.description ?? null, domain: detail.domain, suiteId: b.suiteId ?? null, layerType: b.layerType ?? null, createdAt: now, updatedAt: now }];
+      schemas = [...schemas, { id, name: b.name, description: b.description ?? null, domain: detail.domain, suiteId: b.suiteId ?? null, layerType: b.layerType ?? null, tags: b.tags ?? [], environment: b.environment ?? null, createdAt: now, updatedAt: now }];
       return detail;
     },
 
-    update: async (id: number, b: Partial<{ name: string; description: string; domain: string; suiteId: number | null; layerType: import("../api.js").SchemaLayer | null }>): Promise<SchemaDetail> => {
+    update: async (id: number, b: Partial<{ name: string; description: string; domain: string; suiteId: number | null; layerType: import("../api.js").SchemaLayer | null; tags: string[]; environment: import("../api.js").SchemaEnvironment | null }>): Promise<SchemaDetail> => {
       await delay(80);
       const d = getDetail(id);
       const updated = { ...d, ...b, updatedAt: new Date().toISOString() };

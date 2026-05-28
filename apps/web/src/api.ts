@@ -5,10 +5,12 @@ export interface ProductSuite {
 
 export type SchemaLayer = "transaction" | "r2u" | "unified";
 export type RuleLayer = "transaction" | "r2u" | "unified" | "general";
+export type SchemaEnvironment = "DEV" | "TEST" | "STAGING" | "PROD";
 
 export interface Schema {
   id: number; name: string; description: string | null; domain: string;
   suiteId: number | null; layerType: SchemaLayer | null;
+  tags: string[]; environment: SchemaEnvironment | null;
   createdAt: string; updatedAt: string;
 }
 export interface Field {
@@ -209,9 +211,9 @@ const realApi = {
   schemas: {
     list: () => req<Schema[]>("/schemas"),
     get: (id: number) => req<SchemaDetail>(`/schemas/${id}`),
-    create: (b: { name: string; description?: string; domain?: string; suiteId?: number | null; layerType?: SchemaLayer | null }) =>
+    create: (b: { name: string; description?: string; domain?: string; suiteId?: number | null; layerType?: SchemaLayer | null; tags?: string[]; environment?: SchemaEnvironment | null }) =>
       req<SchemaDetail>("/schemas", { method: "POST", body: JSON.stringify(b) }),
-    update: (id: number, b: Partial<{ name: string; description: string; domain: string; suiteId: number | null; layerType: SchemaLayer | null }>) =>
+    update: (id: number, b: Partial<{ name: string; description: string; domain: string; suiteId: number | null; layerType: SchemaLayer | null; tags: string[]; environment: SchemaEnvironment | null }>) =>
       req<SchemaDetail>(`/schemas/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/schemas/${id}`, { method: "DELETE" }),
     namingCheck: (id: number) => req<TableNamingCheck[]>(`/schemas/${id}/naming-check`, { method: "POST" }),
