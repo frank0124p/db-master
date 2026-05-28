@@ -11,6 +11,7 @@ export interface Schema {
   id: number; name: string; description: string | null; domain: string;
   suiteId: number | null; layerType: SchemaLayer | null;
   tags: string[]; environment: SchemaEnvironment | null;
+  targetDb: "mariadb" | "oracle" | "clickhouse" | null;
   createdAt: string; updatedAt: string;
 }
 export interface Field {
@@ -24,6 +25,7 @@ export interface SchemaDetail extends Schema { tables: Table[]; }
 export interface NamingEntry {
   id: number; concept: string; stdName: string; aliases: string[];
   domain: string; tags: string[]; aiDescription: string | null; description: string | null;
+  layers: string[];
   updatedAt: string;
 }
 
@@ -47,6 +49,7 @@ export interface VersionSnapshot extends SchemaDetail {
 export interface SchemaVersion {
   id: number; schemaId: number; versionNo: number; message: string | null;
   createdAt: string; diff: VersionDiff | null; snapshot: VersionSnapshot;
+  ddlCheck?: { errors: number; warnings: number; infos: number; passed: boolean; dialect: string } | null;
 }
 
 export interface FieldPropChange { prop: string; before: string | null; after: string | null; }
@@ -148,6 +151,13 @@ export interface RuleDetail {
   layers: RuleLayer[];
 }
 
+export interface RuleSnapshot {
+  id: string;
+  name: string;
+  createdAt: string;
+  overrides: Record<string, unknown>;
+}
+
 export interface SkillRuleSummary {
   id: string; group: string; severity: string; description: string;
 }
@@ -211,9 +221,9 @@ const realApi = {
   schemas: {
     list: () => req<Schema[]>("/schemas"),
     get: (id: number) => req<SchemaDetail>(`/schemas/${id}`),
-    create: (b: { name: string; description?: string; domain?: string; suiteId?: number | null; layerType?: SchemaLayer | null; tags?: string[]; environment?: SchemaEnvironment | null }) =>
+    create: (b: { name: string; description?: string; domain?: string; suiteId?: number | null; layerType?: SchemaLayer | null; tags?: string[]; environment?: SchemaEnvironment | null; targetDb?: "mariadb" | "oracle" | "clickhouse" | null }) =>
       req<SchemaDetail>("/schemas", { method: "POST", body: JSON.stringify(b) }),
-    update: (id: number, b: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: SchemaLayer | null; tags: string[]; environment: SchemaEnvironment | null }>) =>
+    update: (id: number, b: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: SchemaLayer | null; tags: string[]; environment: SchemaEnvironment | null; targetDb: "mariadb" | "oracle" | "clickhouse" | null }>) =>
       req<SchemaDetail>(`/schemas/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/schemas/${id}`, { method: "DELETE" }),
     namingCheck: (id: number) => req<TableNamingCheck[]>(`/schemas/${id}/naming-check`, { method: "POST" }),
@@ -274,6 +284,12 @@ const realApi = {
     list: () => req<{ rules: RuleDetail[] }>("/rules"),
     update: (ruleId: string, patch: Partial<{ severity: "error" | "warning" | "info"; enabled: boolean; config: Record<string, unknown> }>) =>
       req<{ rule: RuleDetail }>(`/rules/${ruleId}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    snapshots: {
+      list: () => req<{ snapshots: RuleSnapshot[] }>("/rules/snapshots"),
+      save: (name: string) => req<{ snapshot: RuleSnapshot }>("/rules/snapshots", { method: "POST", body: JSON.stringify({ name }) }),
+      restore: (id: string) => req<{ rules: RuleDetail[] }>(`/rules/snapshots/${id}/restore`, { method: "POST" }),
+      delete: (id: string) => req<void>(`/rules/snapshots/${id}`, { method: "DELETE" }),
+    },
   },
   skills: {
     list: () => req<{ skills: SkillInfo[] }>("/skills"),
@@ -296,7 +312,7 @@ const realApi = {
     list: (domain?: string) => req<NamingEntry[]>(`/naming-dictionary${domain ? `?domain=${domain}` : ""}`),
     create: (b: { concept: string; std_name: string; aliases: string[]; domain?: string; description?: string }) =>
       req<NamingEntry>("/naming-dictionary", { method: "POST", body: JSON.stringify(b) }),
-    update: (id: number, b: Partial<{ concept: string; std_name: string; aliases: string[]; domain: string; tags: string[]; ai_description: string; description: string }>) =>
+    update: (id: number, b: Partial<{ concept: string; std_name: string; aliases: string[]; domain: string; tags: string[]; ai_description: string; description: string; layers: string[] }>) =>
       req<NamingEntry>(`/naming-dictionary/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/naming-dictionary/${id}`, { method: "DELETE" }),
     check: (names: string[], domain?: string) =>

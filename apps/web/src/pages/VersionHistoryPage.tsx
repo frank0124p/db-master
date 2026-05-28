@@ -505,12 +505,13 @@ export default function VersionHistoryPage() {
               <col style={{ width: 64 }} />
               <col style={{ width: 64 }} />
               <col style={{ width: 80 }} />
+              <col style={{ width: 120 }} />
               <col style={{ width: 200 }} />
               <col style={{ width: 36 }} />
             </colgroup>
             <thead>
               <tr style={{ background: "var(--bg-3)", borderBottom: "2px solid var(--border)" }}>
-                {["版本", "時間", "備註", "表數", "欄位", "命名分數", "變更摘要", ""].map(h => (
+                {["版本", "時間", "備註", "表數", "欄位", "命名分數", "DDL 檢查", "變更摘要", ""].map(h => (
                   <th key={h} style={{ ...cs(), fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>{h}</th>
                 ))}
               </tr>
@@ -571,6 +572,18 @@ export default function VersionHistoryPage() {
                           : <span style={{ color: "var(--text-3)" }}>—</span>}
                       </td>
 
+                      {/* DDL 檢查 */}
+                      <td style={cs()}>
+                        {v.ddlCheck == null
+                          ? <span style={{ color: "var(--text-3)" }}>—</span>
+                          : v.ddlCheck.passed && v.ddlCheck.errors === 0
+                            ? <span style={{ fontSize: 11, fontWeight: 700, color: "var(--success,#4ade80)" }}>✓ 無錯誤</span>
+                            : v.ddlCheck.errors > 0
+                              ? <span style={{ fontSize: 11, fontWeight: 700, color: "var(--error,#f87171)" }}>✕ {v.ddlCheck.errors} 錯誤</span>
+                              : <span style={{ fontSize: 11, fontWeight: 700, color: "var(--warning)" }}>⚠ {v.ddlCheck.warnings} 警告</span>
+                        }
+                      </td>
+
                       {/* 變更摘要 */}
                       <td style={cs()}>
                         {v.diff === null ? (
@@ -599,7 +612,7 @@ export default function VersionHistoryPage() {
                     {/* ── Expanded detail ── */}
                     {isExpanded && (
                       <tr key={`${v.id}-detail`} style={{ borderTop: "1px solid var(--border)" }}>
-                        <td colSpan={8} style={{ padding: 0, background: "var(--bg-1)" }}>
+                        <td colSpan={9} style={{ padding: 0, background: "var(--bg-1)" }}>
                           <div style={{ maxHeight: 520, overflowY: "auto", padding: "20px 20px 24px" }}>
                             <VersionDetail version={v} entries={namingEntries} />
                           </div>

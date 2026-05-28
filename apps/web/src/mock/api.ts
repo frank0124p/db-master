@@ -15,7 +15,7 @@ import type {
   Schema, SchemaDetail, Table, Field,
   NamingEntry, SchemaVersion,
   WideTableSummary, WideTableDetail, WideTablePreview,
-  DryRunResult, ImportResult, RuleDetail,
+  DryRunResult, ImportResult, RuleDetail, RuleSnapshot,
   TableNamingCheck,
 } from "../api.js";
 
@@ -72,7 +72,7 @@ export const mockApi = {
       return getDetail(id);
     },
 
-    create: async (b: { name: string; description?: string; domain?: string; suiteId?: number | null; layerType?: import("../api.js").SchemaLayer | null; tags?: string[]; environment?: import("../api.js").SchemaEnvironment | null }): Promise<SchemaDetail> => {
+    create: async (b: { name: string; description?: string; domain?: string; suiteId?: number | null; layerType?: import("../api.js").SchemaLayer | null; tags?: string[]; environment?: import("../api.js").SchemaEnvironment | null; targetDb?: "mariadb" | "oracle" | "clickhouse" | null }): Promise<SchemaDetail> => {
       await delay(100);
       const id = uid();
       const now = new Date().toISOString();
@@ -80,14 +80,15 @@ export const mockApi = {
         id, name: b.name, description: b.description ?? null,
         domain: b.domain ?? "semiconductor", suiteId: b.suiteId ?? null,
         layerType: b.layerType ?? null, tags: b.tags ?? [], environment: b.environment ?? null,
+        targetDb: b.targetDb ?? null,
         createdAt: now, updatedAt: now, tables: [],
       };
       schemaDetails[id] = detail;
-      schemas = [...schemas, { id, name: b.name, description: b.description ?? null, domain: detail.domain, suiteId: b.suiteId ?? null, layerType: b.layerType ?? null, tags: b.tags ?? [], environment: b.environment ?? null, createdAt: now, updatedAt: now }];
+      schemas = [...schemas, { id, name: b.name, description: b.description ?? null, domain: detail.domain, suiteId: b.suiteId ?? null, layerType: b.layerType ?? null, tags: b.tags ?? [], environment: b.environment ?? null, targetDb: b.targetDb ?? null, createdAt: now, updatedAt: now }];
       return detail;
     },
 
-    update: async (id: number, b: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: import("../api.js").SchemaLayer | null; tags: string[]; environment: import("../api.js").SchemaEnvironment | null }>): Promise<SchemaDetail> => {
+    update: async (id: number, b: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: import("../api.js").SchemaLayer | null; tags: string[]; environment: import("../api.js").SchemaEnvironment | null; targetDb: "mariadb" | "oracle" | "clickhouse" | null }>): Promise<SchemaDetail> => {
       await delay(80);
       const d = getDetail(id);
       const updated = { ...d, ...b, updatedAt: new Date().toISOString() };
@@ -284,6 +285,23 @@ export const mockApi = {
       const rule = rules.find(r => r.id === ruleId) ?? rules[0]!;
       return { rule };
     },
+    snapshots: {
+      list: async (): Promise<{ snapshots: RuleSnapshot[] }> => {
+        await delay(60);
+        return { snapshots: [] as RuleSnapshot[] };
+      },
+      save: async (name: string): Promise<{ snapshot: RuleSnapshot }> => {
+        await delay(100);
+        return { snapshot: { id: Date.now().toString(), name, createdAt: new Date().toISOString(), overrides: {} } as RuleSnapshot };
+      },
+      restore: async (_id: string): Promise<{ rules: RuleDetail[] }> => {
+        await delay(80);
+        return { rules: [] as RuleDetail[] };
+      },
+      delete: async (_id: string): Promise<void> => {
+        await delay(60);
+      },
+    },
   },
 
   naming: {
@@ -296,13 +314,13 @@ export const mockApi = {
       const entry: NamingEntry = {
         id: uid(), concept: b.concept, stdName: b.std_name,
         aliases: b.aliases, domain: b.domain ?? "semiconductor",
-        tags: [], aiDescription: null, description: b.description ?? null,
+        tags: [], layers: [], aiDescription: null, description: b.description ?? null,
         updatedAt: new Date().toISOString(),
       };
       naming = [...naming, entry];
       return entry;
     },
-    update: async (id: number, b: Partial<{ concept: string; std_name: string; aliases: string[]; domain: string; tags: string[]; ai_description: string; description: string }>): Promise<NamingEntry> => {
+    update: async (id: number, b: Partial<{ concept: string; std_name: string; aliases: string[]; domain: string; tags: string[]; ai_description: string; description: string; layers: string[] }>): Promise<NamingEntry> => {
       await delay(80);
       naming = naming.map(e => e.id === id ? {
         ...e,
@@ -311,6 +329,7 @@ export const mockApi = {
         aliases: b.aliases ?? e.aliases,
         domain: b.domain ?? e.domain,
         tags: b.tags ?? e.tags,
+        layers: b.layers ?? e.layers,
         aiDescription: b.ai_description ?? e.aiDescription,
         description: b.description ?? e.description,
       } : e);

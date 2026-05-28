@@ -23,6 +23,15 @@ const TAG_COLORS: Record<string, { bg: string; color: string }> = {
 
 const ALL_TAGS = Object.keys(TAG_COLORS);
 
+const DICT_LAYER_CFG = {
+  general:     { label: "通用",    color: "var(--text-3)",  bg: "var(--bg-4)" },
+  transaction: { label: "交易層",  color: "#a78bfa",        bg: "rgba(167,139,250,0.15)" },
+  r2u:         { label: "R2U",     color: "#34d399",        bg: "rgba(52,211,153,0.15)" },
+  unified:     { label: "Unified", color: "#60a5fa",        bg: "rgba(96,165,250,0.15)" },
+} as const;
+const DICT_LAYERS = ["general", "transaction", "r2u", "unified"] as const;
+type DictLayer = typeof DICT_LAYERS[number];
+
 function TagChip({ tag, onRemove }: { tag: string; onRemove?: () => void }) {
   const c = TAG_COLORS[tag] ?? { bg: "var(--bg-4)", color: "var(--text-3)" };
   return (
@@ -40,6 +49,7 @@ function DefinitionPanel({ entry, onClose }: { entry: NamingEntry; onClose: () =
   const { showToast } = useStore();
   const [manualDesc, setManualDesc] = useState(entry.description ?? "");
   const [tags, setTags] = useState<string[]>(entry.tags ?? []);
+  const [layers, setLayers] = useState<string[]>(entry.layers ?? []);
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -58,7 +68,7 @@ function DefinitionPanel({ entry, onClose }: { entry: NamingEntry; onClose: () =
   async function saveManual() {
     setSaving(true);
     try {
-      const patch: Parameters<typeof api.naming.update>[1] = { tags };
+      const patch: Parameters<typeof api.naming.update>[1] = { tags, layers };
       if (manualDesc) patch.description = manualDesc;
       const updated = await api.naming.update(entry.id, patch);
       qc.setQueryData<NamingEntry[]>(["naming"], old =>
@@ -98,6 +108,27 @@ function DefinitionPanel({ entry, onClose }: { entry: NamingEntry; onClose: () =
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Layers */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>適用分層</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {DICT_LAYERS.map(l => {
+                const cfg = DICT_LAYER_CFG[l];
+                const active = layers.includes(l);
+                return (
+                  <button key={l}
+                    onClick={() => setLayers(active ? layers.filter(x => x !== l) : [...layers, l])}
+                    style={{ padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                      background: active ? cfg.bg : "var(--bg-3)",
+                      color: active ? cfg.color : "var(--text-3)",
+                      border: `1px solid ${active ? cfg.color : "var(--border)"}` }}>
+                    {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Tags */}
           <div>
@@ -272,13 +303,17 @@ export default function NamingDictPage() {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const [filter, setFilter] = useState("all");
+  const [layerFilter, setLayerFilter] = useState<"" | DictLayer>("");
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState<NamingEntry | null>(null);
   const [defEntry, setDefEntry] = useState<NamingEntry | null>(null);
 
   const { data: entries } = useQuery({ queryKey: ["naming"], queryFn: () => api.naming.list() });
 
-  const filtered = entries?.filter(e => filter === "all" || e.domain === filter);
+  const filtered = entries?.filter(e =>
+    (filter === "all" || e.domain === filter) &&
+    (layerFilter === "" || (e.layers ?? []).includes(layerFilter))
+  );
 
   async function del(e: NamingEntry) {
     if (!confirm(`刪除「${e.stdName}」？`)) return;
@@ -314,11 +349,36 @@ export default function NamingDictPage() {
         </div>
       </div>
 
+      {/* Layer filter bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", marginRight: 2 }}>分層</span>
+        <button onClick={() => setLayerFilter("")}
+          style={{ padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+            background: layerFilter === "" ? "var(--accent-dim)" : "var(--bg-3)",
+            color: layerFilter === "" ? "var(--accent)" : "var(--text-3)",
+            border: `1px solid ${layerFilter === "" ? "var(--accent)" : "var(--border)"}` }}>
+          全部
+        </button>
+        {DICT_LAYERS.map(l => {
+          const cfg = DICT_LAYER_CFG[l];
+          const active = layerFilter === l;
+          return (
+            <button key={l} onClick={() => setLayerFilter(active ? "" : l)}
+              style={{ padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                background: active ? cfg.bg : "var(--bg-3)",
+                color: active ? cfg.color : "var(--text-3)",
+                border: `1px solid ${active ? cfg.color : "var(--border)"}` }}>
+              {cfg.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Table */}
       <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--bg-2)", borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)" }}>
         <thead>
           <tr style={{ background: "var(--bg-3)" }}>
-            {["概念", "標準英文名", "領域", "最後更新", ""].map((h, i) => (
+            {["概念", "標準英文名", "分層", "領域", "最後更新", ""].map((h, i) => (
               <th key={i} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid var(--border)" }}>{h}</th>
             ))}
           </tr>
@@ -332,6 +392,23 @@ export default function NamingDictPage() {
               <td style={{ padding: "9px 12px", fontSize: 12, color: "var(--text-1)" }}>{e.concept}</td>
               <td style={{ padding: "9px 12px" }}>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--success)" }}>{e.stdName}</span>
+              </td>
+              <td style={{ padding: "9px 12px" }}>
+                <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                  {(e.layers ?? []).length === 0
+                    ? <span style={{ fontSize: 10, color: "var(--text-3)" }}>—</span>
+                    : (e.layers ?? []).map(l => {
+                        const cfg = DICT_LAYER_CFG[l as DictLayer];
+                        if (!cfg) return null;
+                        return (
+                          <span key={l} style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 6,
+                            background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}33` }}>
+                            {cfg.label}
+                          </span>
+                        );
+                      })
+                  }
+                </div>
               </td>
               <td style={{ padding: "9px 12px" }}>
                 <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: e.domain === "semiconductor" ? "rgba(123,140,255,0.12)" : "var(--bg-4)", color: e.domain === "semiconductor" ? "var(--accent)" : "var(--text-3)" }}>

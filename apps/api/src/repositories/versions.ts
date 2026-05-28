@@ -10,10 +10,15 @@ type WideTableSnapshot = {
 
 type VersionSnapshot = SchemaWithTables & { wideTables: WideTableSnapshot[] };
 
+export interface DdlCheckSummary {
+  errors: number; warnings: number; infos: number; passed: boolean; dialect: string;
+}
+
 interface VersionFile {
   id: number; schemaId: number; versionNo: number;
   message: string | null; createdAt: string;
   snapshot: VersionSnapshot; diff: unknown | null;
+  ddlCheck?: DdlCheckSummary | null;
 }
 
 function toWideTableSnapshot(wt: WideTableDetail): WideTableSnapshot {
@@ -117,6 +122,7 @@ export async function listVersions(schemaId: number) {
     versions.push({
       id: v.id, schemaId: v.schemaId, versionNo: v.versionNo,
       snapshot: v.snapshot, diff: v.diff, message: v.message,
+      ddlCheck: v.ddlCheck ?? null,
       createdAt: new Date(v.createdAt),
     });
   }
@@ -128,7 +134,7 @@ export async function getVersionByNo(schemaId: number, vno: number) {
   return versions.find(v => v.versionNo === vno) ?? null;
 }
 
-export async function saveVersion(schemaId: number, message?: string) {
+export async function saveVersion(schemaId: number, message?: string, ddlCheck?: DdlCheckSummary | null) {
   const schema = await getSchemaById(schemaId);
   const wtSummaries = await listWideTables(schemaId);
   const wtDetails = await Promise.all(wtSummaries.map(wt => getWideTable(wt.id)));
@@ -149,12 +155,13 @@ export async function saveVersion(schemaId: number, message?: string) {
     id, schemaId, versionNo, message: message ?? null,
     createdAt: new Date().toISOString(),
     snapshot: currentSnapshot, diff,
+    ddlCheck: ddlCheck ?? null,
   };
   await store.writeJson(versionFile(slug, versionNo), vf);
 
   return {
     id, versionNo, schemaId, message: message ?? null,
-    score: namingScore(schema), diff,
+    score: namingScore(schema), diff, ddlCheck: ddlCheck ?? null,
     createdAt: new Date(vf.createdAt),
   };
 }

@@ -78,6 +78,7 @@ export interface NamingEntry {
   aliases: string[];
   domain: string;
   tags: string[];
+  layers: string[];
   aiDescription: string | null;
   description: string | null;
   updatedAt: string;
@@ -91,6 +92,9 @@ export type SchemaLayer = typeof SCHEMA_LAYERS[number];
 export const SCHEMA_ENVIRONMENTS = ["DEV", "TEST", "STAGING", "PROD"] as const;
 export type SchemaEnvironment = typeof SCHEMA_ENVIRONMENTS[number];
 
+export const TARGET_DBS = ["mariadb", "oracle", "clickhouse"] as const;
+export type TargetDb = typeof TARGET_DBS[number];
+
 export const CreateSchemaInput = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
@@ -99,6 +103,7 @@ export const CreateSchemaInput = z.object({
   layerType: z.enum(SCHEMA_LAYERS).nullable().optional(),
   tags: z.array(z.string()).optional(),
   environment: z.enum(SCHEMA_ENVIRONMENTS).nullable().optional(),
+  targetDb: z.enum(TARGET_DBS).nullable().optional(),
 });
 export type CreateSchemaInput = z.infer<typeof CreateSchemaInput>;
 

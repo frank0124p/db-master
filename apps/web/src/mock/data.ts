@@ -115,7 +115,7 @@ export const plmSchema: SchemaDetail = {
   id: 1, name: "PLM Core",
   description: "產品生命週期管理核心 — 零件、BOM、ECO 與供應商管理",
   domain: "semiconductor", suiteId: null, layerType: null,
-  tags: [], environment: null,
+  tags: [], environment: null, targetDb: null,
   createdAt: ts(30), updatedAt: ts(1),
   tables: plmTables,
 };
@@ -178,7 +178,7 @@ export const mesSchema: SchemaDetail = {
   id: 2, name: "MES Process",
   description: "製造執行系統 — 批次、晶圓、製程操作與設備管理",
   domain: "semiconductor", suiteId: null, layerType: null,
-  tags: [], environment: null,
+  tags: [], environment: null, targetDb: null,
   createdAt: ts(20), updatedAt: ts(2),
   tables: mesTables,
 };
@@ -186,8 +186,8 @@ export const mesSchema: SchemaDetail = {
 // ── Schema list ───────────────────────────────────────────────────────────────
 
 export const mockSchemas: Schema[] = [
-  { id: 1, name: "PLM Core",    description: plmSchema.description, domain: "semiconductor", suiteId: null, layerType: null, tags: [], environment: null, createdAt: ts(30), updatedAt: ts(1) },
-  { id: 2, name: "MES Process", description: mesSchema.description, domain: "semiconductor", suiteId: null, layerType: null, tags: [], environment: null, createdAt: ts(20), updatedAt: ts(2) },
+  { id: 1, name: "PLM Core",    description: plmSchema.description, domain: "semiconductor", suiteId: null, layerType: null, tags: [], environment: null, targetDb: null, createdAt: ts(30), updatedAt: ts(1) },
+  { id: 2, name: "MES Process", description: mesSchema.description, domain: "semiconductor", suiteId: null, layerType: null, tags: [], environment: null, targetDb: null, createdAt: ts(20), updatedAt: ts(2) },
 ];
 
 // ── Wide Tables (for PLM Core) ────────────────────────────────────────────────
@@ -221,21 +221,21 @@ export const mockWideDetail: WideTableDetail = {
 // ── Naming Dictionary ─────────────────────────────────────────────────────────
 
 export const mockNaming: NamingEntry[] = [
-  { id: 1,  concept: "批號",       stdName: "lot_id",           aliases: ["batch_id","lot_no"],          domain: "semiconductor", tags: ["批次相關","識別碼"], aiDescription: "批次唯一識別碼，格式 LOT-YYYYMMDD-NNN，生產批次追蹤主鍵。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 2,  concept: "晶圓 ID",    stdName: "wafer_id",         aliases: ["wafer_no","wfr_id"],          domain: "semiconductor", tags: ["批次相關","識別碼"], aiDescription: "批次內晶圓片編號，通常為 1–25 的整數，配合 lot_id 唯一定位每片晶圓。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 3,  concept: "設備 ID",    stdName: "equip_id",         aliases: ["machine_id","tool_id","eqp_id"], domain: "semiconductor", tags: ["設備相關","識別碼"], aiDescription: "製程設備唯一識別碼，對應設備主檔，用於製程履歷查詢與 OEE 分析。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 4,  concept: "操作員工號", stdName: "operator_id",      aliases: ["op_id","user_id","emp_id"],   domain: "semiconductor", tags: ["操作人員","識別碼"], aiDescription: "執行製程操作的員工工號，用於責任歸屬與稽核追蹤。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 5,  concept: "料號",       stdName: "part_no",          aliases: ["p_no","item_no","material_no"], domain: "semiconductor", tags: ["產品相關","識別碼"], aiDescription: "零件唯一料號，遵循命名規則，全域不重複，廢止後不得再用。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 6,  concept: "良率",       stdName: "yield_rate",       aliases: ["yield","pass_rate"],          domain: "semiconductor", tags: ["良率品質","量測值"], aiDescription: "晶圓或批次良率，0~1 之間的小數，代表合格晶粒佔總晶粒的比例。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 7,  concept: "站點代碼",   stdName: "operation_code",   aliases: ["op_code","step_id","process_step"], domain: "semiconductor", tags: ["製程相關","識別碼"], aiDescription: "製程站點代碼，對應工藝流程圖中的每個加工步驟。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 8,  concept: "狀態",       stdName: "status",           aliases: ["state","sts"],                domain: "semiconductor", tags: ["狀態"], aiDescription: "業務物件的當前狀態值，具體取值由業務規則定義（如 lot 批次狀態：run/hold/complete）。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 9,  concept: "數量",       stdName: "quantity",         aliases: ["qty","count","amount"],       domain: "semiconductor", tags: ["數量"], aiDescription: "物料或批次的數量，單位由相關欄位（unit/unit_of_measure）定義。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 10, concept: "生命週期狀態", stdName: "lifecycle_state", aliases: ["lc_state","life_state"],     domain: "semiconductor", tags: ["狀態","產品相關"], aiDescription: "產品或零件的生命週期階段，如 draft/review/released/obsolete，控制物料的可用性。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 11, concept: "製程節點",   stdName: "process_node",     aliases: ["node","process","tech_node"], domain: "semiconductor", tags: ["製程相關"], aiDescription: "IC 製造製程技術節點，如 TSMC 28nm、7nm EUV，影響良率與製造成本。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 12, concept: "交期天數",   stdName: "lead_time_days",   aliases: ["lead_time","lt_days"],        domain: "semiconductor", tags: ["量測值"], aiDescription: "供應商交期天數，從下單到到貨的預計天數，用於採購排程計算。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 13, concept: "供應商代碼", stdName: "supplier_code",    aliases: ["vendor_code","sup_code"],     domain: "semiconductor", tags: ["識別碼"], aiDescription: "供應商唯一識別代碼，對應供應商主檔，用於採購與物料管理。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 14, concept: "版本號",     stdName: "revision_no",      aliases: ["rev_no","version","ver"],     domain: "semiconductor", tags: ["識別碼","產品相關"], aiDescription: "零件或文件的版本標識，如 A0/A1/B0，每次 ECO 後遞增，追蹤設計演進歷程。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
-  { id: 15, concept: "建立時間",   stdName: "created_at",       aliases: ["create_time","created_time"], domain: "semiconductor", tags: ["時間戳"], aiDescription: "記錄建立的 UTC 時間戳，系統自動填入，不可手動修改，用於稽核追蹤。", description: null, updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 1,  concept: "批號",       stdName: "lot_id",           aliases: ["batch_id","lot_no"],          domain: "semiconductor", tags: ["批次相關","識別碼"], aiDescription: "批次唯一識別碼，格式 LOT-YYYYMMDD-NNN，生產批次追蹤主鍵。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 2,  concept: "晶圓 ID",    stdName: "wafer_id",         aliases: ["wafer_no","wfr_id"],          domain: "semiconductor", tags: ["批次相關","識別碼"], aiDescription: "批次內晶圓片編號，通常為 1–25 的整數，配合 lot_id 唯一定位每片晶圓。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 3,  concept: "設備 ID",    stdName: "equip_id",         aliases: ["machine_id","tool_id","eqp_id"], domain: "semiconductor", tags: ["設備相關","識別碼"], aiDescription: "製程設備唯一識別碼，對應設備主檔，用於製程履歷查詢與 OEE 分析。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 4,  concept: "操作員工號", stdName: "operator_id",      aliases: ["op_id","user_id","emp_id"],   domain: "semiconductor", tags: ["操作人員","識別碼"], aiDescription: "執行製程操作的員工工號，用於責任歸屬與稽核追蹤。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 5,  concept: "料號",       stdName: "part_no",          aliases: ["p_no","item_no","material_no"], domain: "semiconductor", tags: ["產品相關","識別碼"], aiDescription: "零件唯一料號，遵循命名規則，全域不重複，廢止後不得再用。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 6,  concept: "良率",       stdName: "yield_rate",       aliases: ["yield","pass_rate"],          domain: "semiconductor", tags: ["良率品質","量測值"], aiDescription: "晶圓或批次良率，0~1 之間的小數，代表合格晶粒佔總晶粒的比例。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 7,  concept: "站點代碼",   stdName: "operation_code",   aliases: ["op_code","step_id","process_step"], domain: "semiconductor", tags: ["製程相關","識別碼"], aiDescription: "製程站點代碼，對應工藝流程圖中的每個加工步驟。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 8,  concept: "狀態",       stdName: "status",           aliases: ["state","sts"],                domain: "semiconductor", tags: ["狀態"], aiDescription: "業務物件的當前狀態值，具體取值由業務規則定義（如 lot 批次狀態：run/hold/complete）。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 9,  concept: "數量",       stdName: "quantity",         aliases: ["qty","count","amount"],       domain: "semiconductor", tags: ["數量"], aiDescription: "物料或批次的數量，單位由相關欄位（unit/unit_of_measure）定義。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 10, concept: "生命週期狀態", stdName: "lifecycle_state", aliases: ["lc_state","life_state"],     domain: "semiconductor", tags: ["狀態","產品相關"], aiDescription: "產品或零件的生命週期階段，如 draft/review/released/obsolete，控制物料的可用性。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 11, concept: "製程節點",   stdName: "process_node",     aliases: ["node","process","tech_node"], domain: "semiconductor", tags: ["製程相關"], aiDescription: "IC 製造製程技術節點，如 TSMC 28nm、7nm EUV，影響良率與製造成本。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 12, concept: "交期天數",   stdName: "lead_time_days",   aliases: ["lead_time","lt_days"],        domain: "semiconductor", tags: ["量測值"], aiDescription: "供應商交期天數，從下單到到貨的預計天數，用於採購排程計算。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 13, concept: "供應商代碼", stdName: "supplier_code",    aliases: ["vendor_code","sup_code"],     domain: "semiconductor", tags: ["識別碼"], aiDescription: "供應商唯一識別代碼，對應供應商主檔，用於採購與物料管理。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 14, concept: "版本號",     stdName: "revision_no",      aliases: ["rev_no","version","ver"],     domain: "semiconductor", tags: ["識別碼","產品相關"], aiDescription: "零件或文件的版本標識，如 A0/A1/B0，每次 ECO 後遞增，追蹤設計演進歷程。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
+  { id: 15, concept: "建立時間",   stdName: "created_at",       aliases: ["create_time","created_time"], domain: "semiconductor", tags: ["時間戳"], aiDescription: "記錄建立的 UTC 時間戳，系統自動填入，不可手動修改，用於稽核追蹤。", description: null, layers: [], updatedAt: "2024-01-01T00:00:00.000Z" },
 ];
 
 // ── Version History (for PLM Core) ───────────────────────────────────────────

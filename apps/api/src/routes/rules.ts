@@ -2,6 +2,12 @@ import { Router, type Request, type Response } from "express";
 import { type Router as RouterType } from "express";
 import { z } from "zod";
 import { listRules, updateRule, getAllRules } from "../repositories/rules.js";
+import {
+  listSnapshots,
+  saveSnapshot,
+  restoreSnapshot,
+  deleteSnapshot,
+} from "../repositories/ruleSnapshots.js";
 
 const router: RouterType = Router();
 
@@ -26,6 +32,64 @@ router.get("/", async (_req: Request, res: Response) => {
       };
     }),
   });
+});
+
+// GET /api/v1/rules/snapshots
+router.get("/snapshots", async (_req: Request, res: Response) => {
+  const snapshots = await listSnapshots();
+  res.json({ snapshots });
+});
+
+const SaveSnapshotBody = z.object({
+  name: z.string().min(1),
+});
+
+// POST /api/v1/rules/snapshots
+router.post("/snapshots", async (req: Request, res: Response) => {
+  const parsed = SaveSnapshotBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { code: "VALIDATION_ERROR", detail: parsed.error.format() } });
+    return;
+  }
+  const snapshot = await saveSnapshot(parsed.data.name);
+  res.status(201).json({ snapshot });
+});
+
+// POST /api/v1/rules/snapshots/:id/restore
+router.post("/snapshots/:id/restore", async (req: Request, res: Response) => {
+  const id = (req.params as Record<string, string>)["id"]!;
+  try {
+    await restoreSnapshot(id);
+  } catch {
+    res.status(404).json({ error: { code: "NOT_FOUND", message: `Snapshot ${id} not found` } });
+    return;
+  }
+  const rules = await listRules();
+  const allRuleDefns = getAllRules();
+  res.json({
+    rules: rules.map(r => {
+      const ruleDefn = allRuleDefns.find(x => x.id === r.ruleId);
+      return {
+        id: r.ruleId,
+        group: r.group,
+        description: r.description,
+        defaultSeverity: ruleDefn?.defaultSeverity ?? r.severity,
+        defaultConfig: ruleDefn?.defaultConfig ?? {},
+        severity: r.severity,
+        enabled: r.enabled,
+        config: r.config,
+        source: r.source,
+        layers: ruleDefn?.layers ?? ["general"],
+      };
+    }),
+  });
+});
+
+// DELETE /api/v1/rules/snapshots/:id
+router.delete("/snapshots/:id", async (req: Request, res: Response) => {
+  const id = (req.params as Record<string, string>)["id"]!;
+  await deleteSnapshot(id);
+  res.status(204).send();
 });
 
 const PatchBody = z.object({

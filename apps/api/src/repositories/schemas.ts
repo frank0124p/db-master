@@ -19,7 +19,7 @@ interface SchemaMeta {
   id: number; name: string; description: string | null; domain: string;
   suiteId: number | null; layerType: string | null;
   selectedRuleIds: string[] | null;
-  tags: string[]; environment: string | null;
+  tags: string[]; environment: string | null; targetDb: string | null;
   createdAt: string; updatedAt: string;
 }
 
@@ -27,7 +27,7 @@ export interface SchemaWithTables {
   id: number; name: string; description: string | null; domain: string;
   suiteId: number | null; layerType: string | null;
   selectedRuleIds: string[] | null;
-  tags: string[]; environment: string | null;
+  tags: string[]; environment: string | null; targetDb: string | null;
   createdAt: Date; updatedAt: Date;
   tables: {
     id: number; name: string; comment: string | null;
@@ -122,6 +122,7 @@ export async function listSchemas() {
       suiteId: meta.suiteId ?? null, layerType: meta.layerType ?? null,
       selectedRuleIds: meta.selectedRuleIds ?? null,
       tags: meta.tags ?? [], environment: meta.environment ?? null,
+      targetDb: meta.targetDb ?? null,
       createdAt: new Date(meta.createdAt), updatedAt: new Date(meta.updatedAt),
     });
   }
@@ -148,12 +149,13 @@ export async function getSchemaById(id: number): Promise<SchemaWithTables> {
     suiteId: meta.suiteId ?? null, layerType: meta.layerType ?? null,
     selectedRuleIds: meta.selectedRuleIds ?? null,
     tags: meta.tags ?? [], environment: meta.environment ?? null,
+    targetDb: meta.targetDb ?? null,
     createdAt: new Date(meta.createdAt), updatedAt: new Date(meta.updatedAt),
     tables,
   };
 }
 
-export async function createSchema(input: { name: string; description?: string | null; domain?: string; suiteId?: number | null; layerType?: string | null; tags?: string[]; environment?: string | null }) {
+export async function createSchema(input: { name: string; description?: string | null; domain?: string; suiteId?: number | null; layerType?: string | null; tags?: string[]; environment?: string | null; targetDb?: string | null }) {
   const id = await store.nextId("schemas");
   const slug = await uniqueSlug(toSlug(input.name));
   const now = new Date().toISOString();
@@ -162,6 +164,7 @@ export async function createSchema(input: { name: string; description?: string |
     domain: input.domain ?? "semiconductor", suiteId: input.suiteId ?? null,
     layerType: input.layerType ?? null, selectedRuleIds: null,
     tags: input.tags ?? [], environment: input.environment ?? null,
+    targetDb: input.targetDb ?? null,
     createdAt: now, updatedAt: now,
   };
   await store.writeJson(metaFile(slug), meta);
@@ -169,7 +172,7 @@ export async function createSchema(input: { name: string; description?: string |
   return getSchemaById(id);
 }
 
-export async function updateSchema(id: number, input: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: string | null; selectedRuleIds: string[] | null; tags: string[]; environment: string | null }>) {
+export async function updateSchema(id: number, input: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: string | null; selectedRuleIds: string[] | null; tags: string[]; environment: string | null; targetDb: string | null }>) {
   const slug = await getSchemaSlug(id);
   const meta = await store.readJson<SchemaMeta>(metaFile(slug));
   if (!meta) throw new NotFoundError("Schema", id);
@@ -181,6 +184,7 @@ export async function updateSchema(id: number, input: Partial<{ name: string; de
   if ("selectedRuleIds" in input) meta.selectedRuleIds = input.selectedRuleIds ?? null;
   if (input.tags !== undefined) meta.tags = input.tags;
   if ("environment" in input) meta.environment = input.environment ?? null;
+  if ("targetDb" in input) meta.targetDb = input.targetDb ?? null;
   meta.updatedAt = new Date().toISOString();
   await store.writeJson(metaFile(slug), meta);
   return getSchemaById(id);

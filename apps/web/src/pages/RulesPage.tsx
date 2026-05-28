@@ -1,6 +1,6 @@
 import React, { useState, Fragment } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type RuleDetail, type RuleLayer, type SkillInfo } from "../api.js";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { api, type RuleDetail, type RuleLayer, type SkillInfo, type RuleSnapshot } from "../api.js";
 import { useStore } from "../store.js";
 
 // ── shared helpers ────────────────────────────────────────────────────────────
@@ -149,6 +149,54 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
   const [srcFilter, setSrcFilter] = useState<"all" | "built-in" | "skill">("all");
   const [layerFilter, setLayerFilter] = useState<"all" | RuleLayer>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // ── Snapshot state ────────────────────────────────────────────────────────
+  const [snapshotPanelOpen, setSnapshotPanelOpen] = useState(false);
+  const [savingSnapshotName, setSavingSnapshotName] = useState(false);
+  const [snapshotNameInput, setSnapshotNameInput] = useState("");
+  const [showNameInput, setShowNameInput] = useState(false);
+
+  const { data: snapshotsData, refetch: refetchSnapshots } = useQuery({
+    queryKey: ["rule-snapshots"],
+    queryFn: () => api.rules.snapshots.list(),
+  });
+  const snapshots: RuleSnapshot[] = snapshotsData?.snapshots ?? [];
+
+  const saveMut = useMutation({
+    mutationFn: (name: string) => api.rules.snapshots.save(name),
+    onSuccess: (data) => {
+      void refetchSnapshots();
+      showToast(`✓ 快照「${data.snapshot.name}」已儲存`);
+      setSnapshotNameInput("");
+      setShowNameInput(false);
+    },
+    onError: (e) => showToast(`快照儲存失敗: ${String(e)}`),
+  });
+
+  const restoreMut = useMutation({
+    mutationFn: (id: string) => api.rules.snapshots.restore(id),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["rules"] });
+      showToast("✓ 已還原規則快照");
+    },
+    onError: (e) => showToast(`還原失敗: ${String(e)}`),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.rules.snapshots.delete(id),
+    onSuccess: () => {
+      void refetchSnapshots();
+      showToast("已刪除快照");
+    },
+    onError: (e) => showToast(`刪除失敗: ${String(e)}`),
+  });
+
+  function handleSaveSnapshot() {
+    const name = snapshotNameInput.trim() || new Date().toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    setSavingSnapshotName(true);
+    saveMut.mutate(name);
+    setSavingSnapshotName(false);
+  }
 
   const visible = rules.filter(r =>
     (group === "all" || r.group === group) &&
@@ -395,6 +443,89 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
           </div>
         )}
       </div>
+
+      {/* ── Snapshot toolbar row ── */}
+      <div style={{ padding: "8px 20px", borderTop: "1px solid var(--border)", background: "var(--bg-2)",
+        display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        {showNameInput ? (
+          <>
+            <input
+              autoFocus
+              placeholder="快照名稱（可留空使用日期時間）"
+              value={snapshotNameInput}
+              onChange={e => setSnapshotNameInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleSaveSnapshot(); if (e.key === "Escape") { setShowNameInput(false); setSnapshotNameInput(""); } }}
+              style={{ fontSize: 12, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--border)",
+                background: "var(--bg-3)", color: "var(--text-1)", outline: "none", width: 240 }}
+            />
+            <button onClick={handleSaveSnapshot} disabled={saveMut.isPending || savingSnapshotName}
+              style={{ fontSize: 11, padding: "4px 12px", borderRadius: 5, border: "none",
+                background: "var(--accent)", color: "#fff", cursor: "pointer", fontWeight: 700,
+                opacity: saveMut.isPending ? 0.7 : 1 }}>
+              {saveMut.isPending ? "儲存中…" : "確認儲存"}
+            </button>
+            <button onClick={() => { setShowNameInput(false); setSnapshotNameInput(""); }}
+              style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid var(--border)",
+                background: "transparent", color: "var(--text-3)", cursor: "pointer" }}>
+              取消
+            </button>
+          </>
+        ) : (
+          <button onClick={() => setShowNameInput(true)}
+            style={{ fontSize: 11, padding: "4px 12px", borderRadius: 5, border: "1px solid var(--border)",
+              background: "var(--bg-3)", color: "var(--text-2)", cursor: "pointer", transition: "all 0.15s" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--bg-4)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "var(--bg-3)"; }}>
+            ⊕ 儲存快照
+          </button>
+        )}
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setSnapshotPanelOpen(v => !v)}
+          style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid var(--border)",
+            background: snapshotPanelOpen ? "var(--bg-4)" : "transparent",
+            color: "var(--text-3)", cursor: "pointer", transition: "all 0.15s" }}>
+          設定快照歷史 {snapshots.length > 0 ? `(${snapshots.length})` : ""} {snapshotPanelOpen ? "▲" : "▼"}
+        </button>
+      </div>
+
+      {/* ── Snapshot history panel ── */}
+      {snapshotPanelOpen && (
+        <div style={{ borderTop: "1px solid var(--border)", background: "var(--bg-1)",
+          padding: "12px 20px", flexShrink: 0, maxHeight: 280, overflowY: "auto" }}>
+          {snapshots.length === 0 ? (
+            <div style={{ color: "var(--text-3)", fontSize: 12, textAlign: "center", padding: "16px 0" }}>
+              尚無儲存的快照
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {snapshots.map(snap => (
+                <div key={snap.id} style={{ display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 12px", borderRadius: 6, background: "var(--bg-2)", border: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", flex: 1, minWidth: 0,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {snap.name}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0 }}>
+                    {new Date(snap.createdAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                  <button onClick={() => restoreMut.mutate(snap.id)} disabled={restoreMut.isPending}
+                    style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "1px solid var(--border)",
+                      background: "var(--accent-dim)", color: "var(--accent)", cursor: "pointer", flexShrink: 0 }}>
+                    還原
+                  </button>
+                  <button onClick={() => deleteMut.mutate(snap.id)} disabled={deleteMut.isPending}
+                    style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)",
+                      background: "transparent", color: "var(--text-3)", cursor: "pointer", flexShrink: 0 }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--error,#f87171)"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}>
+                    刪除
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

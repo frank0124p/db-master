@@ -1301,6 +1301,7 @@ function SchemaSettingsModal({ schema, suites, onClose, onDeleted }: {
     suiteId: schema.suiteId != null ? String(schema.suiteId) : "",
     layerType: schema.layerType ?? "",
     environment: schema.environment ?? "",
+    targetDb: schema.targetDb ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -1317,6 +1318,7 @@ function SchemaSettingsModal({ schema, suites, onClose, onDeleted }: {
         suiteId: form.suiteId ? Number(form.suiteId) : null,
         layerType: (form.layerType as import("../api.js").SchemaLayer) || null,
         environment: (form.environment as SchemaEnvironment) || null,
+        targetDb: (form.targetDb as "mariadb" | "oracle" | "clickhouse") || null,
       });
       await qc.invalidateQueries({ queryKey: ["schema", schema.id] });
       await qc.invalidateQueries({ queryKey: ["schemas"] });
@@ -1364,6 +1366,14 @@ function SchemaSettingsModal({ schema, suites, onClose, onDeleted }: {
             <select key="e" className="form-input" value={form.environment} onChange={e => setForm({ ...form, environment: e.target.value })}>
               <option value="">（未指定）</option>
               {ALL_ENVS.map(e => <option key={e} value={e} style={{ color: ENV_COLORS[e] }}>{e}</option>)}
+            </select>
+          )],
+          ["Target DB", (
+            <select key="tdb" className="form-input" value={form.targetDb} onChange={e => setForm({ ...form, targetDb: e.target.value })}>
+              <option value="">（未指定）</option>
+              <option value="mariadb">MariaDB</option>
+              <option value="oracle">Oracle</option>
+              <option value="clickhouse">ClickHouse</option>
             </select>
           )],
         ] as [string, React.ReactNode][]).map(([label, ctrl]) => (
