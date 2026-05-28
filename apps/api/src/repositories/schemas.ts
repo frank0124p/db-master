@@ -17,13 +17,13 @@ export interface TableFile {
 
 interface SchemaMeta {
   id: number; name: string; description: string | null; domain: string;
-  suiteId: number | null;
+  suiteId: number | null; layerType: string | null;
   createdAt: string; updatedAt: string;
 }
 
 export interface SchemaWithTables {
   id: number; name: string; description: string | null; domain: string;
-  suiteId: number | null;
+  suiteId: number | null; layerType: string | null;
   createdAt: Date; updatedAt: Date;
   tables: {
     id: number; name: string; comment: string | null;
@@ -115,7 +115,7 @@ export async function listSchemas() {
     if (!meta) continue;
     schemas.push({
       id: meta.id, name: meta.name, description: meta.description, domain: meta.domain,
-      suiteId: meta.suiteId ?? null,
+      suiteId: meta.suiteId ?? null, layerType: meta.layerType ?? null,
       createdAt: new Date(meta.createdAt), updatedAt: new Date(meta.updatedAt),
     });
   }
@@ -139,19 +139,20 @@ export async function getSchemaById(id: number): Promise<SchemaWithTables> {
   const tables = await loadTables(id);
   return {
     id: meta.id, name: meta.name, description: meta.description, domain: meta.domain,
-    suiteId: meta.suiteId ?? null,
+    suiteId: meta.suiteId ?? null, layerType: meta.layerType ?? null,
     createdAt: new Date(meta.createdAt), updatedAt: new Date(meta.updatedAt),
     tables,
   };
 }
 
-export async function createSchema(input: { name: string; description?: string | null; domain?: string; suiteId?: number | null }) {
+export async function createSchema(input: { name: string; description?: string | null; domain?: string; suiteId?: number | null; layerType?: string | null }) {
   const id = await store.nextId("schemas");
   const slug = await uniqueSlug(toSlug(input.name));
   const now = new Date().toISOString();
   const meta: SchemaMeta = {
     id, name: input.name, description: input.description ?? null,
     domain: input.domain ?? "semiconductor", suiteId: input.suiteId ?? null,
+    layerType: input.layerType ?? null,
     createdAt: now, updatedAt: now,
   };
   await store.writeJson(metaFile(slug), meta);
@@ -159,7 +160,7 @@ export async function createSchema(input: { name: string; description?: string |
   return getSchemaById(id);
 }
 
-export async function updateSchema(id: number, input: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null }>) {
+export async function updateSchema(id: number, input: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: string | null }>) {
   const slug = await getSchemaSlug(id);
   const meta = await store.readJson<SchemaMeta>(metaFile(slug));
   if (!meta) throw new NotFoundError("Schema", id);
@@ -167,6 +168,7 @@ export async function updateSchema(id: number, input: Partial<{ name: string; de
   if (input.description !== undefined) meta.description = input.description;
   if (input.domain !== undefined) meta.domain = input.domain;
   if ("suiteId" in input) meta.suiteId = input.suiteId ?? null;
+  if ("layerType" in input) meta.layerType = input.layerType ?? null;
   meta.updatedAt = new Date().toISOString();
   await store.writeJson(metaFile(slug), meta);
   return getSchemaById(id);

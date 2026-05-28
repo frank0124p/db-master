@@ -2,7 +2,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore, type Page, type Theme } from "./store.js";
 import { useT } from "./i18n.js";
-import { api, type ProductSuite } from "./api.js";
+import { api, type ProductSuite, type SchemaLayer } from "./api.js";
 import { useBreakpoint } from "./hooks/useBreakpoint.js";
 import SchemaEditorPage from "./pages/SchemaEditorPage.js";
 import NamingDictPage from "./pages/NamingDictPage.js";
@@ -192,8 +192,17 @@ function NlGenerateModal({ onClose }: { onClose: () => void }) {
 
 const SUITE_COLORS = ["#7b8cff", "#4ade80", "#fbbf24", "#f87171", "#60a5fa", "#c084fc", "#fb923c"];
 
+const LAYER_LABELS: Record<SchemaLayer, string> = {
+  transaction: "交易層 Transaction",
+  wide_table:  "寬表層 Wide Table",
+  unified:     "統一層 Unified",
+};
+const LAYER_ORDER: (SchemaLayer | null)[] = ["transaction", "wide_table", "unified", null];
+
 // ── Schema list (shared between Sidebar and mobile drawer) ────────────────────
-function SchemaItem({ name, active, suiteColor, onClick }: { name: string; active: boolean; suiteColor?: string | null; onClick: () => void }) {
+const LAYER_BADGE: Record<SchemaLayer, string> = { transaction: "TX", wide_table: "WT", unified: "UL" };
+
+function SchemaItem({ name, active, suiteColor, layerType, onClick }: { name: string; active: boolean; suiteColor?: string | null; layerType?: SchemaLayer | null; onClick: () => void }) {
   const [hover, setHover] = useState(false);
   return (
     <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
@@ -202,6 +211,11 @@ function SchemaItem({ name, active, suiteColor, onClick }: { name: string; activ
         background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent" }}>
       <div style={{ width: 6, height: 6, borderRadius: "50%", background: suiteColor ?? (active ? "var(--accent)" : "var(--text-3)"), flexShrink: 0 }} />
       <div style={{ fontSize: 12, color: active ? "var(--accent)" : "var(--text-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+      {layerType && (
+        <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", background: "var(--bg-4)", borderRadius: 3, padding: "1px 4px", flexShrink: 0, letterSpacing: "0.3px" }}>
+          {LAYER_BADGE[layerType]}
+        </span>
+      )}
     </div>
   );
 }
@@ -328,7 +342,7 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
   const [showNl, setShowNl] = useState(false);
   const [showSuiteModal, setShowSuiteModal] = useState(false);
   const [reloading, setReloading] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", domain: "semiconductor", suiteId: "" });
+  const [form, setForm] = useState({ name: "", description: "", domain: "semiconductor", suiteId: "", layerType: "" });
   const t = useT();
 
   async function reloadDdl() {
@@ -342,16 +356,18 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
   async function create() {
     if (!form.name.trim()) return;
     const suiteId = form.suiteId ? Number(form.suiteId) : (activeSuiteId ?? undefined);
+    const layerType = form.layerType ? (form.layerType as SchemaLayer) : null;
     const s = await api.schemas.create({
       name: form.name,
       ...(form.description ? { description: form.description } : {}),
       domain: form.domain,
       ...(suiteId != null ? { suiteId } : {}),
+      ...(layerType ? { layerType } : {}),
     });
     await qc.invalidateQueries({ queryKey: ["schemas"] });
     setSelectedSchemaId(s.id);
     setShowModal(false);
-    setForm({ name: "", description: "", domain: "semiconductor", suiteId: "" });
+    setForm({ name: "", description: "", domain: "semiconductor", suiteId: "", layerType: "" });
     showToast(t("toast.schema_created"));
   }
 
@@ -359,6 +375,14 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
   const filteredSchemas = activeSuiteId === null
     ? (schemas ?? [])
     : (schemas ?? []).filter(s => s.suiteId === activeSuiteId);
+
+  const groupedByLayer = activeSuiteId !== null
+    ? LAYER_ORDER.map(layer => ({
+        layer,
+        label: layer ? LAYER_LABELS[layer] : "未分類",
+        items: filteredSchemas.filter(s => s.layerType === layer),
+      })).filter(g => g.items.length > 0)
+    : null;
 
   return (
     <>
@@ -399,11 +423,26 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
       )}
 
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
-        {filteredSchemas.map((s) => (
-          <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
-            suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
-            onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
-        ))}
+        {groupedByLayer ? (
+          groupedByLayer.map(g => (
+            <div key={g.layer ?? "__none__"}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.6px", padding: "8px 4px 3px" }}>{g.label}</div>
+              {g.items.map(s => (
+                <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
+                  suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
+                  layerType={s.layerType}
+                  onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
+              ))}
+            </div>
+          ))
+        ) : (
+          filteredSchemas.map(s => (
+            <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
+              suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
+              layerType={s.layerType}
+              onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
+          ))
+        )}
       </div>
 
       {showNl && <NlGenerateModal onClose={() => setShowNl(false)} />}
@@ -441,6 +480,14 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
                 </select>
               </FormRow>
             )}
+            <FormRow label="Schema 用途層">
+              <select className="form-input" value={form.layerType} onChange={e => setForm({ ...form, layerType: e.target.value })}>
+                <option value="">（未分類）</option>
+                <option value="transaction">交易層 Transaction</option>
+                <option value="wide_table">寬表層 Wide Table</option>
+                <option value="unified">統一層 Unified</option>
+              </select>
+            </FormRow>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
               <button className="btn btn-ghost" onClick={() => setShowModal(false)}>{t("btn.cancel")}</button>
               <button className="btn btn-primary" onClick={() => void create()}>{t("btn.create")}</button>

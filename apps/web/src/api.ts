@@ -3,9 +3,11 @@ export interface ProductSuite {
   color: string | null; createdAt: string; updatedAt: string;
 }
 
+export type SchemaLayer = "transaction" | "wide_table" | "unified";
+
 export interface Schema {
   id: number; name: string; description: string | null; domain: string;
-  suiteId: number | null;
+  suiteId: number | null; layerType: SchemaLayer | null;
   createdAt: string; updatedAt: string;
 }
 export interface Field {
@@ -205,9 +207,9 @@ const realApi = {
   schemas: {
     list: () => req<Schema[]>("/schemas"),
     get: (id: number) => req<SchemaDetail>(`/schemas/${id}`),
-    create: (b: { name: string; description?: string; domain?: string }) =>
+    create: (b: { name: string; description?: string; domain?: string; suiteId?: number | null; layerType?: SchemaLayer | null }) =>
       req<SchemaDetail>("/schemas", { method: "POST", body: JSON.stringify(b) }),
-    update: (id: number, b: Partial<{ name: string; description: string; domain: string; suiteId: number | null }>) =>
+    update: (id: number, b: Partial<{ name: string; description: string; domain: string; suiteId: number | null; layerType: SchemaLayer | null }>) =>
       req<SchemaDetail>(`/schemas/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/schemas/${id}`, { method: "DELETE" }),
     namingCheck: (id: number) => req<TableNamingCheck[]>(`/schemas/${id}/naming-check`, { method: "POST" }),

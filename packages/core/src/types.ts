@@ -83,12 +83,17 @@ export interface NamingEntry {
   updatedAt: string;
 }
 
+// ── SchemaLayer ──
+export const SCHEMA_LAYERS = ["transaction", "wide_table", "unified"] as const;
+export type SchemaLayer = typeof SCHEMA_LAYERS[number];
+
 // ── API Input types ──
 export const CreateSchemaInput = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
   domain: z.string().default("semiconductor"),
   suiteId: z.number().int().nullable().optional(),
+  layerType: z.enum(SCHEMA_LAYERS).nullable().optional(),
 });
 export type CreateSchemaInput = z.infer<typeof CreateSchemaInput>;
 

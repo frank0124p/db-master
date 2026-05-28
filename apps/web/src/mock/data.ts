@@ -114,7 +114,7 @@ const plmTables: Table[] = [
 export const plmSchema: SchemaDetail = {
   id: 1, name: "PLM Core",
   description: "產品生命週期管理核心 — 零件、BOM、ECO 與供應商管理",
-  domain: "semiconductor", suiteId: null,
+  domain: "semiconductor", suiteId: null, layerType: null,
   createdAt: ts(30), updatedAt: ts(1),
   tables: plmTables,
 };
@@ -176,7 +176,7 @@ const mesTables: Table[] = [
 export const mesSchema: SchemaDetail = {
   id: 2, name: "MES Process",
   description: "製造執行系統 — 批次、晶圓、製程操作與設備管理",
-  domain: "semiconductor", suiteId: null,
+  domain: "semiconductor", suiteId: null, layerType: null,
   createdAt: ts(20), updatedAt: ts(2),
   tables: mesTables,
 };
@@ -184,8 +184,8 @@ export const mesSchema: SchemaDetail = {
 // ── Schema list ───────────────────────────────────────────────────────────────
 
 export const mockSchemas: Schema[] = [
-  { id: 1, name: "PLM Core",    description: plmSchema.description, domain: "semiconductor", suiteId: null, createdAt: ts(30), updatedAt: ts(1) },
-  { id: 2, name: "MES Process", description: mesSchema.description, domain: "semiconductor", suiteId: null, createdAt: ts(20), updatedAt: ts(2) },
+  { id: 1, name: "PLM Core",    description: plmSchema.description, domain: "semiconductor", suiteId: null, layerType: null, createdAt: ts(30), updatedAt: ts(1) },
+  { id: 2, name: "MES Process", description: mesSchema.description, domain: "semiconductor", suiteId: null, layerType: null, createdAt: ts(20), updatedAt: ts(2) },
 ];
 
 // ── Wide Tables (for PLM Core) ────────────────────────────────────────────────
