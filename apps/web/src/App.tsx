@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, type ReactNode } from "react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore, type Page, type Theme } from "./store.js";
 import { useT } from "./i18n.js";
-import { api } from "./api.js";
+import { api, type ProductSuite } from "./api.js";
+import { useBreakpoint } from "./hooks/useBreakpoint.js";
 import SchemaEditorPage from "./pages/SchemaEditorPage.js";
 import NamingDictPage from "./pages/NamingDictPage.js";
 import VersionHistoryPage from "./pages/VersionHistoryPage.js";
@@ -13,16 +14,18 @@ import RulesPage from "./pages/RulesPage.js";
 import DataHubPage from "./pages/DataHubPage.js";
 import SettingsPanel from "./pages/SettingsPanel.js";
 
-const NAV_KEYS: { id: Page; key: string }[] = [
-  { id: "editor",   key: "nav.editor" },
-  { id: "dict",     key: "nav.dict" },
-  { id: "versions", key: "nav.versions" },
-  { id: "analysis", key: "nav.analysis" },
-  { id: "er",       key: "nav.er" },
-  { id: "wide",     key: "nav.wide" },
-  { id: "rules",    key: "nav.rules" },
-  { id: "datahub",  key: "nav.datahub" },
+const NAV_KEYS: { id: Page; key: string; icon: string }[] = [
+  { id: "editor",   key: "nav.editor",   icon: "⬡" },
+  { id: "dict",     key: "nav.dict",     icon: "⌨" },
+  { id: "versions", key: "nav.versions", icon: "⊛" },
+  { id: "analysis", key: "nav.analysis", icon: "◎" },
+  { id: "er",       key: "nav.er",       icon: "⊡" },
+  { id: "wide",     key: "nav.wide",     icon: "⊞" },
+  { id: "rules",    key: "nav.rules",    icon: "◈" },
+  { id: "datahub",  key: "nav.datahub",  icon: "⬆" },
 ];
+
+// ── shared helpers ────────────────────────────────────────────────────────────
 
 function FormRow({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -33,7 +36,74 @@ function FormRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-// ── NL Generate Modal ──────────────────────────────────────────────────────────
+const iconBtnStyle = {
+  width: 30, height: 30, borderRadius: 6, border: "1px solid var(--border-light)",
+  background: "var(--bg-3)", color: "var(--text-2)", cursor: "pointer",
+  display: "flex", alignItems: "center", justifyContent: "center",
+  fontSize: 13, transition: "all 0.15s", flexShrink: 0,
+} as const;
+
+function ThemeToggle() {
+  const { theme, setTheme } = useStore();
+  const isDark = theme === "dark";
+  return (
+    <button onClick={() => setTheme(isDark ? "light" : "dark")}
+      title={isDark ? "Light mode" : "Dark mode"}
+      style={iconBtnStyle}
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-4)"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-3)"; }}>
+      {isDark ? "☀" : "☾"}
+    </button>
+  );
+}
+
+function LangToggle() {
+  const { locale, setLocale } = useStore();
+  return (
+    <button onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
+      title={locale === "zh" ? "Switch to English" : "切換為中文"}
+      style={{ ...iconBtnStyle, fontSize: 11, fontWeight: 700, letterSpacing: "0.3px" }}
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-4)"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-3)"; }}>
+      {locale === "zh" ? "EN" : "中"}
+    </button>
+  );
+}
+
+function Toast() {
+  const { toastMsg } = useStore();
+  return (
+    <div style={{
+      position: "fixed", bottom: 20, right: 20,
+      background: "var(--bg-4)", border: "1px solid var(--border-light)",
+      borderLeft: "3px solid var(--success)", borderRadius: 8,
+      padding: "10px 16px", fontSize: 13, display: "flex", alignItems: "center", gap: 8,
+      boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+      transform: toastMsg ? "translateY(0)" : "translateY(60px)",
+      opacity: toastMsg ? 1 : 0, transition: "all 0.25s", zIndex: 999,
+    }}>
+      {toastMsg}
+    </div>
+  );
+}
+
+function NavBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ padding: "5px 12px", borderRadius: "var(--radius)", border: "none",
+        background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent",
+        color: active ? "var(--accent)" : hover ? "var(--text-1)" : "var(--text-2)",
+        cursor: "pointer", fontSize: 12, transition: "all 0.15s", fontFamily: "inherit",
+        whiteSpace: "nowrap" }}>
+      {children}
+    </button>
+  );
+}
+
+// ── NL Generate Modal ─────────────────────────────────────────────────────────
 function NlGenerateModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { setSelectedSchemaId, showToast } = useStore();
@@ -46,16 +116,12 @@ function NlGenerateModal({ onClose }: { onClose: () => void }) {
 
   async function generate() {
     if (!prompt.trim() || streaming) return;
-    setStreaming(true);
-    setTokens("");
-    setStatus("正在生成 Schema...");
-
+    setStreaming(true); setTokens(""); setStatus("正在生成 Schema...");
     try {
       const res = await api.llm.generate(prompt, domain);
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buf = "";
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -78,31 +144,26 @@ function NlGenerateModal({ onClose }: { onClose: () => void }) {
           }
         }
       }
-    } catch (e) {
-      setStatus(`錯誤：${e instanceof Error ? e.message : "連線失敗"}`);
-    } finally {
-      setStreaming(false);
-    }
+    } catch (e) { setStatus(`錯誤：${e instanceof Error ? e.message : "連線失敗"}`); }
+    finally { setStreaming(false); }
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
       <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 12, width: "min(720px, 92vw)", padding: 24, boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>✦ AI 自然語言生成 Schema</div>
         <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>描述你需要的資料庫結構，AI 將自動套用命名字典並生成符合規範的 Schema</div>
-
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>描述需求</div>
-          <textarea
-            value={prompt}
-            onChange={e => setPrompt(e.target.value)}
-            placeholder={"例如：建立一個設備保養記錄系統，需要記錄設備 ID、保養類型、執行人員、保養日期、下次保養日期，以及保養結果描述"}
+          <textarea value={prompt} onChange={e => setPrompt(e.target.value)}
+            placeholder="例如：建立一個設備保養記錄系統..."
             disabled={streaming}
-            style={{ width: "100%", height: 100, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-1)", fontSize: 13, lineHeight: 1.6, resize: "none", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
-          />
+            style={{ width: "100%", height: 100, padding: "10px 12px", borderRadius: 8,
+              border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-1)",
+              fontSize: 13, lineHeight: 1.6, resize: "none", outline: "none",
+              fontFamily: "inherit", boxSizing: "border-box" }} />
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
           <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>領域</div>
           <select value={domain} onChange={e => setDomain(e.target.value)} disabled={streaming}
             style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-1)" }}>
@@ -116,10 +177,8 @@ function NlGenerateModal({ onClose }: { onClose: () => void }) {
             {streaming ? t("btn.generating") : t("btn.ai_generate")}
           </button>
         </div>
-
         {tokens && (
           <div style={{ background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, maxHeight: 240, overflowY: "auto" }}>
-            <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("misc.ai_output")}</div>
             <pre style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-2)", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
               {tokens}
               {streaming && <span style={{ display: "inline-block", width: 2, height: 12, background: "var(--accent)", marginLeft: 2, animation: "blink 1s infinite", verticalAlign: "text-bottom" }} />}
@@ -131,66 +190,237 @@ function NlGenerateModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Sidebar ─────────────────────────────────────────────────────────────────────
-function Sidebar() {
+const SUITE_COLORS = ["#7b8cff", "#4ade80", "#fbbf24", "#f87171", "#60a5fa", "#c084fc", "#fb923c"];
+
+// ── Schema list (shared between Sidebar and mobile drawer) ────────────────────
+function SchemaItem({ name, active, suiteColor, onClick }: { name: string; active: boolean; suiteColor?: string | null; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{ padding: "7px 8px", borderRadius: "var(--radius)", cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 8, marginBottom: 1,
+        background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent" }}>
+      <div style={{ width: 6, height: 6, borderRadius: "50%", background: suiteColor ?? (active ? "var(--accent)" : "var(--text-3)"), flexShrink: 0 }} />
+      <div style={{ fontSize: 12, color: active ? "var(--accent)" : "var(--text-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+    </div>
+  );
+}
+
+// ── Suite Management Modal ────────────────────────────────────────────────────
+function SuiteManageModal({ suites, schemas, activeSuiteId, onClose }: {
+  suites: ProductSuite[];
+  schemas: import("./api.js").Schema[];
+  activeSuiteId: number | null;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
-  const { selectedSchemaId, setSelectedSchemaId, showToast } = useStore();
+  const { showToast, setActiveSuiteId } = useStore();
+  const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState(SUITE_COLORS[0]!);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editColor, setEditColor] = useState("");
+
+  const createMut = useMutation({
+    mutationFn: () => api.suites.create({ name: newName.trim(), color: newColor }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["suites"] });
+      setNewName(""); showToast("Suite 已建立");
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => api.suites.delete(id),
+    onSuccess: async (_data, id) => {
+      await qc.invalidateQueries({ queryKey: ["suites"] });
+      if (activeSuiteId === id) setActiveSuiteId(null);
+      showToast("Suite 已刪除");
+    },
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, name, color }: { id: number; name: string; color: string }) =>
+      api.suites.update(id, { name, color }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["suites"] });
+      setEditId(null); showToast("Suite 已更新");
+    },
+  });
+
+  function startEdit(s: ProductSuite) {
+    setEditId(s.id); setEditName(s.name); setEditColor(s.color ?? SUITE_COLORS[0]!);
+  }
+
+  function schemaCountFor(suiteId: number) {
+    return schemas.filter(sc => sc.suiteId === suiteId).length;
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 700, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: "min(480px, 92vw)", padding: 20, boxShadow: "0 8px 32px rgba(0,0,0,0.5)", maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>管理 Product Suite</div>
+
+        <div style={{ flex: 1, overflowY: "auto", marginBottom: 16 }}>
+          {suites.length === 0 && (
+            <div style={{ fontSize: 12, color: "var(--text-3)", padding: "12px 0" }}>尚無 Suite，在下方建立第一個</div>
+          )}
+          {suites.map(s => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border)", marginBottom: 6, background: "var(--bg-3)" }}>
+              {editId === s.id ? (
+                <>
+                  <input value={editName} onChange={e => setEditName(e.target.value)}
+                    style={{ flex: 1, background: "var(--bg-4)", border: "1px solid var(--border)", color: "var(--text-1)", padding: "4px 8px", borderRadius: 4, fontSize: 13, outline: "none" }} />
+                  <div style={{ display: "flex", gap: 3 }}>
+                    {SUITE_COLORS.map(c => (
+                      <div key={c} onClick={() => setEditColor(c)}
+                        style={{ width: 14, height: 14, borderRadius: "50%", background: c, cursor: "pointer", border: editColor === c ? "2px solid var(--text-1)" : "2px solid transparent" }} />
+                    ))}
+                  </div>
+                  <button className="btn btn-primary" style={{ fontSize: 11, padding: "3px 8px" }}
+                    onClick={() => updateMut.mutate({ id: s.id, name: editName.trim() || s.name, color: editColor })}>
+                    儲存
+                  </button>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setEditId(null)}>取消</button>
+                </>
+              ) : (
+                <>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: s.color ?? "var(--text-3)", flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0 }}>{schemaCountFor(s.id)} 個 Schema</span>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => startEdit(s)}>編輯</button>
+                  <button className="btn btn-danger" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => deleteMut.mutate(s.id)}>刪除</button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+          <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.5px" }}>新增 Suite</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input className="form-input" placeholder="Suite 名稱" value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && newName.trim() && createMut.mutate()}
+              style={{ flex: 1 }} />
+            <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+              {SUITE_COLORS.map(c => (
+                <div key={c} onClick={() => setNewColor(c)}
+                  style={{ width: 16, height: 16, borderRadius: "50%", background: c, cursor: "pointer", border: newColor === c ? "2px solid var(--text-1)" : "2px solid transparent" }} />
+              ))}
+            </div>
+            <button className="btn btn-primary" style={{ fontSize: 11 }} disabled={!newName.trim() || createMut.isPending} onClick={() => createMut.mutate()}>建立</button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+          <button className="btn btn-ghost" onClick={onClose}>關閉</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
+  const qc = useQueryClient();
+  const { selectedSchemaId, setSelectedSchemaId, showToast, activeSuiteId, setActiveSuiteId } = useStore();
   const { data: schemas } = useQuery({ queryKey: ["schemas"], queryFn: api.schemas.list });
+  const { data: suites } = useQuery({ queryKey: ["suites"], queryFn: api.suites.list });
   const [showModal, setShowModal] = useState(false);
   const [showNl, setShowNl] = useState(false);
+  const [showSuiteModal, setShowSuiteModal] = useState(false);
   const [reloading, setReloading] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", domain: "semiconductor" });
+  const [form, setForm] = useState({ name: "", description: "", domain: "semiconductor", suiteId: "" });
   const t = useT();
 
   async function reloadDdl() {
     if (reloading) return;
     setReloading(true);
-    try {
-      await api.reload();
-      await qc.invalidateQueries({ queryKey: ["schemas"] });
-      showToast(t("toast.reloaded"));
-    } catch {
-      showToast(t("toast.reload_failed"));
-    } finally {
-      setReloading(false);
-    }
+    try { await api.reload(); await qc.invalidateQueries({ queryKey: ["schemas"] }); showToast(t("toast.reloaded")); }
+    catch { showToast(t("toast.reload_failed")); }
+    finally { setReloading(false); }
   }
 
   async function create() {
     if (!form.name.trim()) return;
-    const s = await api.schemas.create({ name: form.name, ...(form.description ? { description: form.description } : {}), domain: form.domain });
+    const suiteId = form.suiteId ? Number(form.suiteId) : (activeSuiteId ?? undefined);
+    const s = await api.schemas.create({
+      name: form.name,
+      ...(form.description ? { description: form.description } : {}),
+      domain: form.domain,
+      ...(suiteId != null ? { suiteId } : {}),
+    });
     await qc.invalidateQueries({ queryKey: ["schemas"] });
     setSelectedSchemaId(s.id);
     setShowModal(false);
-    setForm({ name: "", description: "", domain: "semiconductor" });
+    setForm({ name: "", description: "", domain: "semiconductor", suiteId: "" });
     showToast(t("toast.schema_created"));
   }
 
+  const suiteMap = new Map((suites ?? []).map(s => [s.id, s]));
+  const filteredSchemas = activeSuiteId === null
+    ? (schemas ?? [])
+    : (schemas ?? []).filter(s => s.suiteId === activeSuiteId);
+
   return (
     <>
-      <div style={{ width: 220, background: "var(--bg-2)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-        <div style={{ padding: "12px 14px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.8px" }}>{t("sidebar.schemas")}</span>
-          <div style={{ display: "flex", gap: 4 }}>
-            <button onClick={() => setShowNl(true)} title={t("sidebar.ai_gen")} style={{ padding: "2px 7px", borderRadius: 4, border: "1px solid var(--accent)", background: "var(--accent-dim)", color: "var(--accent)", cursor: "pointer", fontSize: 10, fontWeight: 700, letterSpacing: "0.3px" }}>✦ AI</button>
-            <button onClick={() => void reloadDdl()} title={t("sidebar.reload")} disabled={reloading} style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, opacity: reloading ? 0.5 : 1 }}>↺</button>
-            <button onClick={() => setShowModal(true)} title={t("sidebar.new_schema")} style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>＋</button>
-          </div>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
-          {schemas?.map((s) => (
-            <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id} onClick={() => setSelectedSchemaId(s.id)} />
-          ))}
+      <div style={{ padding: "12px 14px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.8px" }}>{t("sidebar.schemas")}</span>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => setShowSuiteModal(true)} title="管理 Suite"
+            style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>⊛</button>
+          <button onClick={() => setShowNl(true)} title={t("sidebar.ai_gen")}
+            style={{ padding: "2px 7px", borderRadius: 4, border: "1px solid var(--accent)", background: "var(--accent-dim)", color: "var(--accent)", cursor: "pointer", fontSize: 10, fontWeight: 700, letterSpacing: "0.3px" }}>✦ AI</button>
+          <button onClick={() => void reloadDdl()} disabled={reloading}
+            style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, opacity: reloading ? 0.5 : 1 }}>↺</button>
+          <button onClick={() => setShowModal(true)}
+            style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>＋</button>
         </div>
       </div>
 
+      {suites && suites.length > 0 && (
+        <div style={{ padding: "4px 8px 4px", display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0 }}>
+          <button onClick={() => setActiveSuiteId(null)}
+            style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: "1px solid var(--border)", cursor: "pointer", fontWeight: activeSuiteId === null ? 700 : 400,
+              background: activeSuiteId === null ? "var(--accent-dim)" : "transparent",
+              color: activeSuiteId === null ? "var(--accent)" : "var(--text-3)" }}>
+            全部
+          </button>
+          {suites.map(s => (
+            <button key={s.id} onClick={() => setActiveSuiteId(s.id)}
+              style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: `1px solid ${activeSuiteId === s.id ? (s.color ?? "var(--accent)") : "var(--border)"}`, cursor: "pointer",
+                background: activeSuiteId === s.id ? `${s.color ?? "var(--accent)"}22` : "transparent",
+                color: activeSuiteId === s.id ? (s.color ?? "var(--accent)") : "var(--text-3)",
+                fontWeight: activeSuiteId === s.id ? 700 : 400,
+                display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color ?? "var(--text-3)", display: "inline-block", flexShrink: 0 }} />
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
+        {filteredSchemas.map((s) => (
+          <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
+            suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
+            onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
+        ))}
+      </div>
+
       {showNl && <NlGenerateModal onClose={() => setShowNl(false)} />}
+      {showSuiteModal && (
+        <SuiteManageModal
+          suites={suites ?? []}
+          schemas={schemas ?? []}
+          activeSuiteId={activeSuiteId}
+          onClose={() => setShowSuiteModal(false)}
+        />
+      )}
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowModal(false)}>
-          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: 400, padding: 20, boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowModal(false)}>
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: "min(400px, 92vw)", padding: 20, boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>{t("schemas.modal_new_schema")}</div>
             <FormRow label={t("form.schema_name")}>
-              <input className="form-input" placeholder={t("form.schema_name_ph")} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} onKeyDown={e => e.key === "Enter" && create()} />
+              <input className="form-input" placeholder={t("form.schema_name_ph")} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} onKeyDown={e => e.key === "Enter" && void create()} />
             </FormRow>
             <FormRow label={t("form.description")}>
               <input className="form-input" placeholder={t("form.description_ph")} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
@@ -201,9 +431,19 @@ function Sidebar() {
                 <option value="general">{t("form.general")}</option>
               </select>
             </FormRow>
+            {suites && suites.length > 0 && (
+              <FormRow label="Product Suite">
+                <select className="form-input" value={form.suiteId} onChange={e => setForm({ ...form, suiteId: e.target.value })}>
+                  <option value="">（無 Suite）</option>
+                  {suites.map(s => (
+                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                  ))}
+                </select>
+              </FormRow>
+            )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
               <button className="btn btn-ghost" onClick={() => setShowModal(false)}>{t("btn.cancel")}</button>
-              <button className="btn btn-primary" onClick={create}>{t("btn.create")}</button>
+              <button className="btn btn-primary" onClick={() => void create()}>{t("btn.create")}</button>
             </div>
           </div>
         </div>
@@ -212,114 +452,164 @@ function Sidebar() {
   );
 }
 
-function SchemaItem({ name, active, onClick }: { name: string; active: boolean; onClick: () => void }) {
-  const [hover, setHover] = useState(false);
+// Desktop/Tablet sidebar shell
+function Sidebar() {
   return (
-    <div onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{ padding: "7px 8px", borderRadius: "var(--radius)", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, marginBottom: 1, background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent" }}
-    >
-      <div style={{ width: 6, height: 6, borderRadius: "50%", background: active ? "var(--accent)" : "var(--text-3)", flexShrink: 0 }} />
-      <div style={{ fontSize: 12, color: active ? "var(--accent)" : "var(--text-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+    <div style={{ width: 220, background: "var(--bg-2)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, overflow: "hidden" }}>
+      <SidebarContent />
     </div>
   );
 }
 
-function Toast() {
-  const { toastMsg } = useStore();
+// ── Mobile drawer (nav + schema list) ─────────────────────────────────────────
+function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { page, setPage } = useStore();
+  const t = useT();
+
+  function navigate(id: Page) { setPage(id); onClose(); }
+
+  // Lock body scroll when open
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
   return (
-    <div style={{
-      position: "fixed", bottom: 20, right: 20,
-      background: "var(--bg-4)", border: "1px solid var(--border-light)",
-      borderLeft: "3px solid var(--success)", borderRadius: 8,
-      padding: "10px 16px", fontSize: 13, display: "flex", alignItems: "center", gap: 8,
-      boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-      transform: toastMsg ? "translateY(0)" : "translateY(60px)",
-      opacity: toastMsg ? 1 : 0, transition: "all 0.25s", zIndex: 999,
-    }}>
-      {toastMsg}
-    </div>
+    <>
+      <div className={`drawer-backdrop${open ? " open" : ""}`} onClick={onClose} />
+      <div className={`mobile-drawer${open ? " open" : ""}`}>
+        {/* Drawer header */}
+        <div style={{ padding: "0 16px", height: 48, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: "var(--accent)", letterSpacing: "0.5px" }}>⬡ Schema Studio</span>
+          <button onClick={onClose}
+            style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            ✕
+          </button>
+        </div>
+
+        {/* Page navigation */}
+        <div style={{ padding: "8px 8px 4px", flexShrink: 0 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.8px", padding: "6px 8px 4px" }}>頁面</div>
+          {NAV_KEYS.map(n => (
+            <button key={n.id} onClick={() => navigate(n.id)}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
+                padding: "9px 10px", borderRadius: "var(--radius)", border: "none",
+                background: page === n.id ? "var(--accent-dim)" : "transparent",
+                color: page === n.id ? "var(--accent)" : "var(--text-2)",
+                cursor: "pointer", fontSize: 13, fontFamily: "inherit", textAlign: "left",
+                marginBottom: 2, transition: "all 0.12s" }}>
+              <span style={{ fontSize: 14, width: 20, textAlign: "center", flexShrink: 0 }}>{n.icon}</span>
+              {t(n.key)}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ height: 1, background: "var(--border)", margin: "4px 16px", flexShrink: 0 }} />
+
+        {/* Schema list */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <SidebarContent onSchemaSelect={onClose} />
+        </div>
+      </div>
+    </>
   );
 }
 
-const iconBtnStyle = {
-  width: 30, height: 30, borderRadius: 6, border: "1px solid var(--border-light)",
-  background: "var(--bg-3)", color: "var(--text-2)", cursor: "pointer",
-  display: "flex", alignItems: "center", justifyContent: "center",
-  fontSize: 13, transition: "all 0.15s", flexShrink: 0,
-} as const;
-
-function ThemeToggle() {
-  const { theme, setTheme } = useStore();
-  const isDark = theme === "dark";
-  return (
-    <button onClick={() => setTheme(isDark ? "light" : "dark")}
-      title={isDark ? "Light mode" : "Dark mode"}
-      style={iconBtnStyle}
-      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-4)"; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-3)"; }}
-    >
-      {isDark ? "☀" : "☾"}
-    </button>
-  );
-}
-
-function LangToggle() {
-  const { locale, setLocale } = useStore();
-  return (
-    <button onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
-      title={locale === "zh" ? "Switch to English" : "切換為中文"}
-      style={{ ...iconBtnStyle, fontSize: 11, fontWeight: 700, letterSpacing: "0.3px" }}
-      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-4)"; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-3)"; }}
-    >
-      {locale === "zh" ? "EN" : "中"}
-    </button>
-  );
-}
-
+// ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const { page, setPage } = useStore();
   const t = useT();
+  const { isMobile, isTablet, isDesktop } = useBreakpoint();
   const [showSettings, setShowSettings] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Close mobile menu when resizing to desktop
+  useEffect(() => { if (isDesktop) setMobileMenuOpen(false); }, [isDesktop]);
+  // Reset sidebar open state when going from mobile to larger
+  useEffect(() => { if (!isMobile) setSidebarOpen(true); }, [isMobile]);
+
+  const topBarHeight = isMobile ? 48 : 44;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
-      {/* Top bar */}
-      <div style={{ height: 44, background: "var(--bg-2)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", padding: "0 16px", gap: 24, flexShrink: 0, zIndex: 100 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: "var(--accent)", letterSpacing: "0.5px" }}>⬡ Schema Studio</div>
-        <nav style={{ display: "flex", gap: 2 }}>
-          {NAV_KEYS.map((n) => (
-            <NavBtn key={n.id} active={page === n.id} onClick={() => setPage(n.id)}>{t(n.key)}</NavBtn>
-          ))}
-        </nav>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+      {/* ── Top bar ── */}
+      <div style={{
+        height: topBarHeight, background: "var(--bg-2)", borderBottom: "1px solid var(--border)",
+        display: "flex", alignItems: "center", padding: isMobile ? "0 12px" : "0 16px",
+        gap: isMobile ? 8 : 16, flexShrink: 0, zIndex: 100,
+      }}>
+        {/* Logo */}
+        <div style={{ fontWeight: 700, fontSize: isMobile ? 13 : 14, color: "var(--accent)", letterSpacing: "0.5px", flexShrink: 0 }}>
+          ⬡{!isMobile && " Schema Studio"}
+          {isMobile && <span style={{ marginLeft: 4 }}>Schema Studio</span>}
+        </div>
+
+        {/* Desktop: full nav | Tablet: scrollable nav | Mobile: nothing (in drawer) */}
+        {!isMobile && (
+          <nav className={isTablet ? "nav-scroll" : undefined}
+            style={{ display: "flex", gap: 2, flex: isTablet ? 1 : undefined, minWidth: 0 }}>
+            {NAV_KEYS.map((n) => (
+              <NavBtn key={n.id} active={page === n.id} onClick={() => setPage(n.id)}>{t(n.key)}</NavBtn>
+            ))}
+          </nav>
+        )}
+
+        <div style={{ marginLeft: isMobile ? "auto" : !isTablet ? "auto" : undefined, display: "flex", gap: 6, alignItems: "center" }}>
+          {/* Tablet: sidebar toggle */}
+          {isTablet && (
+            <button onClick={() => setSidebarOpen(v => !v)} title={sidebarOpen ? "收合側欄" : "展開側欄"}
+              style={{ ...iconBtnStyle, fontSize: 15 }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-4)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-3)"; }}>
+              {sidebarOpen ? "⊟" : "⊞"}
+            </button>
+          )}
+
           <LangToggle />
           <ThemeToggle />
+
           <button onClick={() => setShowSettings(true)} title="系統設定"
             style={{ ...iconBtnStyle, fontSize: 15 }}
             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-4)"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-3)"; }}>
             ⚙
           </button>
+
+          {/* Mobile: hamburger */}
+          {isMobile && (
+            <button onClick={() => setMobileMenuOpen(true)} title="選單"
+              style={{ ...iconBtnStyle, fontSize: 18, border: "none" }}>
+              ☰
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main */}
+      {/* ── Main content ── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <Sidebar />
+        {/* Sidebar: desktop always, tablet when open, mobile = hidden (in drawer) */}
+        {!isMobile && (
+          <div className="sidebar-panel"
+            style={{ width: (isDesktop || sidebarOpen) ? 220 : 0, opacity: (isDesktop || sidebarOpen) ? 1 : 0 }}>
+            {(isDesktop || sidebarOpen) && <Sidebar />}
+          </div>
+        )}
+
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          {page === "editor" && <SchemaEditorPage />}
-          {page === "dict" && <NamingDictPage />}
+          {page === "editor"   && <SchemaEditorPage />}
+          {page === "dict"     && <NamingDictPage />}
           {page === "versions" && <VersionHistoryPage />}
           {page === "analysis" && <AnalysisPage />}
-          {page === "er" && <ErDiagramPage />}
-          {page === "wide" && <WideTablePage />}
-          {page === "rules" && <RulesPage />}
-          {page === "datahub" && <DataHubPage />}
+          {page === "er"       && <ErDiagramPage />}
+          {page === "wide"     && <WideTablePage />}
+          {page === "rules"    && <RulesPage />}
+          {page === "datahub"  && <DataHubPage />}
         </div>
       </div>
+
+      {/* Mobile slide-in drawer */}
+      {isMobile && <MobileDrawer open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />}
 
       <Toast />
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
@@ -340,17 +630,5 @@ export default function App() {
         .icon-btn:hover { background: var(--bg-3); color: var(--text-1); }
       `}</style>
     </div>
-  );
-}
-
-function NavBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <button onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{ padding: "5px 12px", borderRadius: "var(--radius)", border: "none", background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent", color: active ? "var(--accent)" : hover ? "var(--text-1)" : "var(--text-2)", cursor: "pointer", fontSize: 12, transition: "all 0.15s", fontFamily: "inherit" }}>
-      {children}
-    </button>
   );
 }

@@ -1,5 +1,11 @@
+export interface ProductSuite {
+  id: number; name: string; description: string | null;
+  color: string | null; createdAt: string; updatedAt: string;
+}
+
 export interface Schema {
   id: number; name: string; description: string | null; domain: string;
+  suiteId: number | null;
   createdAt: string; updatedAt: string;
 }
 export interface Field {
@@ -201,7 +207,7 @@ const realApi = {
     get: (id: number) => req<SchemaDetail>(`/schemas/${id}`),
     create: (b: { name: string; description?: string; domain?: string }) =>
       req<SchemaDetail>("/schemas", { method: "POST", body: JSON.stringify(b) }),
-    update: (id: number, b: Partial<{ name: string; description: string; domain: string }>) =>
+    update: (id: number, b: Partial<{ name: string; description: string; domain: string; suiteId: number | null }>) =>
       req<SchemaDetail>(`/schemas/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/schemas/${id}`, { method: "DELETE" }),
     namingCheck: (id: number) => req<TableNamingCheck[]>(`/schemas/${id}/naming-check`, { method: "POST" }),
@@ -307,6 +313,14 @@ const realApi = {
     push: (schemaId: number, opts?: { tableIds?: number[]; wideTableIds?: number[] }) =>
       req<PushRecord>(`/datahub/push/${schemaId}`, { method: "POST", body: JSON.stringify(opts ?? {}) }),
     getPushLog: () => req<PushRecord[]>("/datahub/push-log"),
+  },
+  suites: {
+    list: (): Promise<ProductSuite[]> => req("/suites"),
+    create: (b: { name: string; description?: string; color?: string }) =>
+      req<ProductSuite>("/suites", { method: "POST", body: JSON.stringify(b) }),
+    update: (id: number, b: Partial<{ name: string; description: string | null; color: string | null }>) =>
+      req<ProductSuite>(`/suites/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+    delete: (id: number) => req<void>(`/suites/${id}`, { method: "DELETE" }),
   },
   reload: () => req<{ ok: boolean; reloadedAt: string }>("/reload", { method: "POST" }),
 };

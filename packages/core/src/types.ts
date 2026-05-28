@@ -4,6 +4,17 @@ import { z } from "zod";
 const dbId = z.coerce.number();
 const dbBool = z.coerce.boolean();
 
+// ── ProductSuite ──
+export const ProductSuiteSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().nullable(),
+  color: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ProductSuite = z.infer<typeof ProductSuiteSchema>;
+
 // ── Schema ──
 export const SchemaRowSchema = z.object({
   id: dbId,
@@ -77,6 +88,7 @@ export const CreateSchemaInput = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
   domain: z.string().default("semiconductor"),
+  suiteId: z.number().int().nullable().optional(),
 });
 export type CreateSchemaInput = z.infer<typeof CreateSchemaInput>;
 

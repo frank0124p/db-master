@@ -110,11 +110,12 @@ interface Counters {
   wideTables: number;
   wideSources: number;
   wideColumns: number;
+  suites: number;
 }
 
 const defaultCounters: Counters = {
   schemas: 0, tables: 0, fields: 0, namingEntries: 0,
-  versions: 0, wideTables: 0, wideSources: 0, wideColumns: 0,
+  versions: 0, wideTables: 0, wideSources: 0, wideColumns: 0, suites: 0,
 };
 
 export async function nextId(key: keyof Counters): Promise<number> {

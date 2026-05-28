@@ -72,21 +72,21 @@ export const mockApi = {
       return getDetail(id);
     },
 
-    create: async (b: { name: string; description?: string; domain?: string }): Promise<SchemaDetail> => {
+    create: async (b: { name: string; description?: string; domain?: string; suiteId?: number | null }): Promise<SchemaDetail> => {
       await delay(100);
       const id = uid();
       const now = new Date().toISOString();
       const detail: SchemaDetail = {
         id, name: b.name, description: b.description ?? null,
-        domain: b.domain ?? "semiconductor",
+        domain: b.domain ?? "semiconductor", suiteId: b.suiteId ?? null,
         createdAt: now, updatedAt: now, tables: [],
       };
       schemaDetails[id] = detail;
-      schemas = [...schemas, { id, name: b.name, description: b.description ?? null, domain: detail.domain, createdAt: now, updatedAt: now }];
+      schemas = [...schemas, { id, name: b.name, description: b.description ?? null, domain: detail.domain, suiteId: b.suiteId ?? null, createdAt: now, updatedAt: now }];
       return detail;
     },
 
-    update: async (id: number, b: Partial<{ name: string; description: string; domain: string }>): Promise<SchemaDetail> => {
+    update: async (id: number, b: Partial<{ name: string; description: string; domain: string; suiteId: number | null }>): Promise<SchemaDetail> => {
       await delay(80);
       const d = getDetail(id);
       const updated = { ...d, ...b, updatedAt: new Date().toISOString() };
@@ -376,6 +376,18 @@ export const mockApi = {
       pushedAt: new Date().toISOString(), status: "failed" as const,
     }),
     getPushLog: async () => [],
+  },
+  suites: {
+    list: async () => [],
+    create: async (_b: { name: string; description?: string; color?: string }) => ({
+      id: uid(), name: _b.name, description: _b.description ?? null, color: _b.color ?? null,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    }),
+    update: async (id: number, _b: Partial<{ name: string; description: string | null; color: string | null }>) => ({
+      id, name: _b.name ?? "", description: _b.description ?? null, color: _b.color ?? null,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    }),
+    delete: async (_id: number): Promise<void> => { await delay(60); },
   },
   reload: async () => ({ ok: true, reloadedAt: new Date().toISOString() }),
 };

@@ -349,15 +349,18 @@ function SchemaTablePicker({ primarySchemaId, checked, onToggle }: {
   checked: Set<string>;
   onToggle: (schemaId: number, tableId: number) => void;
 }) {
+  const { activeSuiteId } = useStore();
   const { data: allSchemas } = useQuery({ queryKey: ["schemas"], queryFn: () => api.schemas.list() });
   const [expanded, setExpanded] = useState<Set<number>>(new Set([primarySchemaId]));
+
+  const filteredSchemas = allSchemas?.filter(s => activeSuiteId === null || s.suiteId === activeSuiteId);
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 8px" }}>
       <div style={{ padding: "6px 4px 6px", fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
         已選 {checked.size} 張 table（可跨 Schema）
       </div>
-      {allSchemas?.map(sc => (
+      {filteredSchemas?.map(sc => (
         <SchemaSection
           key={sc.id}
           schema={sc}

@@ -11,12 +11,14 @@ interface AppStore {
   toastMsg: string | null;
   theme: Theme;
   locale: Locale;
+  activeSuiteId: number | null;
   setPage: (p: Page) => void;
   setSelectedSchemaId: (id: number | null) => void;
   setSelectedTableId: (id: number | null) => void;
   showToast: (msg: string) => void;
   setTheme: (t: Theme) => void;
   setLocale: (l: Locale) => void;
+  setActiveSuiteId: (id: number | null) => void;
 }
 
 function applyTheme(t: Theme) {
@@ -26,6 +28,8 @@ function applyTheme(t: Theme) {
 
 const savedTheme  = (localStorage.getItem("schema-studio-theme")  as Theme  | null) ?? "dark";
 const savedLocale = (localStorage.getItem("schema-studio-locale") as Locale | null) ?? "zh";
+const savedSuiteRaw = localStorage.getItem("schema-studio-suite");
+const savedSuiteId: number | null = savedSuiteRaw !== null ? (Number(savedSuiteRaw) || null) : null;
 applyTheme(savedTheme);
 
 export const useStore = create<AppStore>((set) => ({
@@ -35,6 +39,7 @@ export const useStore = create<AppStore>((set) => ({
   toastMsg: null,
   theme: savedTheme,
   locale: savedLocale,
+  activeSuiteId: savedSuiteId,
   setPage: (page) => set({ page }),
   setSelectedSchemaId: (selectedSchemaId) => set({ selectedSchemaId, selectedTableId: null }),
   setSelectedTableId:  (selectedTableId)  => set({ selectedTableId }),
@@ -49,5 +54,13 @@ export const useStore = create<AppStore>((set) => ({
   setLocale: (locale) => {
     localStorage.setItem("schema-studio-locale", locale);
     set({ locale });
+  },
+  setActiveSuiteId: (activeSuiteId) => {
+    if (activeSuiteId === null) {
+      localStorage.removeItem("schema-studio-suite");
+    } else {
+      localStorage.setItem("schema-studio-suite", String(activeSuiteId));
+    }
+    set({ activeSuiteId });
   },
 }));
