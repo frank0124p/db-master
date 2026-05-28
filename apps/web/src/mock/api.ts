@@ -87,7 +87,7 @@ export const mockApi = {
       return detail;
     },
 
-    update: async (id: number, b: Partial<{ name: string; description: string; domain: string; suiteId: number | null; layerType: import("../api.js").SchemaLayer | null; tags: string[]; environment: import("../api.js").SchemaEnvironment | null }>): Promise<SchemaDetail> => {
+    update: async (id: number, b: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: import("../api.js").SchemaLayer | null; tags: string[]; environment: import("../api.js").SchemaEnvironment | null }>): Promise<SchemaDetail> => {
       await delay(80);
       const d = getDetail(id);
       const updated = { ...d, ...b, updatedAt: new Date().toISOString() };

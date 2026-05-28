@@ -213,7 +213,7 @@ const realApi = {
     get: (id: number) => req<SchemaDetail>(`/schemas/${id}`),
     create: (b: { name: string; description?: string; domain?: string; suiteId?: number | null; layerType?: SchemaLayer | null; tags?: string[]; environment?: SchemaEnvironment | null }) =>
       req<SchemaDetail>("/schemas", { method: "POST", body: JSON.stringify(b) }),
-    update: (id: number, b: Partial<{ name: string; description: string; domain: string; suiteId: number | null; layerType: SchemaLayer | null; tags: string[]; environment: SchemaEnvironment | null }>) =>
+    update: (id: number, b: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: SchemaLayer | null; tags: string[]; environment: SchemaEnvironment | null }>) =>
       req<SchemaDetail>(`/schemas/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/schemas/${id}`, { method: "DELETE" }),
     namingCheck: (id: number) => req<TableNamingCheck[]>(`/schemas/${id}/naming-check`, { method: "POST" }),

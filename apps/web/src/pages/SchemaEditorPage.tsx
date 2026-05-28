@@ -1279,6 +1279,127 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
 // ── Main page ─────────────────────────────────────────────────────────────────
 const ENV_COLORS: Record<SchemaEnvironment, string> = { DEV: "#60a5fa", TEST: "#4ade80", STAGING: "#fbbf24", PROD: "#f87171" };
 const ALL_ENVS: SchemaEnvironment[] = ["DEV", "TEST", "STAGING", "PROD"];
+const LAYER_OPTIONS = [
+  { value: "", label: "（未分類）" },
+  { value: "transaction", label: "交易層 Transaction" },
+  { value: "r2u", label: "寬表層 R2U" },
+  { value: "unified", label: "寬表層 Unified Layer" },
+];
+
+function SchemaSettingsModal({ schema, suites, onClose, onDeleted }: {
+  schema: SchemaDetail;
+  suites: import("../api.js").ProductSuite[];
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const [form, setForm] = useState({
+    name: schema.name,
+    description: schema.description ?? "",
+    domain: schema.domain,
+    suiteId: schema.suiteId != null ? String(schema.suiteId) : "",
+    layerType: schema.layerType ?? "",
+    environment: schema.environment ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function save() {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    try {
+      await api.schemas.update(schema.id, {
+        name: form.name.trim(),
+        description: form.description || null,
+        domain: form.domain,
+        suiteId: form.suiteId ? Number(form.suiteId) : null,
+        layerType: (form.layerType as import("../api.js").SchemaLayer) || null,
+        environment: (form.environment as SchemaEnvironment) || null,
+      });
+      await qc.invalidateQueries({ queryKey: ["schema", schema.id] });
+      await qc.invalidateQueries({ queryKey: ["schemas"] });
+      showToast("Schema 設定已儲存");
+      onClose();
+    } finally { setSaving(false); }
+  }
+
+  async function doDelete() {
+    setDeleting(true);
+    try {
+      await api.schemas.delete(schema.id);
+      await qc.invalidateQueries({ queryKey: ["schemas"] });
+      showToast(`Schema "${schema.name}" 已刪除`);
+      onDeleted();
+    } finally { setDeleting(false); }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: "min(440px, 92vw)", padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 18 }}>⚙ Schema 設定</div>
+
+        {([
+          ["名稱", <input key="n" className="form-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />],
+          ["描述", <input key="d" className="form-input" placeholder="（選填）" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />],
+          ["Domain", (
+            <select key="dom" className="form-input" value={form.domain} onChange={e => setForm({ ...form, domain: e.target.value })}>
+              <option value="semiconductor">semiconductor</option>
+              <option value="general">general</option>
+            </select>
+          )],
+          ["Product Suite", (
+            <select key="s" className="form-input" value={form.suiteId} onChange={e => setForm({ ...form, suiteId: e.target.value })}>
+              <option value="">（無 Suite）</option>
+              {suites.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+            </select>
+          )],
+          ["用途層", (
+            <select key="l" className="form-input" value={form.layerType} onChange={e => setForm({ ...form, layerType: e.target.value })}>
+              {LAYER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          )],
+          ["環境", (
+            <select key="e" className="form-input" value={form.environment} onChange={e => setForm({ ...form, environment: e.target.value })}>
+              <option value="">（未指定）</option>
+              {ALL_ENVS.map(e => <option key={e} value={e} style={{ color: ENV_COLORS[e] }}>{e}</option>)}
+            </select>
+          )],
+        ] as [string, React.ReactNode][]).map(([label, ctrl]) => (
+          <div key={label} style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 4, display: "block", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</label>
+            {ctrl}
+          </div>
+        ))}
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20 }}>
+          {/* Delete zone */}
+          {!confirmDelete ? (
+            <button className="btn btn-ghost" style={{ color: "var(--error,#f87171)", borderColor: "rgba(248,113,113,0.3)" }}
+              onClick={() => setConfirmDelete(true)}>刪除 Schema</button>
+          ) : (
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "var(--text-2)" }}>確認刪除？</span>
+              <button className="btn" style={{ background: "rgba(248,113,113,0.15)", color: "var(--error,#f87171)", border: "1px solid rgba(248,113,113,0.4)", fontSize: 12 }}
+                disabled={deleting} onClick={() => void doDelete()}>
+                {deleting ? "刪除中…" : "確認"}
+              </button>
+              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setConfirmDelete(false)}>取消</button>
+            </div>
+          )}
+          {/* Save/Cancel */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" onClick={onClose}>取消</button>
+            <button className="btn btn-primary" disabled={saving || !form.name.trim()} onClick={() => void save()}>
+              {saving ? "儲存中…" : "儲存"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function SchemaMetaBar({ schema }: { schema: SchemaDetail }) {
   const qc = useQueryClient();
@@ -1367,9 +1488,10 @@ function SchemaMetaBar({ schema }: { schema: SchemaDetail }) {
 
 export default function SchemaEditorPage() {
   const qc = useQueryClient();
-  const { selectedSchemaId, selectedTableId, setSelectedTableId, showToast } = useStore();
+  const { selectedSchemaId, selectedTableId, setSelectedTableId, setSelectedSchemaId, showToast } = useStore();
   const [addTableModal, setAddTableModal] = useState(false);
   const [importModal, setImportModal] = useState(false);
+  const [settingsModal, setSettingsModal] = useState(false);
   const [newTableName, setNewTableName] = useState("");
 
   const { data: schema } = useQuery({
@@ -1377,6 +1499,8 @@ export default function SchemaEditorPage() {
     queryFn: () => api.schemas.get(selectedSchemaId!),
     enabled: selectedSchemaId !== null,
   });
+
+  const { data: suites } = useQuery({ queryKey: ["suites"], queryFn: api.suites.list });
 
   const { data: naming } = useQuery({ queryKey: ["naming"], queryFn: () => api.naming.list() });
   const namingEntries: NamingEntry[] = naming ?? [];
@@ -1412,6 +1536,7 @@ export default function SchemaEditorPage() {
         <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span className="panel-title">Tables</span>
           <div style={{ display: "flex", gap: 4 }}>
+            <button className="icon-btn" title="Schema 設定" onClick={() => setSettingsModal(true)}>⚙</button>
             <button className="icon-btn" title="匯入 DDL" onClick={() => setImportModal(true)}>↑</button>
             <button className="icon-btn" title="新增 Table" onClick={() => setAddTableModal(true)}>＋</button>
           </div>
@@ -1463,6 +1588,15 @@ export default function SchemaEditorPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {settingsModal && schema && (
+        <SchemaSettingsModal
+          schema={schema}
+          suites={suites ?? []}
+          onClose={() => setSettingsModal(false)}
+          onDeleted={() => { setSettingsModal(false); setSelectedSchemaId(null); }}
+        />
       )}
     </div>
   );
