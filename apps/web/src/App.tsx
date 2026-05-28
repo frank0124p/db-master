@@ -194,13 +194,13 @@ const SUITE_COLORS = ["#7b8cff", "#4ade80", "#fbbf24", "#f87171", "#60a5fa", "#c
 
 const LAYER_LABELS: Record<SchemaLayer, string> = {
   transaction: "交易層 Transaction",
-  wide_table:  "寬表層 Wide Table",
-  unified:     "統一層 Unified",
+  r2u:         "寬表層 R2U",
+  unified:     "寬表層 Unified Layer",
 };
-const LAYER_ORDER: (SchemaLayer | null)[] = ["transaction", "wide_table", "unified", null];
+const LAYER_ORDER: (SchemaLayer | null)[] = ["transaction", "r2u", "unified", null];
 
 // ── Schema list (shared between Sidebar and mobile drawer) ────────────────────
-const LAYER_BADGE: Record<SchemaLayer, string> = { transaction: "TX", wide_table: "WT", unified: "UL" };
+const LAYER_BADGE: Record<SchemaLayer, string> = { transaction: "TX", r2u: "R2U", unified: "UL" };
 
 function SchemaItem({ name, active, suiteColor, layerType, onClick }: { name: string; active: boolean; suiteColor?: string | null; layerType?: SchemaLayer | null; onClick: () => void }) {
   const [hover, setHover] = useState(false);
@@ -484,8 +484,8 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
               <select className="form-input" value={form.layerType} onChange={e => setForm({ ...form, layerType: e.target.value })}>
                 <option value="">（未分類）</option>
                 <option value="transaction">交易層 Transaction</option>
-                <option value="wide_table">寬表層 Wide Table</option>
-                <option value="unified">統一層 Unified</option>
+                <option value="r2u">寬表層 R2U（Ready to Use）</option>
+                <option value="unified">寬表層 Unified Layer</option>
               </select>
             </FormRow>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>

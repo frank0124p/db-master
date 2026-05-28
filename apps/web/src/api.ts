@@ -3,7 +3,7 @@ export interface ProductSuite {
   color: string | null; createdAt: string; updatedAt: string;
 }
 
-export type SchemaLayer = "transaction" | "wide_table" | "unified";
+export type SchemaLayer = "transaction" | "r2u" | "unified";
 
 export interface Schema {
   id: number; name: string; description: string | null; domain: string;

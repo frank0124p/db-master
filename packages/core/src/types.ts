@@ -84,7 +84,7 @@ export interface NamingEntry {
 }
 
 // ── SchemaLayer ──
-export const SCHEMA_LAYERS = ["transaction", "wide_table", "unified"] as const;
+export const SCHEMA_LAYERS = ["transaction", "r2u", "unified"] as const;
 export type SchemaLayer = typeof SCHEMA_LAYERS[number];
 
 // ── API Input types ──
