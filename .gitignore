@@ -7,6 +7,10 @@ dist/
 # Vite dev server temp files
 vite.config.ts.timestamp-*.mjs
 
+# Build artifacts
+apps/api/public/
+*.tsbuildinfo
+
 # Data directory — runtime file-based store (NOT committed, created at runtime)
 # Exceptions: data/ddl/ (sample SQL) and data/skills/ (custom rules) ARE tracked
 data/schemas/
