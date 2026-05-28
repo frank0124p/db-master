@@ -8,18 +8,23 @@ const router: RouterType = Router();
 // GET /api/v1/rules — list all rules (built-in + skill) with current settings
 router.get("/", async (_req: Request, res: Response) => {
   const rules = await listRules();
+  const allRuleDefns = getAllRules();
   res.json({
-    rules: rules.map(r => ({
-      id: r.ruleId,
-      group: r.group,
-      description: r.description,
-      defaultSeverity: getAllRules().find(x => x.id === r.ruleId)?.defaultSeverity ?? r.severity,
-      defaultConfig: getAllRules().find(x => x.id === r.ruleId)?.defaultConfig ?? {},
-      severity: r.severity,
-      enabled: r.enabled,
-      config: r.config,
-      source: r.source,
-    })),
+    rules: rules.map(r => {
+      const ruleDefn = allRuleDefns.find(x => x.id === r.ruleId);
+      return {
+        id: r.ruleId,
+        group: r.group,
+        description: r.description,
+        defaultSeverity: ruleDefn?.defaultSeverity ?? r.severity,
+        defaultConfig: ruleDefn?.defaultConfig ?? {},
+        severity: r.severity,
+        enabled: r.enabled,
+        config: r.config,
+        source: r.source,
+        layers: ruleDefn?.layers ?? ["general"],
+      };
+    }),
   });
 });
 

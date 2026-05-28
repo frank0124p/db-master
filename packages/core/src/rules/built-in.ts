@@ -84,6 +84,7 @@ const fieldCommentRule: RuleDefinition = {
   defaultSeverity: "warning",
   description: "Fields should have comments for semantic layer readability",
   defaultConfig: { minLength: 2 },
+  layers: ["r2u", "unified"],
   check(table: TableContext, field: FieldContext | null, config: RuleConfig) {
     if (field === null) return [];
     const minLen = (config["minLength"] as number | undefined) ?? 2;
@@ -102,6 +103,7 @@ const tableCommentRule: RuleDefinition = {
   defaultSeverity: "info",
   description: "Tables should have comments describing their purpose",
   defaultConfig: {},
+  layers: ["r2u", "unified"],
   check(table: TableContext, field: FieldContext | null) {
     if (field !== null) return [];
     if (!table.comment || table.comment.trim().length < 4) {
@@ -119,6 +121,7 @@ const blobCommentRule: RuleDefinition = {
   defaultSeverity: "warning",
   description: "BLOB/TEXT/JSON fields must have comments so semantic layer can interpret them",
   defaultConfig: {},
+  layers: ["r2u", "unified"],
   check(table: TableContext, field: FieldContext | null) {
     if (field === null) return [];
     const blobTypes = ["blob", "tinyblob", "mediumblob", "longblob", "text",
@@ -158,6 +161,7 @@ const timestampRule: RuleDefinition = {
   defaultSeverity: "warning",
   description: "Tables should have created_at and updated_at columns",
   defaultConfig: {},
+  layers: ["transaction"],
   check(table: TableContext, field: FieldContext | null) {
     if (field !== null) return [];
     const names = new Set(table.fields.map(f => f.name.toLowerCase()));

@@ -1,6 +1,6 @@
 import React, { useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type RuleDetail, type SkillInfo } from "../api.js";
+import { api, type RuleDetail, type RuleLayer, type SkillInfo } from "../api.js";
 import { useStore } from "../store.js";
 
 // ── shared helpers ────────────────────────────────────────────────────────────
@@ -27,6 +27,21 @@ function GroupPill({ g }: { g: string }) {
   return <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 8px", borderRadius: 8,
     background: "var(--bg-4)", color: c?.color ?? "var(--text-3)", border: "1px solid var(--border)", flexShrink: 0 }}>
     {c?.label ?? g}
+  </span>;
+}
+
+const LAYER_CFG: Record<RuleLayer, { label: string; bg: string; color: string }> = {
+  general:     { label: "通用",       bg: "var(--bg-4)",           color: "var(--text-3)" },
+  transaction: { label: "交易層",     bg: "rgba(167,139,250,0.15)", color: "#a78bfa" },
+  r2u:         { label: "R2U",        bg: "rgba(52,211,153,0.15)",  color: "#34d399" },
+  unified:     { label: "Unified",    bg: "rgba(96,165,250,0.15)",  color: "#60a5fa" },
+};
+
+function LayerPill({ layer }: { layer: RuleLayer }) {
+  const c = LAYER_CFG[layer];
+  return <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 6,
+    background: c.bg, color: c.color, border: `1px solid ${c.color}33`, flexShrink: 0, letterSpacing: "0.3px" }}>
+    {c.label}
   </span>;
 }
 
@@ -132,11 +147,13 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [group, setGroup] = useState<"all" | "naming" | "semantic" | "structure">("all");
   const [srcFilter, setSrcFilter] = useState<"all" | "built-in" | "skill">("all");
+  const [layerFilter, setLayerFilter] = useState<"all" | RuleLayer>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const visible = rules.filter(r =>
     (group === "all" || r.group === group) &&
-    (srcFilter === "all" || (r.source ?? "built-in") === srcFilter)
+    (srcFilter === "all" || (r.source ?? "built-in") === srcFilter) &&
+    (layerFilter === "all" || (r.layers ?? ["general"]).includes(layerFilter))
   );
 
   const gc = (g: string) => rules.filter(r => r.group === g).length;
@@ -223,6 +240,28 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
         </div>
       </div>
 
+      {/* ── Layer filter bar ── */}
+      <div style={{ padding: "8px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg-1)",
+        display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", marginRight: 4 }}>適用層級</span>
+        {([
+          { k: "all" as const,         label: "全部" },
+          { k: "general" as const,     label: "通用" },
+          { k: "transaction" as const, label: "交易層" },
+          { k: "r2u" as const,         label: "寬表 R2U" },
+          { k: "unified" as const,     label: "寬表 Unified" },
+        ]).map(({ k, label }) => (
+          <button key={k} onClick={() => setLayerFilter(k)}
+            style={{ padding: "3px 10px", borderRadius: 6, border: `1px solid ${layerFilter === k ? (k === "all" ? "var(--accent)" : LAYER_CFG[k as RuleLayer]?.color ?? "var(--accent)") : "var(--border)"}`,
+              cursor: "pointer", fontSize: 11, fontWeight: 600,
+              background: layerFilter === k ? (k === "all" ? "var(--accent-dim)" : (LAYER_CFG[k as RuleLayer]?.bg ?? "var(--accent-dim)")) : "transparent",
+              color: layerFilter === k ? (k === "all" ? "var(--accent)" : (LAYER_CFG[k as RuleLayer]?.color ?? "var(--accent)")) : "var(--text-3)",
+              transition: "all 0.12s" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* ── Table ── */}
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
@@ -277,6 +316,9 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
                             background: "rgba(251,191,36,0.15)", color: "#fbbf24",
                             border: "1px solid rgba(251,191,36,0.4)", flexShrink: 0 }}>SKILL</span>
                         )}
+                        {(r.layers ?? ["general"]).map((layer) => (
+                          <LayerPill key={layer} layer={layer} />
+                        ))}
                         {hasConfig && !isExpanded && (
                           <span style={{ fontSize: 9, color: "var(--text-3)", flexShrink: 0 }}>⚙ 有設定</span>
                         )}

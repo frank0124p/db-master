@@ -155,6 +155,14 @@ export const mockApi = {
         };
       },
     },
+    getRules: async (_id: number): Promise<{ selectedRuleIds: string[] }> => {
+      await delay(60);
+      return { selectedRuleIds: rules.map(r => r.id) };
+    },
+    setRules: async (_id: number, body: { selectedRuleIds: string[] | null }): Promise<{ selectedRuleIds: string[] }> => {
+      await delay(80);
+      return { selectedRuleIds: body.selectedRuleIds ?? rules.map(r => r.id) };
+    },
   },
 
   tables: {

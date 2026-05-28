@@ -18,12 +18,14 @@ export interface TableFile {
 interface SchemaMeta {
   id: number; name: string; description: string | null; domain: string;
   suiteId: number | null; layerType: string | null;
+  selectedRuleIds: string[] | null;
   createdAt: string; updatedAt: string;
 }
 
 export interface SchemaWithTables {
   id: number; name: string; description: string | null; domain: string;
   suiteId: number | null; layerType: string | null;
+  selectedRuleIds: string[] | null;
   createdAt: Date; updatedAt: Date;
   tables: {
     id: number; name: string; comment: string | null;
@@ -116,6 +118,7 @@ export async function listSchemas() {
     schemas.push({
       id: meta.id, name: meta.name, description: meta.description, domain: meta.domain,
       suiteId: meta.suiteId ?? null, layerType: meta.layerType ?? null,
+      selectedRuleIds: meta.selectedRuleIds ?? null,
       createdAt: new Date(meta.createdAt), updatedAt: new Date(meta.updatedAt),
     });
   }
@@ -140,6 +143,7 @@ export async function getSchemaById(id: number): Promise<SchemaWithTables> {
   return {
     id: meta.id, name: meta.name, description: meta.description, domain: meta.domain,
     suiteId: meta.suiteId ?? null, layerType: meta.layerType ?? null,
+    selectedRuleIds: meta.selectedRuleIds ?? null,
     createdAt: new Date(meta.createdAt), updatedAt: new Date(meta.updatedAt),
     tables,
   };
@@ -152,7 +156,7 @@ export async function createSchema(input: { name: string; description?: string |
   const meta: SchemaMeta = {
     id, name: input.name, description: input.description ?? null,
     domain: input.domain ?? "semiconductor", suiteId: input.suiteId ?? null,
-    layerType: input.layerType ?? null,
+    layerType: input.layerType ?? null, selectedRuleIds: null,
     createdAt: now, updatedAt: now,
   };
   await store.writeJson(metaFile(slug), meta);
@@ -160,7 +164,7 @@ export async function createSchema(input: { name: string; description?: string |
   return getSchemaById(id);
 }
 
-export async function updateSchema(id: number, input: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: string | null }>) {
+export async function updateSchema(id: number, input: Partial<{ name: string; description: string | null; domain: string; suiteId: number | null; layerType: string | null; selectedRuleIds: string[] | null }>) {
   const slug = await getSchemaSlug(id);
   const meta = await store.readJson<SchemaMeta>(metaFile(slug));
   if (!meta) throw new NotFoundError("Schema", id);
@@ -169,6 +173,7 @@ export async function updateSchema(id: number, input: Partial<{ name: string; de
   if (input.domain !== undefined) meta.domain = input.domain;
   if ("suiteId" in input) meta.suiteId = input.suiteId ?? null;
   if ("layerType" in input) meta.layerType = input.layerType ?? null;
+  if ("selectedRuleIds" in input) meta.selectedRuleIds = input.selectedRuleIds ?? null;
   meta.updatedAt = new Date().toISOString();
   await store.writeJson(metaFile(slug), meta);
   return getSchemaById(id);

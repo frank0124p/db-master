@@ -5,6 +5,7 @@ import { getRuleSettingsMap } from "../repositories/rules.js";
 import { checkFieldName, BUILT_IN_RULES, runRules } from "@schema-studio/core";
 import { analyzeSchemaStream, type AnalyzeIssue } from "../services/llm.js";
 import { getSkillsForDomain, formatSkillsForPrompt, getSkillRules } from "../services/skills.js";
+import { resolveSchemaRuleIds } from "./schemaRules.js";
 
 const router: ExpressRouter = Router({ mergeParams: true });
 
@@ -27,8 +28,10 @@ router.post("/", async (req, res, next) => {
 
     const send = (data: unknown) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
-    // Run all rules: built-in + skill-defined
+    // Run all rules: built-in + skill-defined, filtered by schema's selected rule IDs
     const allRules = [...BUILT_IN_RULES, ...getSkillRules()];
+    const selectedIds = resolveSchemaRuleIds(schema, allRules);
+    const activeRules = allRules.filter(r => selectedIds.has(r.id));
     const tableContexts = tables.map(t => ({
       name: t.name, comment: t.comment,
       fields: t.fields.map(f => ({
@@ -37,7 +40,7 @@ router.post("/", async (req, res, next) => {
         isAutoIncrement: false, defaultValue: f.defaultValue, comment: f.comment, position: f.position,
       })),
     }));
-    const ruleResult = runRules(tableContexts, allRules, settingsMap);
+    const ruleResult = runRules(tableContexts, activeRules, settingsMap);
 
     const ruleViolations: AnalyzeIssue[] = ruleResult.violations.map(v => ({
       severity: v.severity,

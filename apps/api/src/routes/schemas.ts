@@ -1,7 +1,10 @@
 import { Router, type Router as ExpressRouter } from "express";
-import { CreateSchemaInput, checkFieldNames } from "@schema-studio/core";
+import { z } from "zod";
+import { CreateSchemaInput, checkFieldNames, BUILT_IN_RULES } from "@schema-studio/core";
 import * as repo from "../repositories/schemas.js";
 import * as namingRepo from "../repositories/naming.js";
+import { getSkillRules } from "../services/skills.js";
+import { resolveSchemaRuleIds } from "./schemaRules.js";
 
 const router: ExpressRouter = Router();
 
@@ -35,6 +38,37 @@ router.delete("/:id", async (req, res, next) => {
   try {
     await repo.deleteSchema(Number(req.params["id"]));
     res.status(204).end();
+  } catch (e) { next(e); }
+});
+
+// GET /api/v1/schemas/:id/rules — get resolved rule IDs for this schema
+router.get("/:id/rules", async (req, res, next) => {
+  try {
+    const schema = await repo.getSchemaById(Number(req.params["id"]));
+    const allRules = [...BUILT_IN_RULES, ...getSkillRules()];
+    const selectedIds = resolveSchemaRuleIds(schema, allRules);
+    res.json({ selectedRuleIds: [...selectedIds] });
+  } catch (e) { next(e); }
+});
+
+const SchemaRulesBody = z.object({
+  selectedRuleIds: z.array(z.string()).nullable(),
+});
+
+// PATCH /api/v1/schemas/:id/rules — set selected rule IDs for this schema
+router.patch("/:id/rules", async (req, res, next) => {
+  try {
+    const parsed = SchemaRulesBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", detail: parsed.error.format() } });
+      return;
+    }
+    const updated = await repo.updateSchema(Number(req.params["id"]), {
+      selectedRuleIds: parsed.data.selectedRuleIds,
+    });
+    const allRules = [...BUILT_IN_RULES, ...getSkillRules()];
+    const selectedIds = resolveSchemaRuleIds(updated, allRules);
+    res.json({ selectedRuleIds: [...selectedIds] });
   } catch (e) { next(e); }
 });
 

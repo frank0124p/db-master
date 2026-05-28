@@ -21,6 +21,7 @@ export interface TableContext {
 // ── Rule types ───────────────────────────────────────────────────────────────
 
 export type Severity = "error" | "warning" | "info";
+export type RuleLayer = "transaction" | "r2u" | "unified" | "general";
 
 export interface RuleConfig {
   [key: string]: unknown;
@@ -32,6 +33,7 @@ export interface RuleDefinition {
   defaultSeverity: Severity;
   description: string;
   defaultConfig: RuleConfig;
+  layers?: RuleLayer[];
   check(
     table: TableContext,
     field: FieldContext | null,

@@ -4,6 +4,7 @@ export interface ProductSuite {
 }
 
 export type SchemaLayer = "transaction" | "r2u" | "unified";
+export type RuleLayer = "transaction" | "r2u" | "unified" | "general";
 
 export interface Schema {
   id: number; name: string; description: string | null; domain: string;
@@ -142,6 +143,7 @@ export interface RuleDetail {
   severity: "error" | "warning" | "info";
   enabled: boolean; config: Record<string, unknown>;
   source?: "built-in" | "skill";
+  layers: RuleLayer[];
 }
 
 export interface SkillRuleSummary {
@@ -225,6 +227,9 @@ const realApi = {
       save: (id: number, message?: string) =>
         req<SchemaVersion>(`/schemas/${id}/versions`, { method: "POST", body: JSON.stringify({ message }) }),
     },
+    getRules: (id: number) => req<{ selectedRuleIds: string[] }>(`/schemas/${id}/rules`),
+    setRules: (id: number, body: { selectedRuleIds: string[] | null }) =>
+      req<{ selectedRuleIds: string[] }>(`/schemas/${id}/rules`, { method: "PATCH", body: JSON.stringify(body) }),
   },
   tables: {
     create: (schemaId: number, b: { name: string; comment?: string }) =>

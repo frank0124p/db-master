@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store.js";
-import { api } from "../api.js";
+import { api, type RuleLayer } from "../api.js";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
 interface Issue {
@@ -12,21 +12,84 @@ interface Issue {
   suggestion: string | null;
 }
 
+const LAYER_LABELS: Record<RuleLayer, string> = {
+  general: "通用", transaction: "交易層", r2u: "R2U", unified: "Unified",
+};
+const LAYER_COLORS: Record<RuleLayer, string> = {
+  general: "var(--text-3)", transaction: "#a78bfa", r2u: "#34d399", unified: "#60a5fa",
+};
+
 export default function AnalysisPage() {
   const { isMobile, isTablet } = useBreakpoint();
   const { selectedSchemaId, showToast } = useStore();
+  const qc = useQueryClient();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [llmText, setLlmText] = useState("點擊「執行分析」開始分析...");
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("");
   const [activeIssue, setActiveIssue] = useState<number | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
+  const [ruleFilterOpen, setRuleFilterOpen] = useState(false);
+  const [localSelectedIds, setLocalSelectedIds] = useState<string[] | null>(null);
+  const [savingRules, setSavingRules] = useState(false);
 
   const { data: schema } = useQuery({
     queryKey: ["schema", selectedSchemaId],
     queryFn: () => api.schemas.get(selectedSchemaId!),
     enabled: !!selectedSchemaId,
   });
+
+  const { data: allRulesData } = useQuery({
+    queryKey: ["rules"],
+    queryFn: () => api.rules.list(),
+  });
+
+  const { data: schemaRulesData } = useQuery({
+    queryKey: ["schema-rules", selectedSchemaId],
+    queryFn: () => api.schemas.getRules(selectedSchemaId!),
+    enabled: !!selectedSchemaId,
+  });
+
+  useEffect(() => {
+    if (schemaRulesData) {
+      setLocalSelectedIds(schemaRulesData.selectedRuleIds);
+    }
+  }, [schemaRulesData]);
+
+  const allRules = allRulesData?.rules ?? [];
+  const serverSelectedIds = schemaRulesData?.selectedRuleIds ?? [];
+  const effectiveSelectedIds = localSelectedIds ?? serverSelectedIds;
+
+  async function applyDefaultRules() {
+    if (!selectedSchemaId) return;
+    setSavingRules(true);
+    try {
+      await api.schemas.setRules(selectedSchemaId, { selectedRuleIds: null });
+      await qc.invalidateQueries({ queryKey: ["schema-rules", selectedSchemaId] });
+      showToast("✓ 已套用預設 Rule 篩選");
+    } catch (e) { showToast(`失敗: ${String(e)}`); }
+    finally { setSavingRules(false); }
+  }
+
+  async function saveSelectedRules() {
+    if (!selectedSchemaId || localSelectedIds === null) return;
+    setSavingRules(true);
+    try {
+      await api.schemas.setRules(selectedSchemaId, { selectedRuleIds: localSelectedIds });
+      await qc.invalidateQueries({ queryKey: ["schema-rules", selectedSchemaId] });
+      showToast(`✓ 已儲存 ${localSelectedIds.length} 條 Rule 篩選`);
+    } catch (e) { showToast(`失敗: ${String(e)}`); }
+    finally { setSavingRules(false); }
+  }
+
+  function toggleRuleId(id: string) {
+    const base = localSelectedIds ?? serverSelectedIds;
+    if (base.includes(id)) {
+      setLocalSelectedIds(base.filter(x => x !== id));
+    } else {
+      setLocalSelectedIds([...base, id]);
+    }
+  }
 
   async function runAnalysis() {
     if (!selectedSchemaId || running) return;
@@ -107,6 +170,70 @@ export default function AnalysisPage() {
         </select>
         <button className="btn btn-primary" onClick={runAnalysis} disabled={running}>▶ 執行分析</button>
         <span style={{ fontSize: 12, color: "var(--text-3)" }}>{status}</span>
+      </div>
+
+      {/* ── Rule 篩選 collapsible panel ── */}
+      <div style={{ borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <button
+          onClick={() => setRuleFilterOpen(v => !v)}
+          style={{ width: "100%", padding: "8px 16px", display: "flex", alignItems: "center", gap: 8,
+            background: "var(--bg-2)", border: "none", cursor: "pointer", textAlign: "left" }}>
+          <span style={{ fontSize: 11, color: ruleFilterOpen ? "var(--accent)" : "var(--text-2)",
+            fontWeight: 600, transition: "color 0.15s" }}>
+            {ruleFilterOpen ? "▾" : "▸"} Rule 篩選 ({effectiveSelectedIds.length}/{allRules.length} 已選)
+          </span>
+          {effectiveSelectedIds.length < allRules.length && (
+            <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 5,
+              background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
+              已自訂
+            </span>
+          )}
+        </button>
+        {ruleFilterOpen && (
+          <div style={{ padding: "10px 16px 14px", background: "var(--bg-1)" }}>
+            {/* Action buttons */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <button onClick={() => void applyDefaultRules()} disabled={savingRules}
+                style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5,
+                  border: "1px solid var(--border)", background: "transparent",
+                  color: "var(--text-3)", cursor: savingRules ? "not-allowed" : "pointer", opacity: savingRules ? 0.5 : 1 }}>
+                ↺ 套用預設
+              </button>
+              <button onClick={() => void saveSelectedRules()} disabled={savingRules || localSelectedIds === null}
+                style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5,
+                  border: "none", background: "var(--accent)", color: "#fff",
+                  cursor: savingRules ? "not-allowed" : "pointer", opacity: savingRules ? 0.5 : 1, fontWeight: 700 }}>
+                ✓ 儲存選取
+              </button>
+            </div>
+            {/* Rule checklist grouped by layer */}
+            {(["general", "transaction", "r2u", "unified"] as RuleLayer[]).map(layer => {
+              const layerRules = allRules.filter(r => (r.layers ?? ["general"]).includes(layer));
+              if (layerRules.length === 0) return null;
+              return (
+                <div key={layer} style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: LAYER_COLORS[layer],
+                    textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>
+                    {LAYER_LABELS[layer]}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {layerRules.map(r => (
+                      <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 8,
+                        fontSize: 11, cursor: "pointer", padding: "2px 0", color: "var(--text-2)" }}>
+                        <input type="checkbox"
+                          checked={effectiveSelectedIds.includes(r.id)}
+                          onChange={() => toggleRuleId(r.id)}
+                          style={{ cursor: "pointer", accentColor: "var(--accent)" }} />
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)" }}>{r.id}</span>
+                        <span style={{ color: "var(--text-3)" }}>{r.description}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
