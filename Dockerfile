@@ -2,27 +2,25 @@
 FROM node:20-alpine AS builder
 WORKDIR /build
 
-RUN corepack enable
-
 # Copy manifests first (better layer cache — only reinstall when deps change)
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/core/package.json           ./packages/core/
 COPY packages/ddl-parser/package.json     ./packages/ddl-parser/
 COPY packages/eslint-config/package.json  ./packages/eslint-config/
 COPY apps/api/package.json                ./apps/api/
 COPY apps/web/package.json                ./apps/web/
 
-RUN pnpm install --frozen-lockfile
+RUN npm ci
 
 # Copy source
 COPY packages/ ./packages/
 COPY apps/     ./apps/
 
 # Build order matters: shared packages first, then web (→ apps/api/public/), then api
-RUN pnpm --filter @schema-studio/core build && \
-    pnpm --filter @schema-studio/ddl-parser build && \
-    pnpm --filter web build && \
-    pnpm --filter api build
+RUN npm run build -w packages/core && \
+    npm run build -w packages/ddl-parser && \
+    npm run build -w apps/web && \
+    npm run build -w apps/api
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
@@ -31,17 +29,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3005
 
-RUN corepack enable
-
-# Workspace manifests (pnpm needs these to resolve internal packages)
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+# Workspace manifests (npm needs these to resolve internal packages)
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/core/package.json           ./packages/core/
 COPY packages/ddl-parser/package.json     ./packages/ddl-parser/
 COPY packages/eslint-config/package.json  ./packages/eslint-config/
 COPY apps/api/package.json                ./apps/api/
 
-# Copy the full pnpm virtual store (includes symlinks to workspace packages)
-# Keeping the full node_modules ensures workspace package resolution works correctly
+# Copy the full node_modules (includes symlinks to workspace packages)
 COPY --from=builder /build/node_modules  ./node_modules
 
 # Compiled shared packages

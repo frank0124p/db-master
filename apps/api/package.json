@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
-    "@schema-studio/core": "workspace:*",
-    "@schema-studio/ddl-parser": "workspace:*",
+    "@schema-studio/core": "*",
+    "@schema-studio/ddl-parser": "*",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
     "dotenv-expand": "^13.0.0",
@@ -23,7 +23,7 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@schema-studio/eslint-config": "workspace:*",
+    "@schema-studio/eslint-config": "*",
     "@tailwindcss/vite": "^4.2.4",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",

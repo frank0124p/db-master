@@ -7,7 +7,7 @@ This file is read by Claude Code on session start. It encodes how we build in th
 
 ## TL;DR for the impatient
 
-- **Stack**: Vite + React + TS frontend · Node.js + Express + TS backend · **File-based JSON storage** · pnpm monorepo
+- **Stack**: Vite + React + TS frontend · Node.js + Express + TS backend · **File-based JSON storage** · npm workspaces monorepo
 - **No database server required.** All data persists as JSON files under `data/`. No ORM, no migrations, no Docker needed to run the app.
 - **Tests are mandatory** for `packages/core` and `packages/ddl-parser`. UI can be tested via Playwright.
 - **Conventional Commits** with our scope list (see below).
@@ -31,7 +31,7 @@ DB Master/
 │   └── skills/                # .md files defining custom rules
 ├── skills/                    # Built-in Skill knowledge base (read-only)
 ├── prompts/                   # LLM prompt templates (runtime read)
-└── pnpm-workspace.yaml
+└── package-lock.json
 ```
 
 `packages/core` is imported by both `apps/web` and `apps/api`. Keep it environment-agnostic
@@ -72,7 +72,7 @@ All `data/` subdirectories except `data/ddl/` and `data/skills/` are in `.gitign
 | Storage | File-based JSON (`fs/promises`) | Any database, ORM, or key-value store |
 | Validation | Zod | Joi, Yup, io-ts |
 | Test runner | Vitest (unit) + Playwright (e2e) | Jest, Mocha, Cypress |
-| Package manager | pnpm | npm, yarn |
+| Package manager | npm workspaces | pnpm, yarn |
 
 ---
 
@@ -186,7 +186,7 @@ Response envelope for API errors:
 | `apps/api` | Integration tests for each route using a temp `data/` directory (not production data) |
 | `apps/web` | Smoke test per page via Playwright; key flows (NL → schema, DDL import, dict edit) |
 
-Run `pnpm test` from repo root before every commit.
+Run `npm test` from repo root before every commit.
 
 ---
 

@@ -27,17 +27,17 @@
 
 ```bash
 # 1. 安裝依賴
-pnpm install
+npm install
 
 # 2. 建置共用套件
-pnpm --filter @schema-studio/core build
-pnpm --filter @schema-studio/ddl-parser build
+npm run build -w packages/core
+npm run build -w packages/ddl-parser
 
 # 3. 設定 API 環境變數（可選，不設定則 AI 功能不可用）
 cp apps/api/.env.example apps/api/.env.local
 
 # 4. 啟動（前端 + 後端同在 port 3005）
-pnpm dev
+npm run dev
 ```
 
 瀏覽器開啟 [http://localhost:3005](http://localhost:3005)
@@ -245,7 +245,7 @@ Express Routes          ← Zod 輸入驗證
 | **儲存** | **檔案式 JSON（fs/promises）** | **任何 DB 或 ORM** |
 | 驗證 | Zod | Joi, Yup |
 | 測試 | Vitest（unit）+ Playwright（e2e）| Jest, Cypress |
-| 套件管理 | pnpm monorepo | npm, yarn |
+| 套件管理 | npm workspaces | pnpm, yarn |
 
 > **為何用檔案儲存？** 本專案的主題本身就是「Schema 設計」，引入外部 DB 會造成循環依賴的認知混亂。JSON 檔案透明可讀、可版本控制、零依賴，對小型團隊工具場景完全夠用。
 
@@ -570,16 +570,16 @@ data: {"type":"error", "message":"..."}
 
 ```bash
 # 修改 packages/core 後必須重新建置
-pnpm --filter @schema-studio/core build
+npm run build -w packages/core
 
 # 型別檢查（全 monorepo）
-pnpm typecheck
+npm run typecheck
 
 # 測試
-pnpm test
+npm test
 
 # 單一套件測試
-pnpm --filter @schema-studio/core test
+npm run test -w packages/core
 ```
 
 ### 命名規範

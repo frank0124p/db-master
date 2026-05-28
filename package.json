@@ -2,12 +2,16 @@
   "name": "schema-studio",
   "private": true,
   "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "pnpm --filter api dev",
-    "build": "pnpm -r build",
-    "test": "pnpm -r test",
-    "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "dev": "npm run dev -w apps/api",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",
