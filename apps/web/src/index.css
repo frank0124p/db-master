@@ -82,3 +82,67 @@ input, select, textarea { font-family: inherit; font-size: 13px; color: var(--te
 @keyframes theme-fade { from { opacity: 0.85; } to { opacity: 1; } }
 
 [data-theme] { animation: theme-fade 0.15s ease; }
+
+/* ── RWD / Mobile ────────────────────────────────────────────────────────────── */
+
+/* Left drawer (mobile nav + sidebar) */
+.mobile-drawer {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: min(320px, 88vw);
+  background: var(--bg-2);
+  border-right: 1px solid var(--border-light);
+  box-shadow: 4px 0 32px rgba(0,0,0,0.5);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.24s cubic-bezier(0.4,0,0.2,1);
+  will-change: transform;
+}
+.mobile-drawer.open { transform: translateX(0); }
+
+/* Tablet sidebar transition */
+.sidebar-panel {
+  transition: width 0.22s ease, opacity 0.22s ease;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Backdrop */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 499;
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  pointer-events: none;
+}
+.drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+
+/* Hide nav scrollbar on tablet */
+.nav-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.nav-scroll::-webkit-scrollbar { display: none; }
+
+/* Mobile-only utility */
+@media (max-width: 639px) {
+  .hide-mobile { display: none !important; }
+}
+@media (min-width: 640px) {
+  .hide-desktop-tablet { display: none !important; }
+}
+@media (max-width: 1023px) {
+  .hide-tablet-down { display: none !important; }
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  .tablet-only { display: block !important; }
+}
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

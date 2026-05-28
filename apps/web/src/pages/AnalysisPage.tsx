@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { api } from "../api.js";
+import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
 interface Issue {
   severity: "error" | "warning" | "info";
@@ -12,6 +13,7 @@ interface Issue {
 }
 
 export default function AnalysisPage() {
+  const { isMobile, isTablet } = useBreakpoint();
   const { selectedSchemaId, showToast } = useStore();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [llmText, setLlmText] = useState("點擊「執行分析」開始分析...");
@@ -107,9 +109,9 @@ export default function AnalysisPage() {
         <span style={{ fontSize: 12, color: "var(--text-3)" }}>{status}</span>
       </div>
 
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
         {/* Issues panel */}
-        <div style={{ width: 340, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ width: isMobile ? "100%" : isTablet ? 280 : 340, borderRight: isMobile ? "none" : "1px solid var(--border)", borderBottom: isMobile ? "1px solid var(--border)" : "none", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span className="panel-title">Issues <span style={{ color: "var(--text-3)" }}>({issues.length})</span></span>
           </div>

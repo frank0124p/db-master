@@ -76,7 +76,7 @@ function SingleFieldDictModal({ fieldName, comment, domain, onClose, onAdded }: 
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: 420, padding: 20, display: "flex", flexDirection: "column", gap: 14 }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: "min(420px, 92vw)", padding: 20, display: "flex", flexDirection: "column", gap: 14 }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 14, fontWeight: 600 }}>加入命名字典</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div>
@@ -341,7 +341,7 @@ function DictSuggestModal({ candidates: initial, domain, onClose, onAdded }: {
   const checkedCount = rows.filter(r => r.checked).length;
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 12, width: 780, maxHeight: "78vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 12, width: "min(780px, 96vw)", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
           <div style={{ fontSize: 15, fontWeight: 600 }}>加入命名字典</div>
           <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>版本已儲存。以下欄位名稱未登錄字典，填入概念名稱與描述後批次加入。</div>
@@ -458,7 +458,7 @@ function SaveVersionModal({ schemaId, onClose, onSaved }: {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 12, width: 440, padding: 24, display: "flex", flexDirection: "column", gap: 16 }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 12, width: "min(440px, 92vw)", padding: 24, display: "flex", flexDirection: "column", gap: 16 }} onClick={e => e.stopPropagation()}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>儲存版本</div>
           <div style={{ fontSize: 12, color: "var(--text-3)" }}>
@@ -631,7 +631,7 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
                     <div style={{ position: "fixed", inset: 0, zIndex: 98 }} onClick={() => setShowDialectPopover(false)} />
                     {/* Popover */}
                     <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 99,
-                      width: 400, background: "var(--bg-2)", border: "1px solid var(--border-light)",
+                      width: "min(400px, 92vw)", background: "var(--bg-2)", border: "1px solid var(--border-light)",
                       borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.45)", overflow: "hidden" }}>
                       {/* Header */}
                       <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1244,7 +1244,7 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
 
       {showApplyConfirm && applyCheckResult && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowApplyConfirm(false)}>
-          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 12, width: 560, maxHeight: "80vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 12, width: "min(560px, 94vw)", maxHeight: "80vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>套用前確認</div>
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -1362,7 +1362,7 @@ export default function SchemaEditorPage() {
 
       {addTableModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setAddTableModal(false)}>
-          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: 360, padding: 20 }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: "min(360px, 92vw)", padding: 20 }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>新增 Table</div>
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 4, display: "block", textTransform: "uppercase" }}>Table 名稱（snake_case）</label>

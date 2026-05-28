@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { api, type SchemaDetail } from "../api.js";
+import { useBreakpoint } from "../hooks/useBreakpoint.js";
 
 function buildMermaid(schema: SchemaDetail, visible: Set<number>): string {
   const lines = ["erDiagram"];
@@ -35,6 +36,7 @@ function buildMermaid(schema: SchemaDetail, visible: Set<number>): string {
 }
 
 export default function ErDiagramPage() {
+  const { isMobile } = useBreakpoint();
   const { selectedSchemaId, showToast } = useStore();
   const [visible, setVisible] = useState<Set<number>>(new Set());
   const [mermaidCode, setMermaidCode] = useState("");
@@ -118,7 +120,7 @@ export default function ErDiagramPage() {
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Sidebar toggles */}
-        <div style={{ width: 220, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", background: "var(--bg-2)" }}>
+        {!isMobile && <div style={{ width: 220, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", background: "var(--bg-2)" }}>
           <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>顯示的 Tables</div>
           <div style={{ padding: 8, flex: 1, overflowY: "auto" }}>
             {schema?.tables.map(t => (
@@ -133,7 +135,7 @@ export default function ErDiagramPage() {
               </div>
             ))}
           </div>
-        </div>
+        </div>}
 
         {/* Canvas */}
         <div style={{ flex: 1, overflowY: "auto", overflowX: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>

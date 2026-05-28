@@ -55,7 +55,7 @@ function WideTableList({ schemaId, onNew, onOpen }: { schemaId: number; onNew: (
             <div style={{ fontSize: 12 }}>勾選多張 Table，系統自動分析 FK 關係並產生 VIEW</div>
           </div>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
           {wideTables?.map(wt => (
             <div key={wt.id} onClick={() => onOpen(wt.id)}
               style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, cursor: "pointer", transition: "border-color 0.15s" }}
