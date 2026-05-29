@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { useT } from "../i18n.js";
 import { api, type Field, type Table, type SchemaDetail, type NamingEntry, type MatchResult, type ImportCheckResult, type ViolationSummary, type SchemaVersion, type TableNamingCheck, type SchemaEnvironment } from "../api.js";
+import { MarkdownView } from "../MarkdownView.js";
 
 const DATA_TYPES = ["BIGINT", "INT", "SMALLINT", "TINYINT", "DECIMAL(15,4)", "DOUBLE", "FLOAT",
   "VARCHAR(32)", "VARCHAR(64)", "VARCHAR(128)", "VARCHAR(255)", "TEXT", "MEDIUMTEXT",
@@ -505,6 +506,165 @@ function SaveVersionModal({ schemaId, onClose, onSaved }: {
   );
 }
 
+// ── AI Suggest Modal ──────────────────────────────────────────────────────────
+function AiSuggestModal({ schemaId, onClose }: { schemaId: number; onClose: () => void }) {
+  const [text, setText] = useState("");
+  const [done, setDone] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setText(""); setDone(false);
+
+    (async () => {
+      try {
+        const res = api.schemas.suggest(schemaId, ac.signal);
+        const response = res instanceof Promise ? await res : res;
+        const reader = (response as Response).body?.getReader();
+        if (!reader) return;
+        const dec = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done: d, value } = await reader.read();
+          if (d) break;
+          buf += dec.decode(value, { stream: true });
+          const parts = buf.split("\n\n");
+          buf = parts.pop() ?? "";
+          for (const part of parts) {
+            const line = part.replace(/^data: /, "");
+            if (!line.trim()) continue;
+            try {
+              const ev = JSON.parse(line) as { type: string; text?: string };
+              if (ev.type === "token" && ev.text) setText(p => p + ev.text);
+              if (ev.type === "done") setDone(true);
+            } catch { /* ignore */ }
+          }
+        }
+        setDone(true);
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") setText(p => p + "\n\n[錯誤：" + String(e) + "]");
+        setDone(true);
+      }
+    })();
+
+    return () => { ac.abort(); };
+  }, [schemaId]);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 12, width: "min(680px, 95vw)", maxHeight: "80vh", display: "flex", flexDirection: "column", overflow: "hidden" }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>✦ AI Schema 設計建議</span>
+          {!done && <span style={{ fontSize: 11, color: "var(--accent)", animation: "pulse 1.5s infinite" }}>分析中…</span>}
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 16, padding: "0 2px" }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+          {text ? (
+            <MarkdownView markdown={text} />
+          ) : (
+            <div style={{ color: "var(--text-3)", fontSize: 13, textAlign: "center", paddingTop: 40 }}>正在分析 Schema 結構…</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Sample Data Section ───────────────────────────────────────────────────────
+function SampleDataSection({ table }: { table: Table }) {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<Record<string, unknown>[]>(table.sampleData ?? []);
+
+  const fieldNames = table.fields.sort((a, b) => a.position - b.position).map(f => f.name);
+
+  const save = useCallback(async (next: Record<string, unknown>[]) => {
+    try {
+      await api.tables.update(table.id, { sample_data: next });
+      await qc.invalidateQueries({ queryKey: ["schema"] });
+    } catch (e) { showToast(`儲存失敗: ${String(e)}`); }
+  }, [table.id, qc, showToast]);
+
+  function addRow() {
+    const empty: Record<string, unknown> = {};
+    for (const f of fieldNames) empty[f] = "";
+    const next = [...rows, empty];
+    setRows(next);
+    void save(next);
+  }
+
+  function deleteRow(i: number) {
+    const next = rows.filter((_, idx) => idx !== i);
+    setRows(next);
+    void save(next);
+  }
+
+  function updateCell(rowIdx: number, col: string, val: string) {
+    const next = rows.map((r, i) => i === rowIdx ? { ...r, [col]: val } : r);
+    setRows(next);
+    void save(next);
+  }
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", marginTop: 8 }}>
+      <button onClick={() => setOpen(v => !v)}
+        style={{ width: "100%", padding: "8px 10px", background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "var(--text-3)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+        <span style={{ transition: "transform 0.15s", transform: open ? "rotate(90deg)" : "none" }}>▶</span>
+        Sample Data
+        <span style={{ fontWeight: 400, color: "var(--text-3)" }}>{rows.length} 列</span>
+      </button>
+      {open && (
+        <div style={{ padding: "8px 10px 12px", overflowX: "auto" }}>
+          {fieldNames.length === 0 ? (
+            <div style={{ color: "var(--text-3)", fontSize: 12 }}>先新增欄位再填寫 sample data</div>
+          ) : (
+            <>
+              <table style={{ borderCollapse: "collapse", fontSize: 11, width: "max-content", minWidth: "100%" }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: "4px 8px", color: "var(--text-3)", borderBottom: "1px solid var(--border)", textAlign: "center", width: 28 }}>#</th>
+                    {fieldNames.map(f => (
+                      <th key={f} style={{ padding: "4px 8px", color: "var(--text-3)", borderBottom: "1px solid var(--border)", textAlign: "left", fontFamily: "var(--font-mono)", fontWeight: 500 }}>{f}</th>
+                    ))}
+                    <th style={{ padding: "4px 8px", width: 24, borderBottom: "1px solid var(--border)" }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, ri) => (
+                    <tr key={ri}>
+                      <td style={{ padding: "3px 8px", color: "var(--text-3)", textAlign: "center", fontSize: 10 }}>{ri + 1}</td>
+                      {fieldNames.map(f => (
+                        <td key={f} style={{ padding: "2px 4px" }}>
+                          <input value={String(row[f] ?? "")} onChange={e => updateCell(ri, f, e.target.value)}
+                            style={{ width: "100%", minWidth: 80, fontSize: 11, fontFamily: "var(--font-mono)", background: "var(--bg-3)", border: "1px solid transparent", borderRadius: 3, padding: "2px 5px", color: "var(--text-1)", outline: "none" }}
+                            onFocus={e => (e.target.style.borderColor = "var(--accent)")}
+                            onBlur={e => (e.target.style.borderColor = "transparent")} />
+                        </td>
+                      ))}
+                      <td style={{ padding: "2px 4px" }}>
+                        <button onClick={() => deleteRow(ri)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 12, opacity: 0.5, padding: "0 2px" }}
+                          onMouseEnter={e => ((e.target as HTMLElement).style.opacity = "1")}
+                          onMouseLeave={e => ((e.target as HTMLElement).style.opacity = "0.5")}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button onClick={addRow}
+                style={{ marginTop: 6, fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "1px dashed var(--border)", background: "transparent", color: "var(--text-3)", cursor: "pointer" }}>
+                + 新增列
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Field editor panel ────────────────────────────────────────────────────────
 function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Table }) {
   const qc = useQueryClient();
@@ -551,6 +711,20 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
     }
   }
 
+  const [showAiSuggest, setShowAiSuggest] = useState(false);
+  const [editingComment, setEditingComment] = useState(false);
+  const [commentDraft, setCommentDraft] = useState(table.comment ?? "");
+
+  useEffect(() => { setCommentDraft(table.comment ?? ""); }, [table.comment]);
+
+  async function saveComment() {
+    setEditingComment(false);
+    if (commentDraft !== (table.comment ?? "")) {
+      await api.tables.update(table.id, { comment: commentDraft || null });
+      refresh();
+    }
+  }
+
   const [ddlDialect, setDdlDialect] = useState<"mariadb" | "oracle" | "clickhouse">("mariadb");
 
   useEffect(() => {
@@ -588,9 +762,9 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 600, color: "var(--text-1)" }}>{table.name}</span>
-        {table.comment && <span style={{ fontSize: 12, color: "var(--text-2)" }}>{table.comment}</span>}
         {issueCount > 0 && (
           <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 10,
             background: "rgba(251,191,36,0.15)", color: "var(--warning)", border: "1px solid rgba(251,191,36,0.35)" }}>
@@ -692,8 +866,25 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
               </button>
             ))}
           </div>
+          <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setShowAiSuggest(true)}>✦ AI 建議</button>
           <button className="btn btn-ghost" onClick={exportDDL}>↓ 匯出 DDL</button>
           <button className="btn btn-primary" onClick={openSaveModal}>儲存版本</button>
+        </div>
+        </div>
+        {/* Inline table description */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {editingComment ? (
+            <input autoFocus value={commentDraft} onChange={e => setCommentDraft(e.target.value)}
+              onBlur={() => void saveComment()} onKeyDown={e => { if (e.key === "Enter") void saveComment(); if (e.key === "Escape") { setCommentDraft(table.comment ?? ""); setEditingComment(false); } }}
+              placeholder="描述此 Table 的用途…"
+              style={{ flex: 1, fontSize: 12, fontStyle: "italic", color: "var(--text-2)", background: "var(--bg-3)", border: "1px solid var(--accent)", borderRadius: 4, padding: "3px 8px", outline: "none" }} />
+          ) : (
+            <span onClick={() => setEditingComment(true)} style={{ flex: 1, fontSize: 12, fontStyle: "italic", color: commentDraft ? "var(--text-2)" : "var(--text-3)", cursor: "text", padding: "3px 8px", borderRadius: 4, border: "1px solid transparent" }}
+              onMouseEnter={e => (e.currentTarget.style.border = "1px solid var(--border-light)")}
+              onMouseLeave={e => (e.currentTarget.style.border = "1px solid transparent")}>
+              {commentDraft || "點擊新增 Table 用途說明…"}
+            </span>
+          )}
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
@@ -716,8 +907,11 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
         ) : (
           <ClassifiedFieldView table={table} schema={schema} namingEntries={namingEntries} onRefresh={refresh} />
         )}
+        <SampleDataSection table={table} />
       </div>
       <style>{`.del-btn { opacity: 0 !important; } tr:hover .del-btn { opacity: 1 !important; }`}</style>
+
+      {showAiSuggest && <AiSuggestModal schemaId={schemaId} onClose={() => setShowAiSuggest(false)} />}
 
       {dictCandidates && (
         <DictSuggestModal
@@ -1503,6 +1697,33 @@ export default function SchemaEditorPage() {
   const [importModal, setImportModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState(false);
   const [newTableName, setNewTableName] = useState("");
+  const importJsonRef = useRef<HTMLInputElement>(null);
+
+  async function exportJson() {
+    if (!selectedSchemaId) return;
+    try {
+      const res = await api.schemas.exportSchema(selectedSchemaId);
+      const blob = await res.blob();
+      const name = schema?.name.replace(/\s+/g, "_") ?? "schema";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = `${name}.json`; a.click();
+      URL.revokeObjectURL(url);
+      showToast("✓ Schema JSON 已匯出");
+    } catch (e) { showToast(`匯出失敗: ${String(e)}`); }
+  }
+
+  async function importJson(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const body = JSON.parse(text) as { schema?: { name?: string } };
+      const created = await api.schemas.importSchema(body);
+      await qc.invalidateQueries({ queryKey: ["schemas"] });
+      showToast(`✓ Schema "${created.name}" 已匯入`);
+    } catch (err) { showToast(`匯入失敗: ${String(err)}`); }
+    finally { if (importJsonRef.current) importJsonRef.current.value = ""; }
+  }
 
   const { data: schema } = useQuery({
     queryKey: ["schema", selectedSchemaId],
@@ -1547,8 +1768,11 @@ export default function SchemaEditorPage() {
           <span className="panel-title">Tables</span>
           <div style={{ display: "flex", gap: 4 }}>
             <button className="icon-btn" title="Schema 設定" onClick={() => setSettingsModal(true)}>⚙</button>
+            <button className="icon-btn" title="匯出 JSON" onClick={() => void exportJson()}>⬇</button>
+            <button className="icon-btn" title="匯入 JSON Schema" onClick={() => importJsonRef.current?.click()}>⬆</button>
             <button className="icon-btn" title="匯入 DDL" onClick={() => setImportModal(true)}>↑</button>
             <button className="icon-btn" title="新增 Table" onClick={() => setAddTableModal(true)}>＋</button>
+            <input ref={importJsonRef} type="file" accept=".json" style={{ display: "none" }} onChange={importJson} />
           </div>
         </div>
         {schema && <SchemaMetaBar schema={schema} />}

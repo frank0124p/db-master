@@ -5,6 +5,7 @@ import * as repo from "../repositories/schemas.js";
 import * as namingRepo from "../repositories/naming.js";
 import { getSkillRules } from "../services/skills.js";
 import { resolveSchemaRuleIds } from "./schemaRules.js";
+import { suggestSchemaStream } from "../services/llm.js";
 
 const router: ExpressRouter = Router();
 
@@ -69,6 +70,148 @@ router.patch("/:id/rules", async (req, res, next) => {
     const allRules = [...BUILT_IN_RULES, ...getSkillRules()];
     const selectedIds = resolveSchemaRuleIds(updated, allRules);
     res.json({ selectedRuleIds: [...selectedIds] });
+  } catch (e) { next(e); }
+});
+
+// POST /api/v1/schemas/:id/suggest — AI suggestions for schema design (SSE)
+router.post("/:id/suggest", async (req, res, next) => {
+  try {
+    const schemaId = Number(req.params["id"]);
+    const schema = await repo.getSchemaById(schemaId);
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const send = (data: unknown) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+    const schemaJson = JSON.stringify({
+      name: schema.name,
+      description: schema.description,
+      domain: schema.domain,
+      tables: schema.tables.map(t => ({
+        name: t.name,
+        comment: t.comment,
+        fields: t.fields.map(f => ({
+          name: f.name, dataType: f.dataType,
+          isPrimaryKey: f.isPrimaryKey, isUnique: f.isUnique,
+          nullable: f.nullable, comment: f.comment,
+        })),
+      })),
+    }, null, 2);
+
+    for await (const event of suggestSchemaStream(schemaJson)) {
+      if (event.type === "error") { send({ type: "error", message: event.message }); res.end(); return; }
+      send(event);
+    }
+    res.end();
+  } catch (e) { next(e); }
+});
+
+// GET /api/v1/schemas/:id/export — export full schema data as JSON
+router.get("/:id/export", async (req, res, next) => {
+  try {
+    const schemaId = Number(req.params["id"]);
+    const schema = await repo.getSchemaById(schemaId);
+    res.setHeader("Content-Disposition", `attachment; filename="${schema.name}.json"`);
+    res.json({
+      exportVersion: 1,
+      exportedAt: new Date().toISOString(),
+      schema: {
+        name: schema.name,
+        description: schema.description,
+        domain: schema.domain,
+        layerType: schema.layerType,
+        tags: schema.tags,
+        environment: schema.environment,
+        targetDb: schema.targetDb,
+        tables: schema.tables.map(t => ({
+          name: t.name,
+          comment: t.comment,
+          sampleData: (t as typeof t & { sampleData?: Record<string, unknown>[] }).sampleData ?? [],
+          fields: t.fields.map(f => ({
+            name: f.name, dataType: f.dataType, nullable: f.nullable,
+            defaultValue: f.defaultValue, isPrimaryKey: f.isPrimaryKey,
+            isUnique: f.isUnique, comment: f.comment, position: f.position,
+          })),
+        })),
+      },
+    });
+  } catch (e) { next(e); }
+});
+
+// POST /api/v1/schemas/import — import schema from JSON export
+router.post("/import", async (req, res, next) => {
+  try {
+    const body = req.body as {
+      schema?: {
+        name?: string; description?: string | null; domain?: string;
+        layerType?: string | null; tags?: string[]; environment?: string | null; targetDb?: string | null;
+        tables?: {
+          name?: string; comment?: string | null;
+          sampleData?: Record<string, unknown>[];
+          fields?: {
+            name?: string; dataType?: string; nullable?: boolean;
+            defaultValue?: string | null; isPrimaryKey?: boolean;
+            isUnique?: boolean; comment?: string | null; position?: number;
+          }[];
+        }[];
+      };
+    };
+
+    if (!body.schema?.name) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "schema.name is required" } });
+      return;
+    }
+
+    const src = body.schema;
+
+    // Handle name conflicts by appending "-copy"
+    let name = src.name!;
+    const existing = await repo.getSchemaByName(name);
+    if (existing) name = `${name}-copy`;
+
+    const created = await repo.createSchema({
+      name,
+      description: src.description ?? null,
+      domain: src.domain ?? "semiconductor",
+      layerType: src.layerType ?? null,
+      tags: src.tags ?? [],
+      environment: src.environment ?? null,
+      targetDb: src.targetDb ?? null,
+    });
+
+    // Import tables + fields
+    const { createTable } = await import("../repositories/tables.js");
+    const { createField } = await import("../repositories/fields.js");
+
+    for (const tbl of src.tables ?? []) {
+      if (!tbl.name) continue;
+      const newTable = await createTable(created.id, {
+        name: tbl.name,
+        comment: tbl.comment ?? null,
+        sampleData: tbl.sampleData ?? [],
+      } as Parameters<typeof createTable>[1] & { sampleData?: Record<string, unknown>[] });
+      const fields = tbl.fields ?? [];
+      for (let i = 0; i < fields.length; i++) {
+        const f = fields[i]!;
+        if (!f.name) continue;
+        await createField(newTable.id, {
+          name: f.name,
+          data_type: f.dataType ?? "VARCHAR(64)",
+          nullable: f.nullable ?? true,
+          default_value: f.defaultValue ?? null,
+          is_primary_key: f.isPrimaryKey ?? false,
+          is_unique: f.isUnique ?? false,
+          comment: f.comment ?? null,
+          position: f.position ?? i,
+        });
+      }
+    }
+
+    const result = await repo.getSchemaById(created.id);
+    res.status(201).json(result);
   } catch (e) { next(e); }
 });
 

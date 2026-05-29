@@ -16,7 +16,7 @@ import type {
   NamingEntry, SchemaVersion,
   WideTableSummary, WideTableDetail, WideTablePreview,
   DryRunResult, ImportResult, RuleDetail, RuleSnapshot,
-  TableNamingCheck,
+  TableNamingCheck, LayerSettings,
 } from "../api.js";
 
 // ── in-memory mutable state ───────────────────────────────────────────────────
@@ -137,6 +137,43 @@ export const mockApi = {
 
     analyze: (_id: number, _tableId?: number): Response => {
       return sseStream(mockAnalysisIssues, mockAnalysisSummary);
+    },
+
+    suggest: (_id: number): Response => {
+      const encoder = new TextEncoder();
+      const mockText = "## AI 設計建議\n\n### 1. 資料表命名\n目前命名符合規範。\n\n### 2. 欄位命名\n建議統一使用 `snake_case` 格式。\n\n### 3. 缺失欄位\n可考慮加入 `created_at`、`updated_at` 追蹤時間戳記。\n\n（Mock 模式 — 連接真實 API 以獲得 AI 建議）";
+      const stream = new ReadableStream({
+        async start(ctrl) {
+          const send = (obj: unknown) =>
+            ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+          const chars = [...mockText];
+          for (let i = 0; i < chars.length; i += 4) {
+            await delay(10);
+            send({ type: "token", text: chars.slice(i, i + 4).join("") });
+          }
+          send({ type: "done" });
+          ctrl.close();
+        },
+      });
+      return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
+    },
+
+    exportSchema: async (id: number): Promise<Response> => {
+      await delay(100);
+      const schema = getDetail(id);
+      const body = JSON.stringify({ exportVersion: 1, exportedAt: new Date().toISOString(), schema: { name: schema.name, description: schema.description, domain: schema.domain, layerType: schema.layerType, tags: schema.tags, environment: schema.environment, targetDb: schema.targetDb, tables: schema.tables.map(t => ({ name: t.name, comment: t.comment, sampleData: t.sampleData ?? [], fields: t.fields })) } });
+      return new Response(body, { headers: { "Content-Type": "application/json" } });
+    },
+
+    importSchema: async (body: { schema?: { name?: string } }): Promise<SchemaDetail> => {
+      await delay(200);
+      const name = body?.schema?.name ?? "imported-schema";
+      const id = uid();
+      const now = new Date().toISOString();
+      const detail: SchemaDetail = { id, name, description: null, domain: "semiconductor", suiteId: null, layerType: null, tags: [], environment: null, targetDb: null, createdAt: now, updatedAt: now, tables: [] };
+      schemaDetails[id] = detail;
+      schemas = [...schemas, { id, name, description: null, domain: "semiconductor", suiteId: null, layerType: null, tags: [], environment: null, targetDb: null, createdAt: now, updatedAt: now }];
+      return detail;
     },
 
     versions: {
@@ -393,6 +430,14 @@ export const mockApi = {
     testStorage: async () => ({ ok: false, message: "Mock mode" }),
     pushToStorage: async () => ({ pushed: 0, errors: 0 }),
     restoreFromStorage: async () => ({ restored: 0, errors: 0 }),
+    getLayers: async (): Promise<LayerSettings> => ({
+      schemaLayers: [{ id: "transaction", label: "Transaction" }, { id: "r2u", label: "R2U" }, { id: "unified", label: "Unified" }],
+      dictLayers:   [{ id: "transaction", label: "Transaction" }, { id: "r2u", label: "R2U" }, { id: "unified", label: "Unified" }, { id: "general", label: "General" }],
+    }),
+    updateLayers: async (patch: Partial<LayerSettings>): Promise<LayerSettings> => ({
+      schemaLayers: patch.schemaLayers ?? [{ id: "transaction", label: "Transaction" }, { id: "r2u", label: "R2U" }, { id: "unified", label: "Unified" }],
+      dictLayers:   patch.dictLayers   ?? [{ id: "transaction", label: "Transaction" }, { id: "r2u", label: "R2U" }, { id: "unified", label: "Unified" }, { id: "general", label: "General" }],
+    }),
   },
   datahub: {
     getSettings: async () => ({ settings: { url: "", token: "", platform: "mysql", env: "PROD" as const } }),

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { api, type RuleLayer } from "../api.js";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
+import { MarkdownView } from "../MarkdownView.js";
 
 interface Issue {
   severity: "error" | "warning" | "info";
@@ -273,8 +274,12 @@ export default function AnalysisPage() {
         {/* LLM panel */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 16, overflowY: "auto", gap: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>AI 整體評估</div>
-          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 14, fontSize: 13, lineHeight: 1.7, color: "var(--text-1)", whiteSpace: "pre-wrap", minHeight: 200 }}>
-            {llmText}
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 14, minHeight: 200 }}>
+            {llmText && llmText !== "點擊「執行分析」開始分析..." ? (
+              <MarkdownView markdown={llmText} />
+            ) : (
+              <span style={{ fontSize: 13, color: "var(--text-3)" }}>{llmText}</span>
+            )}
             {running && <span style={{ display: "inline-block", width: 2, height: 14, background: "var(--accent)", marginLeft: 2, animation: "blink 1s infinite", verticalAlign: "text-bottom" }} />}
           </div>
         </div>

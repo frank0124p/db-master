@@ -10,6 +10,7 @@
 
 - [快速啟動](#快速啟動)
 - [核心工作流程](#核心工作流程)
+- [功能截圖](#功能截圖)
 - [功能總覽](#功能總覽)
 - [專案架構](#專案架構)
 - [資料儲存說明](#資料儲存說明)
@@ -75,25 +76,99 @@ data/ddl/
 
 ---
 
+## 功能截圖
+
+### Schema 編輯器 — 環境標記 / 標籤 / Table 清單
+環境彩色徽章（DEV/TEST/STAGING/PROD）、自訂標籤 Chips、⚙ 設定、⬇ 匯出 JSON、⬆ 匯入 JSON。
+
+![Schema 編輯器](docs/screenshots/01-schema-editor.png)
+
+### Schema 設定面板
+編輯名稱、描述、Product Suite、分層類型、環境、目標 DB、自訂標籤；雙擊確認刪除 Schema。
+
+![Schema 設定](docs/screenshots/02-schema-settings.png)
+
+### Table 用途說明 + Sample Data
+Table 標題下方 inline 可編輯用途說明；展開 Sample Data 區塊可新增 / 刪除示意資料列。
+
+![Table 說明與 Sample Data](docs/screenshots/03-table-description-sample.png)
+
+### ER 關聯圖（卡片式佈局）
+PK/FK/REF 標籤、貝茲曲線箭頭（虛線=可空）、可隱藏 Table；側欄 Mermaid 原始碼可展開。
+
+![ER 圖](docs/screenshots/04-er-diagram.png)
+
+### 寬表建構器
+跨 Schema 多表 JOIN 定義 + SQL VIEW 產生 + 關聯圖。
+
+![寬表](docs/screenshots/05-wide-table.png)
+
+### 規則設定（含版本快照）
+即時啟停規則、調整嚴重度；規則快照支援儲存（含名稱）/ 瀏覽歷史 / 一鍵還原。
+
+![規則設定與快照](docs/screenshots/06-rules-snapshots.png)
+
+### 分層名稱自訂
+點擊分層名稱即可 inline 編輯顯示文字，儲存後全站（字典 / 規則 / Schema 設定）即時生效。
+
+![分層設定](docs/screenshots/07-layer-settings.png)
+
+### 命名字典（含分層分類）
+詞條可標記適用分層（transaction / r2u / unified / general）；上方 Tab 篩選。
+
+![命名字典](docs/screenshots/08-naming-dict.png)
+
+### 版本歷史（含 DDL 正確性檢查）
+儲存版本時自動對目標 DB 方言執行語法驗證，✓/⚠/✕ 顯示於版本列。
+
+![版本歷史](docs/screenshots/09-version-history.png)
+
+### AI 分析 — Markdown 渲染
+規則 Issues 清單 + AI 整體評估（SSE 串流）；輸出以 Markdown 格式渲染，JSON code block 語法高亮。
+
+![AI 分析](docs/screenshots/10-analysis.png)
+
+### DataHub 整合
+推送 Schema 至 DataHub；連線設定；推送記錄。
+
+![DataHub](docs/screenshots/11-datahub.png)
+
+---
+
 ## 功能總覽
 
 | 功能 | 說明 | 入口 |
 |------|------|------|
 | **DDL 自動匯入** | 放入 `.sql` → 啟動 / Reload 自動建立 Schema | `data/ddl/` |
 | **Schema 編輯** | 手動管理 Table / Field，命名建議即時提示 | Schema 編輯器 |
+| **Schema 設定面板** | 編輯名稱、描述、分層、環境、目標 DB、標籤；刪除 Schema | 編輯器 → ⚙ 按鈕 |
+| **Product Suite** | 將多個 Schema 歸入同一產品套件，支援分層（transaction / r2u / unified）| 側邊欄 / Schema 設定 |
+| **環境標記** | 為 Schema 標記 DEV / TEST / STAGING / PROD，側邊欄顯示彩色徽章 | Schema 設定 |
+| **自訂標籤** | 為 Schema 加上任意標籤（如 BDP / legacy），支援新增與移除 | Schema 設定 |
+| **目標 DB** | 指定 Schema 對應的 DB 方言（MariaDB / Oracle / ClickHouse）| Schema 設定 |
 | **DDL 匯入（手動）** | 貼入 DDL 文字，先 dry-run 檢查，確認後套用 | 編輯器 → DDL 頁籤 |
 | **DDL 匯出** | 匯出 MariaDB / Oracle / ClickHouse 標準語句 | 編輯器 → DDL 頁籤 |
 | **方言語法檢查** | 切換目標 DB 方言時自動檢查語法，即時顯示錯誤 | 編輯器 → 方言選擇器 |
-| **版本管理** | 儲存版本快照，含命名分數 + 版本備註 | 編輯器 → 儲存版本 |
+| **版本管理** | 儲存版本快照，含命名分數 + 版本備註 + DDL 正確性結果 | 編輯器 → 儲存版本 |
+| **DDL 正確性檢查** | 儲存版本時自動對目標 DB 方言執行語法驗證，結果顯示於版本歷史 | 版本歷史 |
 | **版本 Diff** | 展開版本比較，逐欄位顯示屬性變更 | 版本歷史 |
 | **AI 分析** | 規則檢查 + 命名比對 + LLM 建議（SSE 串流）| 分析 |
 | **命名字典** | 管理標準欄位名 / 別名 / AI 建議定義；批次名稱檢查 | 命名字典 |
-| **ER 圖** | 自動生成 Mermaid ER 圖 | ER 圖 |
+| **字典分層分類** | 為字典詞條指定適用分層（transaction / r2u / unified / general），支援篩選 | 命名字典 |
+| **ER 圖（卡片式）** | 卡片佈局 ER 圖：PK/FK 高亮、貝茲曲線箭頭（虛線=可空）、可隱藏 Table；附 Mermaid 原始碼供參考 | ER 圖 |
 | **寬表建構** | 跨 Schema 多表 JOIN 定義 + SQL VIEW 產生 + 關聯圖 | 寬表 |
 | **規則設定** | 即時啟停規則、調整嚴重度、一鍵還原預設；點擊規則展開完整說明 + Config | 規則 & Skills |
+| **規則快照版控** | 儲存規則設定快照（含名稱）、瀏覽歷史、一鍵還原任意版本 | 規則 → 快照歷史 |
 | **Skills 管理** | 查看已載入 Skill、展開說明、一鍵重新載入 | 規則 & Skills |
 | **自訂規則** | 放入 `.md` Skill 檔案即可新增規則，無需重啟 | `data/skills/` |
 | **DataHub 整合** | 選擇性推送單張 Table 或寬表至 DataHub；設定連線；推送記錄 | DataHub |
+| **分層名稱自訂** | 自訂 transaction / r2u / unified / general 等分層的顯示名稱，全站即時生效 | 規則 → 分層設定 |
+| **AI Schema 建議（opt-in）** | 點擊「✦ AI 建議」對當前 Schema 的 table 命名、欄位命名、缺失欄位、設計最佳實踐給出具體建議（SSE 串流）| 編輯器 → ✦ AI 建議 |
+| **Table 用途說明** | 每張 Table 標題下方可 inline 編輯用途描述（存入 comment），點擊即可修改 | 編輯器 → Table 標題下方 |
+| **Sample Data** | 每張 Table 可附加示意資料列，inline 編輯欄位值，可新增 / 刪除列 | 編輯器 → Table → Sample Data |
+| **Schema JSON 匯出** | 匯出完整 Schema（含 metadata / sample data）為 `.json` 檔 | 編輯器 → ⬇ 匯出 |
+| **Schema JSON 匯入** | 上傳 `.json` 匯入 Schema，自動處理名稱衝突（加 `-copy`）| 編輯器 → ⬆ 匯入 |
+| **Markdown 渲染** | AI 輸出（建議 / 分析）以 Markdown 格式正確渲染；JSON code block 語法高亮 | AI 建議 / 分析頁 |
 | **LLM 設定** | UI 設定 Provider / API Key / Model；測試連線；持久化儲存 | 規則 → LLM 設定 |
 | **語言切換** | 介面支援繁體中文 / English | 右上角 |
 | **AI 自然語言生成** | 中文描述需求 → AI 自動生成 Schema 草稿 | 側邊欄 ✦ AI |
@@ -259,7 +334,7 @@ Express Routes          ← Zod 輸入驗證
 data/schemas/plm-core/               ← Schema slug（由名稱自動生成）
     meta.json                        ← { id, name, description, domain, createdAt, updatedAt }
     tables/
-        parts.json                   ← { id, name, comment, fields: [...] }
+        parts.json                   ← { id, name, comment, fields: [...], sampleData: [...] }
         bom_items.json
     versions/
         v1.json                      ← 完整 VersionSnapshot（含 diff）
@@ -272,6 +347,10 @@ data/naming/
 
 data/rules/
     overrides.json                   ← { [ruleId]: { severity?, enabled?, config? } }
+    snapshots/{id}.json              ← 規則快照（{ id, name, createdAt, overrides }）
+
+data/settings/
+    layers.json                      ← 分層顯示名稱（{ schemaLayers, dictLayers }）
 
 data/datahub-push-log.json           ← PushRecord[]（最近 100 筆，append-only）
 ```
@@ -447,6 +526,9 @@ Content-Type: application/json
 | GET | `/api/v1/schemas/:id/ddl` | 匯出 DDL（`?dialect=mariadb\|oracle\|clickhouse`，回傳純文字）|
 | POST | `/api/v1/schemas/:id/import-ddl` | 匯入 DDL（`{ sql, dryRun: true\|false }`）|
 | POST | `/api/v1/schemas/:id/analyze` | AI 分析（SSE 串流）|
+| POST | `/api/v1/schemas/:id/suggest` | AI Schema 設計建議（SSE 串流）|
+| GET | `/api/v1/schemas/:id/export` | 匯出完整 Schema JSON（含 sample data）|
+| POST | `/api/v1/schemas/import` | 從 JSON 匯入 Schema |
 
 ### 版本
 
@@ -460,7 +542,7 @@ Content-Type: application/json
 | 方法 | 路徑 | 說明 |
 |------|------|------|
 | POST | `/api/v1/schemas/:schemaId/tables` | 建立 Table |
-| PATCH | `/api/v1/tables/:tableId` | 更新 Table |
+| PATCH | `/api/v1/tables/:tableId` | 更新 Table（含 `sample_data`）|
 | DELETE | `/api/v1/tables/:tableId` | 刪除 Table |
 | POST | `/api/v1/tables/:tableId/fields` | 建立 Field |
 | PATCH | `/api/v1/fields/:fieldId` | 更新 Field |
@@ -494,6 +576,10 @@ Content-Type: application/json
 |------|------|------|
 | GET | `/api/v1/rules` | 規則設定列表（含 Skill 規則）|
 | PATCH | `/api/v1/rules/:id` | 更新規則嚴重度 / 啟用狀態 / config |
+| GET | `/api/v1/rules/snapshots` | 規則快照列表 |
+| POST | `/api/v1/rules/snapshots` | 儲存規則快照（`{ name: string }`）|
+| POST | `/api/v1/rules/snapshots/:id/restore` | 還原規則快照 |
+| DELETE | `/api/v1/rules/snapshots/:id` | 刪除規則快照 |
 | GET | `/api/v1/skills` | 已載入 Skill 清單 |
 
 ### LLM & 設定
@@ -504,6 +590,8 @@ Content-Type: application/json
 | GET | `/api/v1/settings/llm` | 取得 LLM 設定（API Key 遮罩）|
 | PATCH | `/api/v1/settings/llm` | 更新 LLM 設定 |
 | POST | `/api/v1/settings/llm/test` | 測試 LLM 連線 |
+| GET | `/api/v1/settings/layers` | 取得分層名稱設定 |
+| PATCH | `/api/v1/settings/layers` | 更新分層顯示名稱 |
 
 ### DataHub
 

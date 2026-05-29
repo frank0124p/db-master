@@ -348,6 +348,53 @@ export async function* analyzeSchemaStream(
   }
 }
 
+// ── Schema suggestion (streaming) ────────────────────────────────────────────
+
+export async function* suggestSchemaStream(
+  schemaJson: string,
+): AsyncGenerator<{ type: "token"; text: string } | { type: "done" } | { type: "error"; message: string }> {
+  const template = await fs.readFile(path.join(PROMPTS_DIR, "suggest-schema.md"), "utf-8");
+  const systemPrompt = template.replace("{{schema_json}}", schemaJson);
+
+  const cfg = await getConfig();
+  const model = await resolveModel("analyze");
+  const startMs = Date.now();
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  try {
+    if (cfg.provider === "openai") {
+      for await (const chunk of streamOpenAI(systemPrompt, model, 2048)) {
+        if (chunk.text) yield { type: "token", text: chunk.text };
+        if (chunk.outputTokens) outputTokens = chunk.outputTokens;
+      }
+    } else {
+      const stream = await (await getAnthropicClient()).messages.stream({
+        model, max_tokens: 2048,
+        messages: [{ role: "user", content: systemPrompt }],
+      });
+      for await (const event of stream) {
+        if (event.type === "content_block_delta" && event.delta.type === "text_delta")
+          yield { type: "token", text: event.delta.text };
+        if (event.type === "message_delta" && "usage" in event)
+          outputTokens = (event as { usage?: { output_tokens?: number } }).usage?.output_tokens ?? 0;
+        if (event.type === "message_start" && "message" in event)
+          inputTokens = (event as { message?: { usage?: { input_tokens?: number } } }).message?.usage?.input_tokens ?? 0;
+      }
+    }
+
+    await writeAuditLog({
+      ts: new Date().toISOString(), provider: cfg.provider, model,
+      prompt: schemaJson.slice(0, 200), inputTokens, responseTokens: outputTokens,
+      latencyMs: Date.now() - startMs, costUsd: 0, operation: "suggest-schema",
+    });
+
+    yield { type: "done" };
+  } catch (err: unknown) {
+    yield { type: "error", message: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 // ── Naming suggestion ─────────────────────────────────────────────────────────
 
 export interface NamingSuggestion {

@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import type { Router as RouterType } from "express";
 import { z } from "zod";
 import { getLlmSettings, updateLlmSettings, getMinioSettings, updateMinioSettings } from "../repositories/settings.js";
+import { getLayerSettings, updateLayerSettings } from "../repositories/layerSettings.js";
 import { resetLlmConfig } from "../services/llm.js";
 import { initMinio, testConnection, pushAll, restoreAll, isMinioReady } from "../services/minio.js";
 
@@ -103,6 +104,35 @@ router.post("/storage/restore", async (_req: Request, res: Response, next) => {
   try {
     const result = await restoreAll();
     res.json(result);
+  } catch (e) { next(e); }
+});
+
+// ── Layer Settings ────────────────────────────────────────────────────────────
+
+const LayerDefSchema = z.object({
+  id:    z.string().min(1),
+  label: z.string().min(1),
+});
+
+const LayerSettingsBody = z.object({
+  schemaLayers: z.array(LayerDefSchema).optional(),
+  dictLayers:   z.array(LayerDefSchema).optional(),
+});
+
+router.get("/layers", async (_req: Request, res: Response, next) => {
+  try {
+    res.json(await getLayerSettings());
+  } catch (e) { next(e); }
+});
+
+router.patch("/layers", async (req: Request, res: Response, next) => {
+  try {
+    const parsed = LayerSettingsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", detail: parsed.error.format() } });
+      return;
+    }
+    res.json(await updateLayerSettings(parsed.data));
   } catch (e) { next(e); }
 });
 

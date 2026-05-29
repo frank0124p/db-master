@@ -13,6 +13,7 @@ export interface TableFile {
   id: number; schemaId: number; name: string; comment: string | null;
   createdAt: string; updatedAt: string;
   fields: FieldEntry[];
+  sampleData?: Record<string, unknown>[];
 }
 
 interface SchemaMeta {
@@ -32,6 +33,7 @@ export interface SchemaWithTables {
   tables: {
     id: number; name: string; comment: string | null;
     fields: FieldEntry[];
+    sampleData?: Record<string, unknown>[];
   }[];
 }
 
@@ -104,6 +106,7 @@ export async function loadTables(schemaId: number): Promise<SchemaWithTables["ta
       name: t.name,
       comment: t.comment,
       fields: [...t.fields].sort((a, b) => a.position - b.position),
+      sampleData: t.sampleData ?? [],
     });
   }
   return tables.sort((a, b) => a.id - b.id);

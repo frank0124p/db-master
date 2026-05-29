@@ -19,7 +19,7 @@ export interface Field {
   defaultValue: string | null; isPrimaryKey: boolean; isUnique: boolean;
   comment: string | null; position: number;
 }
-export interface Table { id: number; name: string; comment: string | null; fields: Field[]; }
+export interface Table { id: number; name: string; comment: string | null; fields: Field[]; sampleData?: Record<string, unknown>[]; }
 export interface SchemaDetail extends Schema { tables: Table[]; }
 
 export interface NamingEntry {
@@ -169,6 +169,18 @@ export interface SkillInfo {
   filePath?: string;
 }
 
+// ── Layer Settings ────────────────────────────────────────────────────────────
+
+export interface LayerDef {
+  id: string;
+  label: string;
+}
+
+export interface LayerSettings {
+  schemaLayers: LayerDef[];
+  dictLayers: LayerDef[];
+}
+
 export interface LlmSettings {
   provider: "anthropic" | "openai";
   apiKey: string;
@@ -234,6 +246,17 @@ const realApi = {
       body: JSON.stringify(tableId != null ? { tableId } : {}),
       ...(signal != null ? { signal } : {}),
     }),
+    suggest: (id: number, signal?: AbortSignal) => fetch(`/api/v1/schemas/${id}/suggest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+      ...(signal != null ? { signal } : {}),
+    }),
+    exportSchema: (id: number) => fetch(`/api/v1/schemas/${id}/export`),
+    importSchema: (body: unknown) => req<SchemaDetail>("/schemas/import", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
     versions: {
       list: (id: number) => req<SchemaVersion[]>(`/schemas/${id}/versions`),
       save: (id: number, message?: string) =>
@@ -246,7 +269,7 @@ const realApi = {
   tables: {
     create: (schemaId: number, b: { name: string; comment?: string }) =>
       req<Table>(`/schemas/${schemaId}/tables`, { method: "POST", body: JSON.stringify(b) }),
-    update: (id: number, b: Partial<{ name: string; comment: string }>) =>
+    update: (id: number, b: Partial<{ name: string; comment: string | null; sample_data: Record<string, unknown>[] }>) =>
       req<void>(`/tables/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/tables/${id}`, { method: "DELETE" }),
   },
@@ -307,6 +330,9 @@ const realApi = {
     testStorage: () => req<{ ok: boolean; message: string }>("/settings/storage/test", { method: "POST" }),
     pushToStorage: () => req<{ pushed: number; errors: number }>("/settings/storage/push", { method: "POST" }),
     restoreFromStorage: () => req<{ restored: number; errors: number }>("/settings/storage/restore", { method: "POST" }),
+    getLayers: () => req<LayerSettings>("/settings/layers"),
+    updateLayers: (patch: Partial<LayerSettings>) =>
+      req<LayerSettings>("/settings/layers", { method: "PATCH", body: JSON.stringify(patch) }),
   },
   naming: {
     list: (domain?: string) => req<NamingEntry[]>(`/naming-dictionary${domain ? `?domain=${domain}` : ""}`),

@@ -1,6 +1,6 @@
 import React, { useState, Fragment } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { api, type RuleDetail, type RuleLayer, type SkillInfo, type RuleSnapshot } from "../api.js";
+import { api, type RuleDetail, type RuleLayer, type SkillInfo, type RuleSnapshot, type LayerDef } from "../api.js";
 import { useStore } from "../store.js";
 
 // ── shared helpers ────────────────────────────────────────────────────────────
@@ -773,9 +773,93 @@ function SkillsTab({ skills }: { skills: SkillInfo[] }) {
   );
 }
 
+// ── Layers Tab ────────────────────────────────────────────────────────────────
+function LayerEditor({ title, layers, onChange }: { title: string; layers: LayerDef[]; onChange: (next: LayerDef[]) => void }) {
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
+
+  function startEdit(i: number) { setEditIdx(i); setDraft(layers[i]?.label ?? ""); }
+  function commit(i: number) {
+    if (draft.trim()) {
+      const next = layers.map((l, idx) => idx === i ? { ...l, label: draft.trim() } : l);
+      onChange(next);
+    }
+    setEditIdx(null);
+  }
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>{title}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {layers.map((l, i) => (
+          <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-2)" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-3)", minWidth: 80 }}>{l.id}</span>
+            {editIdx === i ? (
+              <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
+                onBlur={() => commit(i)} onKeyDown={e => { if (e.key === "Enter") commit(i); if (e.key === "Escape") setEditIdx(null); }}
+                style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--text-1)", background: "var(--bg-3)", border: "1px solid var(--accent)", borderRadius: 4, padding: "3px 8px", outline: "none" }} />
+            ) : (
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--text-1)", cursor: "text", padding: "3px 8px", borderRadius: 4, border: "1px solid transparent" }}
+                onClick={() => startEdit(i)}
+                onMouseEnter={e => (e.currentTarget.style.border = "1px solid var(--border-light)")}
+                onMouseLeave={e => (e.currentTarget.style.border = "1px solid transparent")}>
+                {l.label}
+              </span>
+            )}
+            <span style={{ fontSize: 10, color: "var(--text-3)" }}>← 點擊編輯</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LayersTab() {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const { data: layerSettings } = useQuery({ queryKey: ["layer-settings"], queryFn: () => api.settings.getLayers() });
+  const [localSchema, setLocalSchema] = useState<LayerDef[] | null>(null);
+  const [localDict, setLocalDict]     = useState<LayerDef[] | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const schemaLayers = localSchema ?? layerSettings?.schemaLayers ?? [];
+  const dictLayers   = localDict   ?? layerSettings?.dictLayers   ?? [];
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.settings.updateLayers({ schemaLayers: localSchema ?? schemaLayers, dictLayers: localDict ?? dictLayers });
+      await qc.invalidateQueries({ queryKey: ["layer-settings"] });
+      setLocalSchema(null); setLocalDict(null);
+      showToast("✓ 分層名稱已儲存");
+    } catch (e) { showToast(`儲存失敗: ${String(e)}`); }
+    finally { setSaving(false); }
+  }
+
+  const dirty = localSchema !== null || localDict !== null;
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: "24px 32px", maxWidth: 600 }}>
+      <div style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 24 }}>
+        自訂各分層的顯示名稱。修改後點擊「儲存」即套用至全站（字典、規則、Schema 設定）。
+      </div>
+      <LayerEditor title="Schema 分層" layers={schemaLayers}
+        onChange={next => setLocalSchema(next)} />
+      <LayerEditor title="字典 / 規則分層" layers={dictLayers}
+        onChange={next => setLocalDict(next)} />
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        {dirty && <button className="btn btn-ghost" onClick={() => { setLocalSchema(null); setLocalDict(null); }}>還原</button>}
+        <button className="btn btn-primary" disabled={!dirty || saving} onClick={() => void save()}>
+          {saving ? "儲存中…" : "儲存"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function RulesPage() {
-  const [tab, setTab] = useState<"rules" | "skills">("rules");
+  const [tab, setTab] = useState<"rules" | "skills" | "layers">("rules");
 
   const { data: rulesData, isLoading: rulesLoading } = useQuery({
     queryKey: ["rules"],
@@ -814,6 +898,7 @@ export default function RulesPage() {
               userSkillCount > 0 && `${userSkillCount} 自訂`,
             ].filter(Boolean).join(" · "),
           },
+          { id: "layers" as const, label: "分層設定", meta: "" },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ padding: "12px 0", marginRight: 28, border: "none", background: "transparent",
@@ -835,10 +920,12 @@ export default function RulesPage() {
           rulesLoading
             ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>載入中…</div>
             : <RulesTab rules={rules} />
-        ) : (
+        ) : tab === "skills" ? (
           skillsLoading
             ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>載入中…</div>
             : <SkillsTab skills={skills} />
+        ) : (
+          <LayersTab />
         )}
       </div>
     </div>
