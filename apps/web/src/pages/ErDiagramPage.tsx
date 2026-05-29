@@ -126,6 +126,28 @@ interface ArrowProps { edges: FkEdge[]; cardEls: Map<string, DOMRect>; container
 function ArrowOverlay({ edges, cardEls, containerRect }: ArrowProps) {
   if (!containerRect) return null;
 
+  // Count how many edges exit/enter each (table, side) slot to distribute y positions
+  const exitCount  = new Map<string, number>(); // key = "tableName:side"
+  const enterCount = new Map<string, number>();
+  const exitIdx    = new Map<number, number>(); // edge index → slot index
+  const enterIdx   = new Map<number, number>();
+
+  // First pass: determine sides and assign slot indices
+  const sideInfo = edges.map((edge, i) => {
+    const fromRect = cardEls.get(edge.fromTable);
+    const toRect   = cardEls.get(edge.toTable);
+    if (!fromRect || !toRect) return null;
+    const fx = fromRect.left - containerRect.left + fromRect.width / 2;
+    const tx = toRect.left   - containerRect.left + toRect.width  / 2;
+    const fromSide = fx <= tx ? "right" : "left";
+    const toSide   = fx <= tx ? "left"  : "right";
+    const exitKey  = `${edge.fromTable}:${fromSide}`;
+    const entKey   = `${edge.toTable}:${toSide}`;
+    const ei = exitCount.get(exitKey)  ?? 0; exitCount.set(exitKey,  ei + 1); exitIdx.set(i, ei);
+    const en = enterCount.get(entKey)  ?? 0; enterCount.set(entKey, en + 1); enterIdx.set(i, en);
+    return { fromSide, toSide, exitKey, entKey };
+  });
+
   return (
     <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
       <defs>
@@ -138,58 +160,67 @@ function ArrowOverlay({ edges, cardEls, containerRect }: ArrowProps) {
       </defs>
       {edges.map((edge, i) => {
         const fromRect = cardEls.get(edge.fromTable);
-        const toRect = cardEls.get(edge.toTable);
-        if (!fromRect || !toRect) return null;
+        const toRect   = cardEls.get(edge.toTable);
+        if (!fromRect || !toRect || !sideInfo[i]) return null;
 
-        const fx = fromRect.left - containerRect.left + fromRect.width / 2;
-        const fy = fromRect.top - containerRect.top + 30; // near header
-        const tx = toRect.left - containerRect.left + toRect.width / 2;
-        const ty = toRect.top - containerRect.top + 30;
+        const { fromSide, exitKey, entKey } = sideInfo[i]!;
+        const totalExit  = exitCount.get(exitKey)  ?? 1;
+        const totalEnter = enterCount.get(entKey)  ?? 1;
+        const ei = exitIdx.get(i)  ?? 0;
+        const en = enterIdx.get(i) ?? 0;
 
-        // Draw from right/left edge depending on horizontal position
-        const fromRight = fromRect.right - containerRect.left;
-        const fromLeft = fromRect.left - containerRect.left;
-        const toRight = toRect.right - containerRect.left;
-        const toLeft = toRect.left - containerRect.left;
+        const HEADER_H = 36; // card header height px
+        const GAP = 4;
 
-        let x1: number, x2: number, y1: number, y2: number, cx1: number, cx2: number;
+        // Distribute y within the usable card body (below header)
+        const fromBodyH = Math.max(fromRect.height - HEADER_H, 24);
+        const toBodyH   = Math.max(toRect.height   - HEADER_H, 24);
+        const fromY0 = fromRect.top - containerRect.top + HEADER_H;
+        const toY0   = toRect.top   - containerRect.top + HEADER_H;
 
-        if (fx < tx) {
-          // from is left of to → exit right, enter left
-          x1 = fromRight; y1 = fromRect.top - containerRect.top + 28;
-          x2 = toLeft - 8; y2 = toRect.top - containerRect.top + 28;
-          cx1 = x1 + Math.max(40, (x2 - x1) * 0.5); cx2 = x2 - Math.max(40, (x2 - x1) * 0.5);
-        } else if (fx > tx) {
-          // from is right of to → exit left, enter right
-          x1 = fromLeft; y1 = fromRect.top - containerRect.top + 28;
-          x2 = toRight + 8; y2 = toRect.top - containerRect.top + 28;
-          cx1 = x1 - Math.max(40, (x1 - x2) * 0.5); cx2 = x2 + Math.max(40, (x1 - x2) * 0.5);
+        const slot = (total: number, idx: number, bodyH: number, y0: number) => {
+          const step = Math.max((bodyH - GAP * 2) / (total + 1), 16);
+          return y0 + GAP + step * (idx + 1);
+        };
+
+        const y1 = slot(totalExit,  ei, fromBodyH, fromY0);
+        const y2 = slot(totalEnter, en, toBodyH,   toY0);
+
+        let x1: number, x2: number, cx1: number, cx2: number;
+
+        if (fromSide === "right") {
+          x1 = fromRect.right - containerRect.left;
+          x2 = toRect.left    - containerRect.left - 8;
+          const spread = Math.max(50, Math.abs(x2 - x1) * 0.45);
+          cx1 = x1 + spread; cx2 = x2 - spread;
+        } else if (fromSide === "left") {
+          x1 = fromRect.left  - containerRect.left;
+          x2 = toRect.right   - containerRect.left + 8;
+          const spread = Math.max(50, Math.abs(x1 - x2) * 0.45);
+          cx1 = x1 - spread; cx2 = x2 + spread;
         } else {
-          // same column → connect bottom to top or vice versa
+          // same horizontal center — route below/above
           x1 = fromRect.left - containerRect.left + fromRect.width / 2;
-          y1 = fromRect.bottom - containerRect.top;
-          x2 = toRect.left - containerRect.left + toRect.width / 2;
-          y2 = toRect.top - containerRect.top - 8;
-          cx1 = x1; cx2 = x2;
+          x2 = toRect.left   - containerRect.left + toRect.width  / 2;
+          const offset = 40 + ei * 20;
+          cx1 = x1 - offset; cx2 = x2 - offset;
         }
 
         const isDashed = edge.nullable;
-        const color = "var(--accent)";
-        const markerId = isDashed ? "arrow-dashed" : "arrow-solid";
+        const color = isDashed ? "rgba(123,140,255,0.55)" : "var(--accent)";
 
         return (
           <g key={i}>
             <path
               d={`M ${x1} ${y1} C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}`}
-              stroke={isDashed ? "rgba(123,140,255,0.5)" : color}
+              stroke={color}
               strokeWidth={isDashed ? 1.5 : 2}
               strokeDasharray={isDashed ? "5 3" : "none"}
               fill="none"
-              markerEnd={`url(#${markerId})`}
+              markerEnd={`url(#${isDashed ? "arrow-dashed" : "arrow-solid"})`}
             />
-            {/* FK field label */}
             <text
-              x={(x1 + x2) / 2} y={Math.min(y1, y2) - 5}
+              x={(x1 + cx1) / 2} y={y1 - 4}
               fontSize={9} fill="var(--text-3)" textAnchor="middle"
               fontFamily="JetBrains Mono, monospace"
             >{edge.fromField}</text>

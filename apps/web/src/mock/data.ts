@@ -35,6 +35,12 @@ function field(
 const plmTables: Table[] = [
   {
     id: 10, name: "parts", comment: "零件主檔 — 所有受管控物料的唯一來源",
+    sampleData: [
+      { id: 1001, part_no: "IC-MCU-001", part_name: "32-bit Cortex-M4 MCU", part_type: "IC", lifecycle_state: "released", process_node: "TSMC 55nm", description: "主控制器，512KB Flash", created_at: "2024-01-10 08:00:00", updated_at: "2024-03-15 10:30:00" },
+      { id: 1002, part_no: "IC-PWR-007", part_name: "3.3V LDO Regulator",   part_type: "IC", lifecycle_state: "released", process_node: "UMC 0.18µm", description: "低壓差線性穩壓器 500mA", created_at: "2024-01-12 09:00:00", updated_at: "2024-02-20 14:00:00" },
+      { id: 1003, part_no: "PCB-MB-002", part_name: "Main Board Rev B",      part_type: "PCB", lifecycle_state: "review",   process_node: null,           description: "4層板，FR4，1.6mm", created_at: "2024-02-01 10:00:00", updated_at: "2024-04-01 16:00:00" },
+      { id: 1004, part_no: "MECH-HSK-01",part_name: "Heatsink Assy",         part_type: "MECH",lifecycle_state: "released", process_node: null,           description: "鋁擠型散熱片 40×40×10mm", created_at: "2023-11-01 08:00:00", updated_at: "2024-01-05 08:00:00" },
+    ],
     fields: [
       field(1001, 10, "id",              "BIGINT",       { isPrimaryKey: true, nullable: false, comment: "系統主鍵" }),
       field(1002, 10, "part_no",         "VARCHAR(32)",  { isUnique: true,     nullable: false, comment: "料號，全域唯一" }),
@@ -49,6 +55,12 @@ const plmTables: Table[] = [
   },
   {
     id: 11, name: "part_revisions", comment: "零件版本管理 — 每次 ECO 後建立新版本",
+    sampleData: [
+      { id: 101, part_id: 1001, revision_no: "A0", revision_state: "released",  released_at: "2024-01-20 00:00:00", created_at: "2024-01-15 08:00:00", updated_at: "2024-01-20 00:00:00" },
+      { id: 102, part_id: 1001, revision_no: "A1", revision_state: "released",  released_at: "2024-03-01 00:00:00", created_at: "2024-02-20 09:00:00", updated_at: "2024-03-01 00:00:00" },
+      { id: 103, part_id: 1002, revision_no: "A0", revision_state: "released",  released_at: "2024-01-25 00:00:00", created_at: "2024-01-18 10:00:00", updated_at: "2024-01-25 00:00:00" },
+      { id: 104, part_id: 1003, revision_no: "B0", revision_state: "draft",     released_at: null,                  created_at: "2024-02-01 10:00:00", updated_at: "2024-04-01 16:00:00" },
+    ],
     fields: [
       field(1101, 11, "id",             "BIGINT",      { isPrimaryKey: true, nullable: false }),
       field(1102, 11, "part_id",        "BIGINT",      { nullable: false, comment: "FK → parts.id" }),
@@ -61,6 +73,11 @@ const plmTables: Table[] = [
   },
   {
     id: 12, name: "bom_items", comment: "BOM 結構 — 父子零件關係",
+    sampleData: [
+      { id: 201, parent_id: 1003, child_id: 1001, quantity: "1.0000", unit: "EA", bom_type: "MBOM", position: 1, created_at: "2024-02-05 08:00:00", updated_at: "2024-02-05 08:00:00" },
+      { id: 202, parent_id: 1003, child_id: 1002, quantity: "2.0000", unit: "EA", bom_type: "MBOM", position: 2, created_at: "2024-02-05 08:00:00", updated_at: "2024-02-05 08:00:00" },
+      { id: 203, parent_id: 1003, child_id: 1004, quantity: "1.0000", unit: "EA", bom_type: "MBOM", position: 3, created_at: "2024-02-05 08:00:00", updated_at: "2024-02-05 08:00:00" },
+    ],
     fields: [
       field(1201, 12, "id",        "BIGINT",      { isPrimaryKey: true, nullable: false }),
       field(1202, 12, "parent_id", "BIGINT",      { nullable: false, comment: "FK → parts.id（父件）" }),
@@ -75,6 +92,10 @@ const plmTables: Table[] = [
   },
   {
     id: 13, name: "engineering_changes", comment: "ECO 工程變更單",
+    sampleData: [
+      { id: 301, ec_no: "ECO-2024-0031", title: "MCU 升級至 Rev A1 — 修正 Timer 問題", status: "approved", approver_id: "ENG-0042", effective_date: "2024-03-01", created_at: "2024-02-20 09:00:00", updated_at: "2024-03-01 00:00:00" },
+      { id: 302, ec_no: "ECO-2024-0045", title: "Main Board Rev B 更換 LDO 供應商",    status: "pending",  approver_id: null,        effective_date: null,         created_at: "2024-04-02 10:00:00", updated_at: "2024-04-02 10:00:00" },
+    ],
     fields: [
       field(1301, 13, "id",             "BIGINT",       { isPrimaryKey: true, nullable: false }),
       field(1302, 13, "ec_no",          "VARCHAR(32)",  { isUnique: true, nullable: false, comment: "ECO 編號" }),
@@ -88,6 +109,11 @@ const plmTables: Table[] = [
   },
   {
     id: 14, name: "suppliers", comment: "供應商主檔",
+    sampleData: [
+      { id: 401, supplier_code: "SUP-TSMC-001", supplier_name: "台積電股份有限公司",   country: "Taiwan", status: "active", created_at: "2023-01-01 00:00:00", updated_at: "2024-01-01 00:00:00" },
+      { id: 402, supplier_code: "SUP-MURATA-01",supplier_name: "Murata Manufacturing", country: "Japan",  status: "active", created_at: "2023-01-01 00:00:00", updated_at: "2024-01-01 00:00:00" },
+      { id: 403, supplier_code: "SUP-YAGEO-01", supplier_name: "國巨股份有限公司",     country: "Taiwan", status: "active", created_at: "2023-06-01 00:00:00", updated_at: "2024-03-01 00:00:00" },
+    ],
     fields: [
       field(1401, 14, "id",            "BIGINT",       { isPrimaryKey: true, nullable: false }),
       field(1402, 14, "supplier_code", "VARCHAR(32)",  { isUnique: true, nullable: false }),
@@ -100,6 +126,11 @@ const plmTables: Table[] = [
   },
   {
     id: 15, name: "part_suppliers", comment: "零件供應商對應（多對多）",
+    sampleData: [
+      { id: 501, part_id: 1001, supplier_id: 401, preferred: 1, lead_time_days: 90, created_at: "2024-01-15 08:00:00" },
+      { id: 502, part_id: 1002, supplier_id: 402, preferred: 1, lead_time_days: 14, created_at: "2024-01-15 08:00:00" },
+      { id: 503, part_id: 1002, supplier_id: 403, preferred: 0, lead_time_days: 21, created_at: "2024-02-01 08:00:00" },
+    ],
     fields: [
       field(1501, 15, "id",              "BIGINT",  { isPrimaryKey: true, nullable: false }),
       field(1502, 15, "part_id",         "BIGINT",  { nullable: false }),
@@ -125,6 +156,12 @@ export const plmSchema: SchemaDetail = {
 const mesTables: Table[] = [
   {
     id: 20, name: "lots", comment: "批次主檔",
+    sampleData: [
+      { id: 601, lot_id: "LOT-20240401-001", product_id: 1001, quantity: 25, status: "complete",  created_at: "2024-04-01 07:00:00", updated_at: "2024-04-03 18:30:00" },
+      { id: 602, lot_id: "LOT-20240401-002", product_id: 1001, quantity: 25, status: "run",        created_at: "2024-04-01 07:30:00", updated_at: "2024-04-02 09:00:00" },
+      { id: 603, lot_id: "LOT-20240402-001", product_id: 1002, quantity: 50, status: "hold",       created_at: "2024-04-02 06:00:00", updated_at: "2024-04-02 14:00:00" },
+      { id: 604, lot_id: "LOT-20240403-001", product_id: 1001, quantity: 25, status: "queue",      created_at: "2024-04-03 06:00:00", updated_at: "2024-04-03 06:00:00" },
+    ],
     fields: [
       field(2001, 20, "id",         "BIGINT",      { isPrimaryKey: true, nullable: false }),
       field(2002, 20, "lot_id",     "VARCHAR(32)", { isUnique: true, nullable: false, comment: "批號，格式 LOT-YYYYMMDD-NNN" }),
@@ -137,6 +174,12 @@ const mesTables: Table[] = [
   },
   {
     id: 21, name: "wafers", comment: "晶圓片資訊",
+    sampleData: [
+      { id: 701, lot_id: 601, wafer_no: 1,  status: "pass",    created_at: "2024-04-01 07:00:00", updated_at: "2024-04-03 18:00:00" },
+      { id: 702, lot_id: 601, wafer_no: 2,  status: "pass",    created_at: "2024-04-01 07:00:00", updated_at: "2024-04-03 18:00:00" },
+      { id: 703, lot_id: 601, wafer_no: 3,  status: "scrap",   created_at: "2024-04-01 07:00:00", updated_at: "2024-04-02 11:30:00" },
+      { id: 704, lot_id: 602, wafer_no: 1,  status: "wip",     created_at: "2024-04-01 07:30:00", updated_at: "2024-04-02 09:00:00" },
+    ],
     fields: [
       field(2101, 21, "id",         "BIGINT",     { isPrimaryKey: true, nullable: false }),
       field(2102, 21, "lot_id",     "BIGINT",     { nullable: false, comment: "FK → lots.id" }),
@@ -148,6 +191,12 @@ const mesTables: Table[] = [
   },
   {
     id: 22, name: "operations", comment: "製程操作記錄",
+    sampleData: [
+      { id: 801, lot_id: 601, operation_code: "PHOTO-01", equip_id: "EQ-LITHO-001", operator_id: "OP-A034", start_time: "2024-04-01 08:00:00", end_time: "2024-04-01 10:30:00", created_at: "2024-04-01 08:00:00", updated_at: "2024-04-01 10:30:00" },
+      { id: 802, lot_id: 601, operation_code: "ETCH-02",  equip_id: "EQ-ETCH-003",  operator_id: "OP-B017", start_time: "2024-04-01 11:00:00", end_time: "2024-04-01 13:45:00", created_at: "2024-04-01 11:00:00", updated_at: "2024-04-01 13:45:00" },
+      { id: 803, lot_id: 601, operation_code: "CVD-05",   equip_id: "EQ-CVD-002",   operator_id: "OP-A034", start_time: "2024-04-02 09:00:00", end_time: "2024-04-02 12:00:00", created_at: "2024-04-02 09:00:00", updated_at: "2024-04-02 12:00:00" },
+      { id: 804, lot_id: 602, operation_code: "PHOTO-01", equip_id: "EQ-LITHO-002", operator_id: "OP-C009", start_time: "2024-04-01 09:00:00", end_time: null,                  created_at: "2024-04-01 09:00:00", updated_at: "2024-04-02 09:00:00" },
+    ],
     fields: [
       field(2201, 22, "id",             "BIGINT",      { isPrimaryKey: true, nullable: false }),
       field(2202, 22, "lot_id",         "BIGINT",      { nullable: false }),
@@ -162,6 +211,12 @@ const mesTables: Table[] = [
   },
   {
     id: 23, name: "equipment", comment: "設備主檔",
+    sampleData: [
+      { id: 901, equip_id: "EQ-LITHO-001", equip_name: "ASML NXT:1980Di Scanner #1", equip_type: "PHOTO", status: "up",   created_at: "2022-06-01 00:00:00", updated_at: "2024-04-01 06:00:00" },
+      { id: 902, equip_id: "EQ-LITHO-002", equip_name: "ASML NXT:1980Di Scanner #2", equip_type: "PHOTO", status: "pm",   created_at: "2022-06-01 00:00:00", updated_at: "2024-04-02 08:00:00" },
+      { id: 903, equip_id: "EQ-ETCH-003",  equip_name: "Lam Research Kiyo 45 Etch",  equip_type: "ETCH",  status: "up",   created_at: "2022-08-01 00:00:00", updated_at: "2024-04-01 06:00:00" },
+      { id: 904, equip_id: "EQ-CVD-002",   equip_name: "AMAT Producer GT CVD",       equip_type: "CVD",   status: "down", created_at: "2022-09-01 00:00:00", updated_at: "2024-04-03 14:00:00" },
+    ],
     fields: [
       field(2301, 23, "id",          "BIGINT",       { isPrimaryKey: true, nullable: false }),
       field(2302, 23, "equip_id",    "VARCHAR(32)",  { isUnique: true, nullable: false }),
