@@ -248,12 +248,13 @@ export const mockSchemas: Schema[] = [
 // ── Wide Tables (for PLM Core) ────────────────────────────────────────────────
 
 export const mockWideSummaries: WideTableSummary[] = [
-  { id: 1, schemaId: 1, name: "v_bom_flat", description: "BOM 展開視圖 — 父件 × 子件 × 版本", createdAt: ts(5), updatedAt: ts(1) },
+  { id: 1, schemaId: 1, name: "v_bom_flat", description: "BOM 展開視圖 — 父件 × 子件 × 版本", wideTableType: "r2u", createdAt: ts(5), updatedAt: ts(1) },
 ];
 
 export const mockWideDetail: WideTableDetail = {
   id: 1, schemaId: 1, name: "v_bom_flat",
   description: "BOM 展開視圖 — 父件 × 子件 × 版本",
+  wideTableType: "r2u",
   createdAt: ts(5), updatedAt: ts(1),
   sources: [
     { id: 1, wideTableId: 1, schemaId: 1, tableId: 10, tableName: "parts",          colPrefix: "parent", joinType: "BASE",  joinCondition: null,                           position: 0 },

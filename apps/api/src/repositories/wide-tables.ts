@@ -6,6 +6,7 @@ import { wideTableFile, wideTablesDir, loadTables, getSchemaSlug, toSlug } from 
 
 export type WideTableSummary = {
   id: number; schemaId: number; name: string; description: string | null;
+  wideTableType: "unified" | "r2u";
   createdAt: Date; updatedAt: Date;
 };
 
@@ -28,6 +29,7 @@ export type WideTableDetail = WideTableSummary & {
 
 export interface WideTableFile {
   id: number; schemaId: number; name: string; description: string | null;
+  wideTableType?: "unified" | "r2u";
   createdAt: string; updatedAt: string;
   sources: WideTableSource[];
   columns: WideTableColumn[];
@@ -38,6 +40,7 @@ export interface WideTableFile {
 export const CreateWideTableInput = z.object({
   name: z.string().min(1).max(128),
   description: z.string().optional(),
+  wideTableType: z.enum(["unified", "r2u"]).default("r2u"),
   sources: z.array(z.object({
     schemaId: z.number().optional(),
     tableId: z.number(),
@@ -60,6 +63,7 @@ export type CreateWideTableInput = z.infer<typeof CreateWideTableInput>;
 
 function toSummary(f: WideTableFile): WideTableSummary {
   return { id: f.id, schemaId: f.schemaId, name: f.name, description: f.description,
+    wideTableType: f.wideTableType ?? "r2u",
     createdAt: new Date(f.createdAt), updatedAt: new Date(f.updatedAt) };
 }
 
@@ -165,6 +169,7 @@ export async function createWideTable(schemaId: number, input: CreateWideTableIn
   const nameSlug = await uniqueWideTableSlug(schemaSlug, toSlug(input.name));
   const wf: WideTableFile = {
     id: wtId, schemaId, name: input.name, description: input.description ?? null,
+    wideTableType: input.wideTableType,
     createdAt: now, updatedAt: now, sources, columns,
   };
   await store.writeJson(wideTableFile(schemaSlug, nameSlug), wf);

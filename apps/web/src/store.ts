@@ -12,6 +12,7 @@ interface AppStore {
   theme: Theme;
   locale: Locale;
   activeSuiteId: number | null;
+  suitePicked: boolean;
   setPage: (p: Page) => void;
   setSelectedSchemaId: (id: number | null) => void;
   setSelectedTableId: (id: number | null) => void;
@@ -19,6 +20,7 @@ interface AppStore {
   setTheme: (t: Theme) => void;
   setLocale: (l: Locale) => void;
   setActiveSuiteId: (id: number | null) => void;
+  setSuitePicked: (picked: boolean) => void;
 }
 
 function applyTheme(t: Theme) {
@@ -30,6 +32,7 @@ const savedTheme  = (localStorage.getItem("schema-studio-theme")  as Theme  | nu
 const savedLocale = (localStorage.getItem("schema-studio-locale") as Locale | null) ?? "zh";
 const savedSuiteRaw = localStorage.getItem("schema-studio-suite");
 const savedSuiteId: number | null = savedSuiteRaw !== null ? (Number(savedSuiteRaw) || null) : null;
+const savedSuitePicked = localStorage.getItem("schema-studio-suite-picked") === "1";
 applyTheme(savedTheme);
 
 export const useStore = create<AppStore>((set) => ({
@@ -40,6 +43,7 @@ export const useStore = create<AppStore>((set) => ({
   theme: savedTheme,
   locale: savedLocale,
   activeSuiteId: savedSuiteId,
+  suitePicked: savedSuitePicked,
   setPage: (page) => set({ page }),
   setSelectedSchemaId: (selectedSchemaId) => set({ selectedSchemaId, selectedTableId: null }),
   setSelectedTableId:  (selectedTableId)  => set({ selectedTableId }),
@@ -62,5 +66,10 @@ export const useStore = create<AppStore>((set) => ({
       localStorage.setItem("schema-studio-suite", String(activeSuiteId));
     }
     set({ activeSuiteId });
+  },
+  setSuitePicked: (picked) => {
+    if (picked) localStorage.setItem("schema-studio-suite-picked", "1");
+    else localStorage.removeItem("schema-studio-suite-picked");
+    set({ suitePicked: picked });
   },
 }));

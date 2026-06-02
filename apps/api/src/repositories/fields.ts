@@ -5,6 +5,7 @@ import { TableFile, getTableFilePath } from "./schemas.js";
 export async function createField(tableId: number, input: {
   name: string; data_type: string; nullable?: boolean; default_value?: string | null;
   is_primary_key?: boolean; is_unique?: boolean; comment?: string | null; position?: number;
+  source_table?: string | null; source_field?: string | null;
 }) {
   const schemaId = await store.indexGet("tableSchema", tableId);
   if (schemaId === null) throw new NotFoundError("Table", tableId);
@@ -24,6 +25,8 @@ export async function createField(tableId: number, input: {
     isUnique: input.is_unique ?? false,
     comment: input.comment ?? null,
     position,
+    sourceTable: input.source_table ?? null,
+    sourceField: input.source_field ?? null,
   };
 
   tbl.fields.push(field);
@@ -36,6 +39,7 @@ export async function createField(tableId: number, input: {
 export async function updateField(id: number, input: Partial<{
   name: string; data_type: string; nullable: boolean; default_value: string | null;
   is_primary_key: boolean; is_unique: boolean; comment: string | null; position: number;
+  source_table: string | null; source_field: string | null;
 }>) {
   const tableId = await store.indexGet("fieldTable", id);
   if (tableId === null) throw new NotFoundError("Field", id);
@@ -56,6 +60,8 @@ export async function updateField(id: number, input: Partial<{
   if (input.is_unique !== undefined) f.isUnique = input.is_unique;
   if (input.comment !== undefined) f.comment = input.comment;
   if (input.position !== undefined) f.position = input.position;
+  if (input.source_table !== undefined) f.sourceTable = input.source_table;
+  if (input.source_field !== undefined) f.sourceField = input.source_field;
 
   tbl.updatedAt = new Date().toISOString();
   await store.writeJson(filePath, tbl);

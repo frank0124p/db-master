@@ -14,7 +14,7 @@ export default function WideTablePage() {
     return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>← 從左側選擇一個 Schema</div>;
   }
 
-  if (view === "builder") return <WideTableBuilder schemaId={selectedSchemaId} onDone={() => setView("list")} />;
+  if (view === "builder") return <WideTableTypeSelector schemaId={selectedSchemaId} onDone={() => setView("list")} />;
   if (view === "detail" && detailId) return <WideTableDetailView schemaId={selectedSchemaId} id={detailId} onBack={() => setView("list")} />;
   return <WideTableList schemaId={selectedSchemaId} onNew={() => setView("builder")} onOpen={id => { setDetailId(id); setView("detail"); }} />;
 }
@@ -52,7 +52,7 @@ function WideTableList({ schemaId, onNew, onOpen }: { schemaId: number; onNew: (
           <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-3)" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⊞</div>
             <div style={{ fontSize: 13, marginBottom: 6 }}>尚無寬表定義</div>
-            <div style={{ fontSize: 12 }}>勾選多張 Table，系統自動分析 FK 關係並產生 VIEW</div>
+            <div style={{ fontSize: 12 }}>選擇 Unified 或 R2U 類型，依需求整合 Table 並產生 VIEW</div>
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
@@ -63,7 +63,15 @@ function WideTableList({ schemaId, onNew, onOpen }: { schemaId: number; onNew: (
               onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                 <div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--accent)", fontWeight: 600, marginBottom: 4 }}>{wt.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--accent)", fontWeight: 600 }}>{wt.name}</div>
+                    <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, fontWeight: 700,
+                      background: wt.wideTableType === "unified" ? "rgba(52,211,153,0.15)" : "rgba(167,139,250,0.15)",
+                      color: wt.wideTableType === "unified" ? "#34d399" : "#a78bfa",
+                      border: `1px solid ${wt.wideTableType === "unified" ? "rgba(52,211,153,0.4)" : "rgba(167,139,250,0.4)"}` }}>
+                      {wt.wideTableType === "unified" ? "UNIFIED" : "R2U"}
+                    </span>
+                  </div>
                   {wt.description && <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8 }}>{wt.description}</div>}
                   <div style={{ fontSize: 11, color: "var(--text-3)" }}>{new Date(wt.createdAt).toLocaleString("zh-TW")}</div>
                 </div>
@@ -449,12 +457,66 @@ function SchemaSection({ schema, isPrimary, expanded, onToggleExpand, checked, o
   );
 }
 
+// ── Type Selector (pre-builder) ───────────────────────────────────────────────
+
+type WideTableType = "unified" | "r2u";
+
+function WideTableTypeSelector({ schemaId, onDone }: { schemaId: number; onDone: () => void }) {
+  const [selected, setSelected] = useState<WideTableType | null>(null);
+  if (selected) return <WideTableBuilder schemaId={schemaId} wideTableType={selected} onDone={onDone} />;
+
+  const options: { type: WideTableType; icon: string; title: string; subtitle: string; desc: string; color: string; bg: string }[] = [
+    {
+      type: "unified", icon: "⊡", title: "Unified Layer", subtitle: "單表或多表",
+      desc: "將一張 Table 的特定欄位組合成統一視圖，也可加入多表 JOIN。適合整合單一主體的寬表定義。",
+      color: "#34d399", bg: "rgba(52,211,153,0.08)",
+    },
+    {
+      type: "r2u", icon: "⊞", title: "R2U（原始→整合）", subtitle: "需要 2 張以上",
+      desc: "將多張原始表透過 FK 關係整合成寬表，系統自動分析 JOIN 路徑。適合跨表整合場景。",
+      color: "#a78bfa", bg: "rgba(167,139,250,0.08)",
+    },
+  ];
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)", flexShrink: 0 }}>
+        <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={onDone}>← 取消</button>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>新建寬表 — 選擇類型</span>
+      </div>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 600, width: "100%" }}>
+          <div style={{ fontSize: 13, color: "var(--text-2)", textAlign: "center", marginBottom: 8 }}>請選擇要建立的寬表類型</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {options.map(opt => (
+              <button key={opt.type} onClick={() => setSelected(opt.type)}
+                style={{ padding: "24px 20px", borderRadius: 12, border: `2px solid var(--border)`,
+                  background: opt.bg, cursor: "pointer", textAlign: "left", transition: "all 0.15s",
+                  display: "flex", flexDirection: "column", gap: 8 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = opt.color; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; }}>
+                <div style={{ fontSize: 28, lineHeight: 1 }}>{opt.icon}</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: opt.color, marginBottom: 2 }}>{opt.title}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8 }}>{opt.subtitle}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.6 }}>{opt.desc}</div>
+                </div>
+                <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: opt.color }}>選擇 →</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Builder ───────────────────────────────────────────────────────────────────
 
 type Step = "select" | "columns" | "save";
 type InputMode = "check" | "sql";
 
-function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () => void }) {
+function WideTableBuilder({ schemaId, wideTableType, onDone }: { schemaId: number; wideTableType: WideTableType; onDone: () => void }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const { data: schema } = useQuery({ queryKey: ["schema", schemaId], queryFn: () => api.schemas.get(schemaId) });
@@ -482,10 +544,12 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
     });
   }
 
+  const minTables = wideTableType === "unified" ? 1 : 2;
+
   // Auto-trigger analysis whenever checked set changes (debounced) — check mode only
   useEffect(() => {
     if (inputMode !== "check") return;
-    if (checked.size < 2) { setPreview(null); setSources([]); setColumns([]); return; }
+    if (checked.size < minTables) { setPreview(null); setSources([]); setColumns([]); return; }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setAnalyzing(true);
@@ -499,7 +563,7 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
       }
     }, 350);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checked, inputMode]);
+  }, [checked, inputMode, minTables]);
 
   function toggle(sid: number, tid: number) {
     const key = `${sid}:${tid}`;
@@ -570,6 +634,7 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
       const body = {
         name: name.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
+        wideTableType,
         sources: sources.map(s => ({ schemaId: s.schemaId, tableId: s.tableId, colPrefix: s.colPrefix || null, joinType: s.joinType, joinCondition: s.joinCondition || null, position: s.position })),
         columns: columns.map((c, i) => ({ sourcePosition: c.sourcePosition, fieldId: c.fieldId, outputName: c.outputName, included: c.included, position: i })),
       };
@@ -602,7 +667,14 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
       {/* Header */}
       <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)", flexShrink: 0 }}>
         <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={onDone}>← 取消</button>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>新建寬表 — {schema?.name}</span>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>新建寬表
+          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, marginLeft: 8, fontWeight: 700,
+            background: wideTableType === "unified" ? "rgba(52,211,153,0.15)" : "rgba(167,139,250,0.15)",
+            color: wideTableType === "unified" ? "#34d399" : "#a78bfa" }}>
+            {wideTableType === "unified" ? "Unified" : "R2U"}
+          </span>
+          {" "}— {schema?.name}
+        </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 2, alignItems: "center" }}>
           {steps.map((s, i) => (
             <span key={s.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -680,7 +752,11 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-3)", gap: 8 }}>
                   <div style={{ fontSize: 28 }}>⊞</div>
                   <div style={{ fontSize: 13 }}>
-                    {inputMode === "check" ? "勾選 2 張以上 Table（可跨 Schema），系統將自動分析 FK 關係" : "貼入 SQL，點擊「解析 SQL」查看關聯圖"}
+                    {inputMode === "check"
+                      ? wideTableType === "unified"
+                        ? "勾選 1 張以上 Table（可跨 Schema），系統將自動產生欄位清單"
+                        : "勾選 2 張以上 Table（可跨 Schema），系統將自動分析 FK 關係"
+                      : "貼入 SQL，點擊「解析 SQL」查看關聯圖"}
                   </div>
                 </div>
               )}
@@ -699,7 +775,7 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
                   <SectionHeader title="Join 關係設定" badge={`${sources.filter(s => s.position > 0 && s.joinCondition).length} / ${sources.length - 1} 已解析`} badgeColor={unresolved > 0 ? "var(--warning)" : "var(--success)"} />
                   <JoinGraph sources={sources} editable onUpdate={updateJoin} />
 
-                  {unresolved > 0 && (
+                  {unresolved > 0 && wideTableType === "r2u" && (
                     <div style={{ padding: "10px 12px", background: "rgba(251,191,36,0.08)", border: "1px solid var(--warning)", borderRadius: 6, fontSize: 12, color: "var(--warning)" }}>
                       ⚠ {unresolved} 個 Join 條件未能自動偵測，請手動填寫 ON 條件後再繼續
                     </div>
@@ -709,7 +785,9 @@ function WideTableBuilder({ schemaId, onDone }: { schemaId: number; onDone: () =
                   <ColumnSummary sources={sources} columns={columns} />
 
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button className="btn btn-primary" onClick={() => setStep("columns")}>下一步：選擇欄位 →</button>
+                    <button className="btn btn-primary"
+                      disabled={wideTableType === "r2u" && unresolved > 0}
+                      onClick={() => setStep("columns")}>下一步：選擇欄位 →</button>
                   </div>
                 </>
               )}

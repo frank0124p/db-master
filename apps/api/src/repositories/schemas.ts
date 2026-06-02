@@ -7,6 +7,7 @@ export interface FieldEntry {
   id: number; tableId: number; name: string; dataType: string; nullable: boolean;
   defaultValue: string | null; isPrimaryKey: boolean; isUnique: boolean;
   comment: string | null; position: number;
+  sourceTable?: string | null; sourceField?: string | null;
 }
 
 export interface TableFile {

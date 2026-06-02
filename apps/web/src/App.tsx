@@ -334,7 +334,7 @@ function SuiteManageModal({ suites, schemas, activeSuiteId, onClose }: {
 
 function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
   const qc = useQueryClient();
-  const { selectedSchemaId, setSelectedSchemaId, showToast, activeSuiteId, setActiveSuiteId } = useStore();
+  const { selectedSchemaId, setSelectedSchemaId, showToast, activeSuiteId, setActiveSuiteId, setSuitePicked } = useStore();
   const { data: schemas } = useQuery({ queryKey: ["schemas"], queryFn: api.schemas.list });
   const { data: suites } = useQuery({ queryKey: ["suites"], queryFn: api.suites.list });
   const [showModal, setShowModal] = useState(false);
@@ -403,7 +403,12 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
       </div>
 
       {suites && suites.length > 0 && (
-        <div style={{ padding: "4px 8px 4px", display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0 }}>
+        <div style={{ padding: "4px 8px 4px", display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0, alignItems: "center" }}>
+          <button onClick={() => setSuitePicked(false)}
+            title="切換 Suite"
+            style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, border: "1px solid var(--border)", cursor: "pointer", background: "transparent", color: "var(--text-3)", marginRight: 2 }}>
+            ⇄
+          </button>
           <button onClick={() => setActiveSuiteId(null)}
             style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: "1px solid var(--border)", cursor: "pointer", fontWeight: activeSuiteId === null ? 700 : 400,
               background: activeSuiteId === null ? "var(--accent-dim)" : "transparent",
@@ -601,9 +606,79 @@ function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   );
 }
 
+// ── Suite Splash Screen ───────────────────────────────────────────────────────
+function SuiteSplash() {
+  const { setActiveSuiteId, setSuitePicked } = useStore();
+  const { data: suites } = useQuery({ queryKey: ["suites"], queryFn: api.suites.list });
+  const { data: schemas } = useQuery({ queryKey: ["schemas"], queryFn: api.schemas.list });
+
+  function pick(suiteId: number | null) {
+    setActiveSuiteId(suiteId);
+    setSuitePicked(true);
+  }
+
+  const suiteList = suites ?? [];
+  const schemaList = schemas ?? [];
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px", overflowY: "auto" }}>
+      <div style={{ maxWidth: 720, width: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 8, color: "var(--accent)" }}>⬡</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-1)", marginBottom: 6 }}>選擇 Product Suite</div>
+          <div style={{ fontSize: 13, color: "var(--text-3)" }}>選擇你要查看的產品範疇，或顯示所有 Schema</div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
+          {/* ALL option */}
+          <button onClick={() => pick(null)}
+            style={{ padding: "20px 16px", borderRadius: 12, border: "2px solid var(--border)", background: "var(--bg-2)", cursor: "pointer", textAlign: "left", transition: "all 0.15s", display: "flex", flexDirection: "column", gap: 8 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--accent)"; (e.currentTarget as HTMLButtonElement).style.background = "var(--accent-dim)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-2)"; }}>
+            <div style={{ fontSize: 22, lineHeight: 1 }}>⊞</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)", marginBottom: 2 }}>ALL</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)" }}>顯示所有 Schema</div>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: "auto" }}>{schemaList.length} 個 Schema</div>
+          </button>
+
+          {suiteList.map(suite => {
+            const count = schemaList.filter(s => s.suiteId === suite.id).length;
+            const color = suite.color ?? "var(--accent)";
+            return (
+              <button key={suite.id} onClick={() => pick(suite.id)}
+                style={{ padding: "20px 16px", borderRadius: 12, border: `2px solid var(--border)`, background: "var(--bg-2)", cursor: "pointer", textAlign: "left", transition: "all 0.15s", display: "flex", flexDirection: "column", gap: 8 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = color; (e.currentTarget as HTMLButtonElement).style.background = `${color}18`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-2)"; }}>
+                <div style={{ width: 20, height: 20, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)", marginBottom: 2 }}>{suite.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>Product Suite</div>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: "auto" }}>{count} 個 Schema</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {suiteList.length === 0 && schemas !== undefined && (
+          <div style={{ textAlign: "center", color: "var(--text-3)", fontSize: 12, padding: "8px 0" }}>
+            尚未建立任何 Suite — 可至側欄「⊛ 管理 Suite」新增
+            <button onClick={() => pick(null)}
+              style={{ marginLeft: 12, padding: "4px 14px", borderRadius: 6, border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+              直接進入 →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const { page, setPage } = useStore();
+  const { page, setPage, suitePicked } = useStore();
   const t = useT();
   const { isMobile, isTablet, isDesktop } = useBreakpoint();
   const [showSettings, setShowSettings] = useState(false);
@@ -683,14 +758,20 @@ export default function App() {
         )}
 
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          {page === "editor"   && <SchemaEditorPage />}
-          {page === "dict"     && <NamingDictPage />}
-          {page === "versions" && <VersionHistoryPage />}
-          {page === "analysis" && <AnalysisPage />}
-          {page === "er"       && <ErDiagramPage />}
-          {page === "wide"     && <WideTablePage />}
-          {page === "rules"    && <RulesPage />}
-          {page === "datahub"  && <DataHubPage />}
+          {!suitePicked ? (
+            <SuiteSplash />
+          ) : (
+            <>
+              {page === "editor"   && <SchemaEditorPage />}
+              {page === "dict"     && <NamingDictPage />}
+              {page === "versions" && <VersionHistoryPage />}
+              {page === "analysis" && <AnalysisPage />}
+              {page === "er"       && <ErDiagramPage />}
+              {page === "wide"     && <WideTablePage />}
+              {page === "rules"    && <RulesPage />}
+              {page === "datahub"  && <DataHubPage />}
+            </>
+          )}
         </div>
       </div>
 

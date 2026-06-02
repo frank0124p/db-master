@@ -120,9 +120,14 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast 
   const [showHint, setShowHint] = useState(false);
   const [hintResult, setHintResult] = useState<MatchResult | null>(null);
   const [showDictModal, setShowDictModal] = useState(false);
+  const [editingSource, setEditingSource] = useState(false);
+  const [srcTable, setSrcTable] = useState(field.sourceTable ?? "");
+  const [srcField, setSrcField] = useState(field.sourceField ?? "");
   const hintRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
   const { checkFieldName } = useNamingCheck(namingEntries);
+
+  useEffect(() => { setSrcTable(field.sourceTable ?? ""); setSrcField(field.sourceField ?? ""); }, [field.sourceTable, field.sourceField]);
 
   useEffect(() => { setName(field.name); }, [field.name]);
 
@@ -162,6 +167,16 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast 
     if (!confirm(`刪除欄位 "${field.name}"？`)) return;
     await api.fields.delete(field.id);
     onRefresh();
+  }
+
+  async function saveSource() {
+    setEditingSource(false);
+    const newSrcTable = srcTable.trim() || null;
+    const newSrcField = srcField.trim() || null;
+    if (newSrcTable !== (field.sourceTable ?? null) || newSrcField !== (field.sourceField ?? null)) {
+      await api.fields.update(field.id, { source_table: newSrcTable, source_field: newSrcField });
+      onRefresh();
+    }
   }
 
   const r = checkFieldName(name);
@@ -209,6 +224,45 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast 
         <span onClick={() => { setHintResult(r); setShowHint(!showHint); }} style={{ color: statusColor, fontSize: 14, cursor: "pointer" }} title={r.status}>{statusIcon}</span>
       </td>
       <td style={{ padding: "8px 10px", verticalAlign: "middle", color: "var(--text-2)", fontSize: 12 }}>{field.comment || ""}</td>
+      <td style={{ padding: "8px 10px", verticalAlign: "middle", minWidth: 140, maxWidth: 200 }}>
+        {editingSource ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <input
+              autoFocus
+              value={srcTable}
+              onChange={e => setSrcTable(e.target.value)}
+              placeholder="source_table"
+              onBlur={() => void saveSource()}
+              onKeyDown={e => { if (e.key === "Enter") void saveSource(); if (e.key === "Escape") { setSrcTable(field.sourceTable ?? ""); setSrcField(field.sourceField ?? ""); setEditingSource(false); } }}
+              style={{ fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--bg-3)", border: "1px solid var(--accent)", borderRadius: 3, padding: "2px 5px", color: "var(--text-1)", outline: "none", width: "100%" }}
+            />
+            <input
+              value={srcField}
+              onChange={e => setSrcField(e.target.value)}
+              placeholder="source_field"
+              onBlur={() => void saveSource()}
+              onKeyDown={e => { if (e.key === "Enter") void saveSource(); if (e.key === "Escape") { setSrcTable(field.sourceTable ?? ""); setSrcField(field.sourceField ?? ""); setEditingSource(false); } }}
+              style={{ fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--bg-3)", border: "1px solid var(--accent)", borderRadius: 3, padding: "2px 5px", color: "var(--text-1)", outline: "none", width: "100%" }}
+            />
+          </div>
+        ) : (
+          <div
+            onClick={() => setEditingSource(true)}
+            title="點擊編輯來源欄位"
+            style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, border: "1px solid transparent", transition: "border-color 0.15s" }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--border-light)")}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = "transparent")}>
+            {field.sourceTable ? (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
+                <span style={{ color: "var(--text-3)" }}>{field.sourceTable}</span>
+                {field.sourceField && <><span style={{ color: "var(--border-light)", margin: "0 2px" }}>.</span><span style={{ color: "var(--text-2)" }}>{field.sourceField}</span></>}
+              </span>
+            ) : (
+              <span style={{ fontSize: 10, color: "var(--border-light)", fontStyle: "italic" }}>—</span>
+            )}
+          </div>
+        )}
+      </td>
       <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           {r.status === "unknown" && (
@@ -244,7 +298,7 @@ function AddFieldRow({ tableId, onRefresh }: { tableId: number; onRefresh: () =>
   }
   return (
     <tr>
-      <td colSpan={7} style={{ padding: 10 }}>
+      <td colSpan={8} style={{ padding: 10 }}>
         <button onClick={add}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
@@ -950,7 +1004,7 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {[t("col.field_name"), t("col.type"), t("col.nullable"), t("col.default"), t("col.naming"), t("col.comment"), ""].map((h, i) => (
+                {[t("col.field_name"), t("col.type"), t("col.nullable"), t("col.default"), t("col.naming"), t("col.comment"), "來源", ""].map((h, i) => (
                   <th key={i} style={{ textAlign: "left", padding: "6px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid var(--border)" }}>{h}</th>
                 ))}
               </tr>

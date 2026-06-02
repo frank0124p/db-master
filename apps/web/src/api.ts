@@ -18,6 +18,7 @@ export interface Field {
   id: number; name: string; dataType: string; nullable: boolean;
   defaultValue: string | null; isPrimaryKey: boolean; isUnique: boolean;
   comment: string | null; position: number;
+  sourceTable?: string | null; sourceField?: string | null;
 }
 export interface Table { id: number; name: string; comment: string | null; tags?: string[]; environment?: string | null; layerType?: string | null; fields: Field[]; sampleData?: Record<string, unknown>[]; }
 export interface SchemaDetail extends Schema { tables: Table[]; }
@@ -75,6 +76,7 @@ export type JoinType = "BASE" | "INNER" | "LEFT";
 
 export interface WideTableSummary {
   id: number; schemaId: number; name: string; description: string | null;
+  wideTableType: "unified" | "r2u";
   createdAt: string; updatedAt: string;
 }
 
@@ -281,6 +283,7 @@ const realApi = {
     update: (id: number, b: Partial<{
       name: string; data_type: string; nullable: boolean; default_value: string | null;
       is_primary_key: boolean; is_unique: boolean; comment: string | null;
+      source_table: string | null; source_field: string | null;
     }>) => req<void>(`/fields/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/fields/${id}`, { method: "DELETE" }),
   },

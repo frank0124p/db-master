@@ -122,6 +122,8 @@ export const CreateFieldInput = z.object({
   is_unique: z.boolean().default(false),
   comment: z.string().optional().nullable(),
   position: z.number().int().optional(),
+  source_table: z.string().max(128).optional().nullable(),
+  source_field: z.string().max(128).optional().nullable(),
 });
 export type CreateFieldInput = z.infer<typeof CreateFieldInput>;
 
