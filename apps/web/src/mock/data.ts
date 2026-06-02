@@ -27,32 +27,95 @@ function field(
     isUnique: opts.isUnique ?? false,
     comment: opts.comment ?? null,
     position: opts.position ?? id,
+    sourceTable: opts.sourceTable ?? null,
+    sourceField: opts.sourceField ?? null,
   };
 }
 
 // ── Schema 1: PLM Core ────────────────────────────────────────────────────────
 
 const plmTables: Table[] = [
+  // ── Layer 0: Root reference tables ────────────────────────────────────────
+  {
+    id: 16, name: "part_categories", comment: "零件分類樹（自參照層級結構）",
+    tags: ["reference"], environment: "PROD", layerType: "transaction",
+    sampleData: [
+      { id: 1, code: "IC",      name: "積體電路",    parent_category_id: null, level: 1 },
+      { id: 2, code: "IC-MCU",  name: "微控制器",    parent_category_id: 1,    level: 2 },
+      { id: 3, code: "IC-PWR",  name: "電源管理 IC", parent_category_id: 1,    level: 2 },
+      { id: 4, code: "PCB",     name: "印刷電路板",  parent_category_id: null, level: 1 },
+      { id: 5, code: "MECH",    name: "機構件",      parent_category_id: null, level: 1 },
+    ],
+    fields: [
+      field(1601, 16, "id",                 "INT",          { isPrimaryKey: true, nullable: false }),
+      field(1602, 16, "code",               "VARCHAR(32)",  { isUnique: true, nullable: false, comment: "分類代碼，如 IC-MCU" }),
+      field(1603, 16, "name",               "VARCHAR(128)", { nullable: false }),
+      field(1604, 16, "parent_category_id", "INT",          { comment: "FK → part_categories.id（自參照）" }),
+      field(1605, 16, "level",              "TINYINT",      { nullable: false, comment: "層級深度 1-5" }),
+      field(1606, 16, "created_at",         "TIMESTAMP",    { nullable: false }),
+    ],
+  },
+  {
+    id: 17, name: "units_of_measure", comment: "計量單位主檔",
+    tags: ["reference"], environment: "PROD", layerType: "transaction",
+    sampleData: [
+      { id: 1, uom_code: "EA",  uom_name: "Each",     base_uom_id: null, conversion_factor: 1 },
+      { id: 2, uom_code: "KG",  uom_name: "Kilogram", base_uom_id: null, conversion_factor: 1 },
+      { id: 3, uom_code: "G",   uom_name: "Gram",     base_uom_id: 2,    conversion_factor: 0.001 },
+      { id: 4, uom_code: "M",   uom_name: "Meter",    base_uom_id: null, conversion_factor: 1 },
+      { id: 5, uom_code: "MM",  uom_name: "Millimeter",base_uom_id: 4,   conversion_factor: 0.001 },
+    ],
+    fields: [
+      field(1701, 17, "id",                "INT",         { isPrimaryKey: true, nullable: false }),
+      field(1702, 17, "uom_code",          "VARCHAR(16)", { isUnique: true, nullable: false }),
+      field(1703, 17, "uom_name",          "VARCHAR(64)", { nullable: false }),
+      field(1704, 17, "base_uom_id",       "INT",         { comment: "FK → units_of_measure.id（換算基準）" }),
+      field(1705, 17, "conversion_factor", "DECIMAL(18,8)",{ nullable: false, defaultValue: "1" }),
+    ],
+  },
+  {
+    id: 18, name: "ecr", comment: "工程變更申請（ECR）— ECO 前置流程",
+    tags: ["workflow"], environment: "PROD", layerType: "transaction",
+    sampleData: [
+      { id: 1, ecr_no: "ECR-2024-0018", title: "提議更換 MCU 供應商", requestor_id: "ENG-0012", priority: "high",   status: "approved", created_at: "2024-02-10 09:00:00" },
+      { id: 2, ecr_no: "ECR-2024-0029", title: "LDO 耐壓提升至 5.5V",  requestor_id: "ENG-0027", priority: "medium", status: "review",   created_at: "2024-03-20 14:00:00" },
+    ],
+    fields: [
+      field(1801, 18, "id",           "BIGINT",       { isPrimaryKey: true, nullable: false }),
+      field(1802, 18, "ecr_no",       "VARCHAR(32)",  { isUnique: true, nullable: false }),
+      field(1803, 18, "title",        "VARCHAR(255)", { nullable: false }),
+      field(1804, 18, "requestor_id", "VARCHAR(64)",  { nullable: false, comment: "申請人工號" }),
+      field(1805, 18, "priority",     "VARCHAR(16)",  { nullable: false, comment: "low / medium / high / critical" }),
+      field(1806, 18, "status",       "VARCHAR(32)",  { nullable: false, comment: "draft / review / approved / rejected" }),
+      field(1807, 18, "created_at",   "TIMESTAMP",    { nullable: false }),
+      field(1808, 18, "updated_at",   "TIMESTAMP",    { nullable: false }),
+    ],
+  },
+
+  // ── Layer 1: Core entity ────────────────────────────────────────────────────
   {
     id: 10, name: "parts", comment: "零件主檔 — 所有受管控物料的唯一來源",
     sampleData: [
-      { id: 1001, part_no: "IC-MCU-001", part_name: "32-bit Cortex-M4 MCU", part_type: "IC", lifecycle_state: "released", process_node: "TSMC 55nm", description: "主控制器，512KB Flash", created_at: "2024-01-10 08:00:00", updated_at: "2024-03-15 10:30:00" },
-      { id: 1002, part_no: "IC-PWR-007", part_name: "3.3V LDO Regulator",   part_type: "IC", lifecycle_state: "released", process_node: "UMC 0.18µm", description: "低壓差線性穩壓器 500mA", created_at: "2024-01-12 09:00:00", updated_at: "2024-02-20 14:00:00" },
-      { id: 1003, part_no: "PCB-MB-002", part_name: "Main Board Rev B",      part_type: "PCB", lifecycle_state: "review",   process_node: null,           description: "4層板，FR4，1.6mm", created_at: "2024-02-01 10:00:00", updated_at: "2024-04-01 16:00:00" },
-      { id: 1004, part_no: "MECH-HSK-01",part_name: "Heatsink Assy",         part_type: "MECH",lifecycle_state: "released", process_node: null,           description: "鋁擠型散熱片 40×40×10mm", created_at: "2023-11-01 08:00:00", updated_at: "2024-01-05 08:00:00" },
+      { id: 1001, part_no: "IC-MCU-001", part_name: "32-bit Cortex-M4 MCU", category_id: 2, uom_id: 1, lifecycle_state: "released", process_node: "TSMC 55nm", created_at: "2024-01-10 08:00:00", updated_at: "2024-03-15 10:30:00" },
+      { id: 1002, part_no: "IC-PWR-007", part_name: "3.3V LDO Regulator",   category_id: 3, uom_id: 1, lifecycle_state: "released", process_node: "UMC 0.18µm",created_at: "2024-01-12 09:00:00", updated_at: "2024-02-20 14:00:00" },
+      { id: 1003, part_no: "PCB-MB-002", part_name: "Main Board Rev B",      category_id: 4, uom_id: 1, lifecycle_state: "review",   process_node: null,        created_at: "2024-02-01 10:00:00", updated_at: "2024-04-01 16:00:00" },
+      { id: 1004, part_no: "MECH-HSK-01",part_name: "Heatsink Assy",         category_id: 5, uom_id: 1, lifecycle_state: "released", process_node: null,        created_at: "2023-11-01 08:00:00", updated_at: "2024-01-05 08:00:00" },
     ],
     fields: [
       field(1001, 10, "id",              "BIGINT",       { isPrimaryKey: true, nullable: false, comment: "系統主鍵" }),
       field(1002, 10, "part_no",         "VARCHAR(32)",  { isUnique: true,     nullable: false, comment: "料號，全域唯一" }),
       field(1003, 10, "part_name",       "VARCHAR(255)", { nullable: false,                    comment: "零件名稱" }),
-      field(1004, 10, "part_type",       "VARCHAR(32)",  { nullable: false,                    comment: "IC / PCB / MECH / ASSY" }),
-      field(1005, 10, "lifecycle_state", "VARCHAR(32)",  { nullable: false,                    comment: "draft → review → released → obsolete" }),
+      field(1004, 10, "category_id",     "INT",          { nullable: false, comment: "FK → part_categories.id" }),
+      field(1010, 10, "uom_id",          "INT",          { nullable: false, comment: "FK → units_of_measure.id" }),
+      field(1005, 10, "lifecycle_state", "VARCHAR(32)",  { nullable: false, comment: "draft → review → released → obsolete" }),
       field(1006, 10, "process_node",    "VARCHAR(32)",  { comment: "製程節點，如 TSMC 28nm" }),
       field(1007, 10, "description",     "TEXT",         { comment: "技術規格說明" }),
       field(1008, 10, "created_at",      "TIMESTAMP",    { nullable: false, comment: "建立時間" }),
       field(1009, 10, "updated_at",      "TIMESTAMP",    { nullable: false, comment: "更新時間" }),
     ],
   },
+
+  // ── Layer 2: Direct children ────────────────────────────────────────────────
   {
     id: 11, name: "part_revisions", comment: "零件版本管理 — 每次 ECO 後建立新版本",
     sampleData: [
@@ -100,6 +163,7 @@ const plmTables: Table[] = [
       field(1301, 13, "id",             "BIGINT",       { isPrimaryKey: true, nullable: false }),
       field(1302, 13, "ec_no",          "VARCHAR(32)",  { isUnique: true, nullable: false, comment: "ECO 編號" }),
       field(1303, 13, "title",          "VARCHAR(255)", { nullable: false }),
+      field(1309, 13, "ecr_id",         "BIGINT",       { comment: "FK → ecr.id（源自的 ECR 申請）" }),
       field(1304, 13, "status",         "VARCHAR(32)",  { nullable: false, comment: "draft / pending / approved / closed" }),
       field(1305, 13, "approver_id",    "VARCHAR(64)",  { comment: "核准者工號" }),
       field(1306, 13, "effective_date", "DATE",         { }),
@@ -132,19 +196,120 @@ const plmTables: Table[] = [
       { id: 503, part_id: 1002, supplier_id: 403, preferred: 0, lead_time_days: 21, created_at: "2024-02-01 08:00:00" },
     ],
     fields: [
-      field(1501, 15, "id",              "BIGINT",  { isPrimaryKey: true, nullable: false }),
-      field(1502, 15, "part_id",         "BIGINT",  { nullable: false }),
-      field(1503, 15, "supplier_id",     "BIGINT",  { nullable: false }),
+      field(1501, 15, "id",              "BIGINT",     { isPrimaryKey: true, nullable: false }),
+      field(1502, 15, "part_id",         "BIGINT",     { nullable: false, comment: "FK → parts.id" }),
+      field(1503, 15, "supplier_id",     "BIGINT",     { nullable: false, comment: "FK → suppliers.id" }),
       field(1504, 15, "preferred",       "TINYINT(1)", { nullable: false, comment: "是否為首選供應商" }),
-      field(1505, 15, "lead_time_days",  "INT",     { comment: "交期（天）" }),
-      field(1506, 15, "created_at",      "TIMESTAMP", { nullable: false }),
+      field(1505, 15, "lead_time_days",  "INT",        { comment: "交期（天）" }),
+      field(1506, 15, "created_at",      "TIMESTAMP",  { nullable: false }),
+    ],
+  },
+  {
+    id: 19, name: "part_documents", comment: "零件相關文件（規格書、圖面、測試報告）",
+    tags: ["document"], environment: "PROD", layerType: "transaction",
+    sampleData: [
+      { id: 601, part_id: 1001, revision_id: 102, doc_type: "SPEC", doc_no: "SPEC-MCU-001-A1", title: "MCU 規格書 Rev A1", version: "A1", status: "released", created_by: "ENG-0012", created_at: "2024-03-01 09:00:00" },
+      { id: 602, part_id: 1002, revision_id: 103, doc_type: "DRAW", doc_no: "DWG-LDO-007-A0", title: "LDO 電路圖",         version: "A0", status: "released", created_by: "ENG-0027", created_at: "2024-01-25 10:00:00" },
+      { id: 603, part_id: 1003, revision_id: 104, doc_type: "TEST", doc_no: "RPT-MB-002-B0",  title: "Main Board 測試報告", version: "B0", status: "draft",    created_by: "ENG-0042", created_at: "2024-04-01 14:00:00" },
+    ],
+    fields: [
+      field(1901, 19, "id",          "BIGINT",       { isPrimaryKey: true, nullable: false }),
+      field(1902, 19, "part_id",     "BIGINT",       { nullable: false, comment: "FK → parts.id" }),
+      field(1903, 19, "revision_id", "BIGINT",       { comment: "FK → part_revisions.id（null 表示適用所有版本）" }),
+      field(1904, 19, "doc_type",    "VARCHAR(16)",  { nullable: false, comment: "SPEC / DRAW / TEST / CERT" }),
+      field(1905, 19, "doc_no",      "VARCHAR(64)",  { isUnique: true, nullable: false, comment: "文件編號" }),
+      field(1906, 19, "title",       "VARCHAR(255)", { nullable: false }),
+      field(1907, 19, "file_path",   "VARCHAR(512)", { comment: "檔案存儲路徑" }),
+      field(1908, 19, "version",     "VARCHAR(8)",   { nullable: false, comment: "文件版本號" }),
+      field(1909, 19, "status",      "VARCHAR(32)",  { nullable: false, comment: "draft / review / released / obsolete" }),
+      field(1910, 19, "created_by",  "VARCHAR(64)",  { nullable: false, comment: "建立者工號" }),
+      field(1911, 19, "created_at",  "TIMESTAMP",    { nullable: false }),
+      field(1912, 19, "updated_at",  "TIMESTAMP",    { nullable: false }),
+    ],
+  },
+
+  // ── Layer 3: Derived / cross-cutting ──────────────────────────────────────────
+  {
+    id: 24, name: "change_items", comment: "ECO 變更明細 — 記錄每筆 ECO 影響的具體欄位變動",
+    tags: ["workflow"], environment: "PROD", layerType: "transaction",
+    sampleData: [
+      { id: 701, eco_id: 301, part_id: 1001, revision_id: 102, change_type: "REVISION_UP", before_value: "A0", after_value: "A1", created_at: "2024-02-20 09:30:00" },
+      { id: 702, eco_id: 301, part_id: 1001, revision_id: 102, change_type: "SPEC_CHANGE", before_value: "Timer 32-bit",   after_value: "Timer 32-bit + DMA", created_at: "2024-02-20 09:31:00" },
+      { id: 703, eco_id: 302, part_id: 1002, revision_id: 103, change_type: "SUPPLIER",   before_value: "Murata",          after_value: "Yageo",             created_at: "2024-04-02 10:30:00" },
+    ],
+    fields: [
+      field(2401, 24, "id",          "BIGINT",       { isPrimaryKey: true, nullable: false }),
+      field(2402, 24, "eco_id",      "BIGINT",       { nullable: false, comment: "FK → engineering_changes.id" }),
+      field(2403, 24, "part_id",     "BIGINT",       { nullable: false, comment: "FK → parts.id",          sourceTable: "parts",          sourceField: "id" }),
+      field(2404, 24, "revision_id", "BIGINT",       { comment: "FK → part_revisions.id（變更後版本）",    sourceTable: "part_revisions", sourceField: "id" }),
+      field(2405, 24, "change_type", "VARCHAR(32)",  { nullable: false, comment: "REVISION_UP / SPEC_CHANGE / SUPPLIER / BOM_MOD" }),
+      field(2406, 24, "before_value","TEXT",         { comment: "變更前值（JSON or text）" }),
+      field(2407, 24, "after_value", "TEXT",         { comment: "變更後值（JSON or text）" }),
+      field(2408, 24, "created_at",  "TIMESTAMP",    { nullable: false }),
+    ],
+  },
+  {
+    id: 25, name: "eco_approvals", comment: "ECO 審批記錄 — 多階段審批流程",
+    tags: ["workflow"], environment: "PROD", layerType: "transaction",
+    sampleData: [
+      { id: 801, eco_id: 301, approver_id: "ENG-0042", approval_role: "PE", decision: "approved", comment: "Timer 問題已驗證",    decided_at: "2024-02-28 17:00:00", created_at: "2024-02-22 09:00:00" },
+      { id: 802, eco_id: 301, approver_id: "MGR-0005", approval_role: "QA", decision: "approved", comment: "QA 測試通過",          decided_at: "2024-03-01 08:30:00", created_at: "2024-02-22 09:00:00" },
+      { id: 803, eco_id: 302, approver_id: "ENG-0018", approval_role: "PE", decision: "pending",  comment: null,                  decided_at: null,                  created_at: "2024-04-03 10:00:00" },
+    ],
+    fields: [
+      field(2501, 25, "id",            "BIGINT",      { isPrimaryKey: true, nullable: false }),
+      field(2502, 25, "eco_id",        "BIGINT",      { nullable: false, comment: "FK → engineering_changes.id" }),
+      field(2503, 25, "approver_id",   "VARCHAR(64)", { nullable: false, comment: "審批人工號" }),
+      field(2504, 25, "approval_role", "VARCHAR(32)", { nullable: false, comment: "PE / QA / QM / VP" }),
+      field(2505, 25, "decision",      "VARCHAR(16)", { nullable: false, comment: "pending / approved / rejected" }),
+      field(2506, 25, "comment",       "TEXT",        { }),
+      field(2507, 25, "decided_at",    "TIMESTAMP",   { }),
+      field(2508, 25, "created_at",    "TIMESTAMP",   { nullable: false }),
+    ],
+  },
+  {
+    id: 26, name: "bom_substitutes", comment: "BOM 替代料清單 — 當首選料缺貨時的替代方案",
+    tags: [], environment: "PROD", layerType: "transaction",
+    sampleData: [
+      { id: 901, bom_item_id: 201, substitute_part_id: 1002, priority: 1, reason: "Murata 缺貨替代",   effective_date: "2024-03-15", created_at: "2024-03-10 08:00:00" },
+      { id: 902, bom_item_id: 202, substitute_part_id: 1001, priority: 1, reason: "同規格替代料",     effective_date: "2024-01-01", created_at: "2024-01-05 09:00:00" },
+    ],
+    fields: [
+      field(2601, 26, "id",                 "BIGINT",      { isPrimaryKey: true, nullable: false }),
+      field(2602, 26, "bom_item_id",        "BIGINT",      { nullable: false, comment: "FK → bom_items.id（被替代的 BOM 項目）" }),
+      field(2603, 26, "substitute_part_id", "BIGINT",      { nullable: false, comment: "FK → parts.id（替代料）", sourceTable: "parts", sourceField: "id" }),
+      field(2604, 26, "priority",           "TINYINT",     { nullable: false, comment: "替代優先順序，1 最高" }),
+      field(2605, 26, "reason",             "VARCHAR(255)", { comment: "替代原因說明" }),
+      field(2606, 26, "effective_date",     "DATE",         { comment: "替代料生效日" }),
+      field(2607, 26, "created_at",         "TIMESTAMP",   { nullable: false }),
+    ],
+  },
+  {
+    id: 27, name: "supplier_quotes", comment: "供應商報價單 — 依零件版本留存歷史報價",
+    tags: [], environment: "PROD", layerType: "transaction",
+    sampleData: [
+      { id: 1001, part_supplier_id: 501, revision_id: 102, quote_no: "Q-2024-TSMC-001", unit_price: "8.50",  currency: "USD", moq: 1000, lead_time_days: 90,  valid_until: "2024-12-31", created_at: "2024-03-05 10:00:00" },
+      { id: 1002, part_supplier_id: 502, revision_id: 103, quote_no: "Q-2024-MUR-007",  unit_price: "0.32",  currency: "USD", moq: 5000, lead_time_days: 14,  valid_until: "2024-06-30", created_at: "2024-02-10 11:00:00" },
+      { id: 1003, part_supplier_id: 503, revision_id: 103, quote_no: "Q-2024-YAG-007",  unit_price: "0.28",  currency: "USD", moq: 5000, lead_time_days: 21,  valid_until: "2024-09-30", created_at: "2024-03-01 09:00:00" },
+    ],
+    fields: [
+      field(2701, 27, "id",               "BIGINT",        { isPrimaryKey: true, nullable: false }),
+      field(2702, 27, "part_supplier_id", "BIGINT",        { nullable: false, comment: "FK → part_suppliers.id" }),
+      field(2703, 27, "revision_id",      "BIGINT",        { comment: "FK → part_revisions.id（報價對應的零件版本）", sourceTable: "part_revisions", sourceField: "id" }),
+      field(2704, 27, "quote_no",         "VARCHAR(64)",   { isUnique: true, nullable: false, comment: "報價單號" }),
+      field(2705, 27, "unit_price",       "DECIMAL(12,4)", { nullable: false }),
+      field(2706, 27, "currency",         "VARCHAR(8)",    { nullable: false, defaultValue: "USD" }),
+      field(2707, 27, "moq",              "INT",           { comment: "最小訂購量" }),
+      field(2708, 27, "lead_time_days",   "INT",           { comment: "交期（天）", sourceTable: "part_suppliers", sourceField: "lead_time_days" }),
+      field(2709, 27, "valid_until",      "DATE",          { comment: "報價有效期" }),
+      field(2710, 27, "created_at",       "TIMESTAMP",     { nullable: false }),
     ],
   },
 ];
 
 export const plmSchema: SchemaDetail = {
   id: 1, name: "PLM Core",
-  description: "產品生命週期管理核心 — 零件、BOM、ECO 與供應商管理",
+  description: "產品生命週期管理核心 — 零件、BOM、ECO、供應商、文件與審批管理",
   domain: "semiconductor", suiteId: null, layerType: null,
   tags: [], environment: null, targetDb: null,
   createdAt: ts(30), updatedAt: ts(1),
@@ -241,7 +406,7 @@ export const mesSchema: SchemaDetail = {
 // ── Schema list ───────────────────────────────────────────────────────────────
 
 export const mockSchemas: Schema[] = [
-  { id: 1, name: "PLM Core",    description: plmSchema.description, domain: "semiconductor", suiteId: null, layerType: null, tags: [], environment: null, targetDb: null, createdAt: ts(30), updatedAt: ts(1) },
+  { id: 1, name: "PLM Core",    description: plmSchema.description,  domain: "semiconductor", suiteId: null, layerType: null, tags: [], environment: null, targetDb: null, createdAt: ts(30), updatedAt: ts(1) },
   { id: 2, name: "MES Process", description: mesSchema.description, domain: "semiconductor", suiteId: null, layerType: null, tags: [], environment: null, targetDb: null, createdAt: ts(20), updatedAt: ts(2) },
 ];
 
