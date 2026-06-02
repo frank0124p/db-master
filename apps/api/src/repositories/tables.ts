@@ -18,7 +18,7 @@ export async function createTable(schemaId: number, input: { name: string; comme
   return { id, schemaId, name: tbl.name, comment: tbl.comment };
 }
 
-export async function updateTable(id: number, input: Partial<{ name: string; comment: string | null; sampleData: Record<string, unknown>[] }>) {
+export async function updateTable(id: number, input: Partial<{ name: string; comment: string | null; tags: string[]; environment: string | null; layerType: string | null; sampleData: Record<string, unknown>[] }>) {
   const schemaId = await store.indexGet("tableSchema", id);
   if (schemaId === null) throw new NotFoundError("Table", id);
   const oldPath = await getTableFilePath(schemaId, id);
@@ -28,6 +28,9 @@ export async function updateTable(id: number, input: Partial<{ name: string; com
   const nameChanged = input.name !== undefined && input.name !== tbl.name;
   if (input.name !== undefined) tbl.name = input.name;
   if (input.comment !== undefined) tbl.comment = input.comment;
+  if (input.tags !== undefined) tbl.tags = input.tags;
+  if (input.environment !== undefined) tbl.environment = input.environment;
+  if (input.layerType !== undefined) tbl.layerType = input.layerType;
   if (input.sampleData !== undefined) tbl.sampleData = input.sampleData;
   tbl.updatedAt = new Date().toISOString();
 

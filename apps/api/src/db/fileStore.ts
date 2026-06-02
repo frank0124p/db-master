@@ -4,7 +4,9 @@ import fs from "fs/promises";
 import { uploadFileAsync } from "../services/minio.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const DATA_DIR = path.resolve(__dirname, "../../../../data");
+export const DATA_DIR = process.env["DATA_DIR"]
+  ? path.resolve(process.env["DATA_DIR"])
+  : path.resolve(__dirname, "../../../../data");
 const SYS = "_sys";
 
 export function dataPath(...segments: string[]): string {

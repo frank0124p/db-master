@@ -11,6 +11,7 @@ export interface FieldEntry {
 
 export interface TableFile {
   id: number; schemaId: number; name: string; comment: string | null;
+  tags?: string[]; environment?: string | null; layerType?: string | null;
   createdAt: string; updatedAt: string;
   fields: FieldEntry[];
   sampleData?: Record<string, unknown>[];
@@ -32,6 +33,7 @@ export interface SchemaWithTables {
   createdAt: Date; updatedAt: Date;
   tables: {
     id: number; name: string; comment: string | null;
+    tags?: string[]; environment?: string | null; layerType?: string | null;
     fields: FieldEntry[];
     sampleData?: Record<string, unknown>[];
   }[];
@@ -105,6 +107,9 @@ export async function loadTables(schemaId: number): Promise<SchemaWithTables["ta
       id: t.id,
       name: t.name,
       comment: t.comment,
+      tags: t.tags ?? [],
+      environment: t.environment ?? null,
+      layerType: t.layerType ?? null,
       fields: [...t.fields].sort((a, b) => a.position - b.position),
       sampleData: t.sampleData ?? [],
     });

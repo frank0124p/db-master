@@ -16,6 +16,9 @@ router.post("/", async (req, res, next) => {
 const UpdateTableBody = z.object({
   name:        z.string().optional(),
   comment:     z.string().nullable().optional(),
+  tags:        z.array(z.string()).optional(),
+  environment: z.string().nullable().optional(),
+  layer_type:  z.string().nullable().optional(),
   sample_data: z.array(z.record(z.unknown())).optional(),
 });
 
@@ -26,10 +29,13 @@ router.patch("/:tableId", async (req, res, next) => {
       res.status(400).json({ error: { code: "VALIDATION_ERROR", detail: parsed.error.format() } });
       return;
     }
-    const { name, comment, sample_data } = parsed.data;
-    const input: Partial<{ name: string; comment: string | null; sampleData: Record<string, unknown>[] }> = {};
+    const { name, comment, tags, environment, layer_type, sample_data } = parsed.data;
+    const input: Partial<{ name: string; comment: string | null; tags: string[]; environment: string | null; layerType: string | null; sampleData: Record<string, unknown>[] }> = {};
     if (name !== undefined) input.name = name;
     if (comment !== undefined) input.comment = comment;
+    if (tags !== undefined) input.tags = tags;
+    if (environment !== undefined) input.environment = environment;
+    if (layer_type !== undefined) input.layerType = layer_type;
     if (sample_data !== undefined) input.sampleData = sample_data;
     await repo.updateTable(Number((req.params as Record<string, string>)["tableId"]), input);
     res.status(204).end();

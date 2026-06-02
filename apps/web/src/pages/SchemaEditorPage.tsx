@@ -725,6 +725,38 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
     }
   }
 
+  // Per-table annotation state
+  const [tableEnv, setTableEnv] = useState<string>(table.environment ?? "");
+  const [tableLayer, setTableLayer] = useState<string>(table.layerType ?? "");
+  const [tableTags, setTableTags] = useState<string[]>(table.tags ?? []);
+  const [tagInput, setTagInput] = useState("");
+
+  useEffect(() => {
+    setTableEnv(table.environment ?? "");
+    setTableLayer(table.layerType ?? "");
+    setTableTags(table.tags ?? []);
+  }, [table.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveTableAnnotation(patch: Partial<{ environment: string | null; layer_type: string | null; tags: string[] }>) {
+    await api.tables.update(table.id, patch);
+    refresh();
+  }
+
+  function addTag() {
+    const tag = tagInput.trim();
+    if (!tag || tableTags.includes(tag)) { setTagInput(""); return; }
+    const next = [...tableTags, tag];
+    setTableTags(next);
+    setTagInput("");
+    void saveTableAnnotation({ tags: next });
+  }
+
+  function removeTag(tag: string) {
+    const next = tableTags.filter(t => t !== tag);
+    setTableTags(next);
+    void saveTableAnnotation({ tags: next });
+  }
+
   const [ddlDialect, setDdlDialect] = useState<"mariadb" | "oracle" | "clickhouse">("mariadb");
 
   useEffect(() => {
@@ -885,6 +917,30 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
               {commentDraft || "點擊新增 Table 用途說明…"}
             </span>
           )}
+        </div>
+        {/* Per-table annotation row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 0 2px" }}>
+          <select value={tableEnv} onChange={e => { setTableEnv(e.target.value); void saveTableAnnotation({ environment: e.target.value || null }); }}
+            style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "var(--bg-3)", color: tableEnv ? "var(--accent)" : "var(--text-3)", cursor: "pointer" }}>
+            <option value="">— 環境 —</option>
+            {["DEV","TEST","STAGING","PROD"].map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+          <select value={tableLayer} onChange={e => { setTableLayer(e.target.value); void saveTableAnnotation({ layer_type: e.target.value || null }); }}
+            style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "var(--bg-3)", color: tableLayer ? "var(--accent)" : "var(--text-3)", cursor: "pointer" }}>
+            <option value="">— 分層 —</option>
+            {(schema.layerType ? [schema.layerType] : ["transaction","r2u","unified"]).map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+          {tableTags.map(tag => (
+            <span key={tag} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, padding: "2px 7px", borderRadius: 12, background: "var(--accent)", color: "#fff", fontWeight: 600 }}>
+              {tag}
+              <button onClick={() => removeTag(tag)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 10, padding: 0, lineHeight: 1 }}>×</button>
+            </span>
+          ))}
+          <input value={tagInput} onChange={e => setTagInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(); } }}
+            onBlur={addTag}
+            placeholder="+ 標注"
+            style={{ fontSize: 11, width: 70, padding: "2px 6px", borderRadius: 4, border: "1px solid var(--border-light)", background: "transparent", color: "var(--text-2)", outline: "none" }} />
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
