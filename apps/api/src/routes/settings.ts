@@ -79,6 +79,12 @@ router.patch("/storage", async (req: Request, res: Response, next) => {
     }
     const updated = await updateMinioSettings(parsed.data);
     initMinio(updated); // re-init client with new config
+    // Auto-push all local data to MinIO whenever connection info is saved
+    if (isMinioReady()) {
+      pushAll()
+        .then(({ pushed, errors }) => console.warn(`[minio] auto-sync complete: pushed=${pushed} errors=${errors}`))
+        .catch((e: unknown) => console.error("[minio] auto-sync failed:", e));
+    }
     const masked = updated.secretKey
       ? `${"*".repeat(Math.max(0, updated.secretKey.length - 4))}${updated.secretKey.slice(-4)}`
       : "";
