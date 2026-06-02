@@ -53,7 +53,9 @@ app.post("/api/v1/reload", async (_req, res, next) => {
 // API routes
 app.use("/api/v1/schemas", schemasRouter);
 app.use("/api/v1/schemas/:schemaId/tables", tablesRouter);
+app.use("/api/v1/tables", tablesRouter);
 app.use("/api/v1/tables/:tableId/fields", fieldsRouter);
+app.use("/api/v1/fields", fieldsRouter);
 app.use("/api/v1/naming-dictionary", namingRouter);
 app.use("/api/v1/schemas/:schemaId/versions", versionsRouter);
 app.use("/api/v1/schemas/:schemaId/ddl", ddlRouter);
