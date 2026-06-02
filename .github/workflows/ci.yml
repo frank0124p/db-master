@@ -19,6 +19,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Build packages
+        run: npm run build -w packages/core -w packages/ddl-parser
+
       - name: Typecheck
         run: npm run typecheck
 
