@@ -4,6 +4,7 @@ import { useStore } from "../store.js";
 import { api, type RuleLayer } from "../api.js";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
 import { MarkdownView } from "../MarkdownView.js";
+import { useLayerSettings } from "../hooks/useLayerSettings.js";
 
 interface Issue {
   severity: "error" | "warning" | "info";
@@ -13,17 +14,11 @@ interface Issue {
   suggestion: string | null;
 }
 
-const LAYER_LABELS: Record<RuleLayer, string> = {
-  general: "通用", transaction: "交易層", r2u: "R2U", unified: "Unified",
-};
-const LAYER_COLORS: Record<RuleLayer, string> = {
-  general: "var(--text-3)", transaction: "#a78bfa", r2u: "#34d399", unified: "#60a5fa",
-};
-
 export default function AnalysisPage() {
   const { isMobile, isTablet } = useBreakpoint();
   const { selectedSchemaId, showToast } = useStore();
   const qc = useQueryClient();
+  const { dictLayers: configLayers } = useLayerSettings();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [llmText, setLlmText] = useState("點擊「執行分析」開始分析...");
   const [running, setRunning] = useState(false);
@@ -208,14 +203,15 @@ export default function AnalysisPage() {
               </button>
             </div>
             {/* Rule checklist grouped by layer */}
-            {(["general", "transaction", "r2u", "unified"] as RuleLayer[]).map(layer => {
+            {configLayers.map(layerDef => {
+              const layer = layerDef.id as RuleLayer;
               const layerRules = allRules.filter(r => (r.layers ?? ["general"]).includes(layer));
               if (layerRules.length === 0) return null;
               return (
                 <div key={layer} style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: LAYER_COLORS[layer],
+                  <div style={{ fontSize: 10, fontWeight: 700, color: layerDef.color,
                     textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>
-                    {LAYER_LABELS[layer]}
+                    {layerDef.label}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     {layerRules.map(r => (

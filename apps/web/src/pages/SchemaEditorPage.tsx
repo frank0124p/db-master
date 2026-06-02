@@ -5,6 +5,7 @@ import { useStore } from "../store.js";
 import { useT } from "../i18n.js";
 import { api, type Field, type Table, type SchemaDetail, type NamingEntry, type MatchResult, type ImportCheckResult, type ViolationSummary, type SchemaVersion, type TableNamingCheck, type SchemaEnvironment } from "../api.js";
 import { MarkdownView } from "../MarkdownView.js";
+import { useLayerSettings } from "../hooks/useLayerSettings.js";
 
 const DATA_TYPES = ["BIGINT", "INT", "SMALLINT", "TINYINT", "DECIMAL(15,4)", "DOUBLE", "FLOAT",
   "VARCHAR(32)", "VARCHAR(64)", "VARCHAR(128)", "VARCHAR(255)", "TEXT", "MEDIUMTEXT",
@@ -670,6 +671,7 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
   const qc = useQueryClient();
   const { showToast } = useStore();
   const t = useT();
+  const { schemaLayers } = useLayerSettings();
   const { data: naming } = useQuery({ queryKey: ["naming"], queryFn: () => api.naming.list() });
   const namingEntries: NamingEntry[] = naming ?? [];
   const [dictCandidates, setDictCandidates] = useState<DictCandidate[] | null>(null);
@@ -928,7 +930,7 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
           <select value={tableLayer} onChange={e => { setTableLayer(e.target.value); void saveTableAnnotation({ layer_type: e.target.value || null }); }}
             style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "var(--bg-3)", color: tableLayer ? "var(--accent)" : "var(--text-3)", cursor: "pointer" }}>
             <option value="">— 分層 —</option>
-            {(schema.layerType ? [schema.layerType] : ["transaction","r2u","unified"]).map(v => <option key={v} value={v}>{v}</option>)}
+            {schemaLayers.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
           </select>
           {tableTags.map(tag => (
             <span key={tag} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, padding: "2px 7px", borderRadius: 12, background: "var(--accent)", color: "#fff", fontWeight: 600 }}>
@@ -1529,12 +1531,6 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
 // ── Main page ─────────────────────────────────────────────────────────────────
 const ENV_COLORS: Record<SchemaEnvironment, string> = { DEV: "#60a5fa", TEST: "#4ade80", STAGING: "#fbbf24", PROD: "#f87171" };
 const ALL_ENVS: SchemaEnvironment[] = ["DEV", "TEST", "STAGING", "PROD"];
-const LAYER_OPTIONS = [
-  { value: "", label: "（未分類）" },
-  { value: "transaction", label: "交易層 Transaction" },
-  { value: "r2u", label: "寬表層 R2U" },
-  { value: "unified", label: "寬表層 Unified Layer" },
-];
 
 function SchemaSettingsModal({ schema, suites, onClose, onDeleted }: {
   schema: SchemaDetail;
@@ -1544,6 +1540,7 @@ function SchemaSettingsModal({ schema, suites, onClose, onDeleted }: {
 }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
+  const { schemaLayers } = useLayerSettings();
   const [form, setForm] = useState({
     name: schema.name,
     description: schema.description ?? "",
@@ -1609,7 +1606,8 @@ function SchemaSettingsModal({ schema, suites, onClose, onDeleted }: {
           )],
           ["用途層", (
             <select key="l" className="form-input" value={form.layerType} onChange={e => setForm({ ...form, layerType: e.target.value })}>
-              {LAYER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              <option value="">（未分類）</option>
+              {schemaLayers.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
             </select>
           )],
           ["環境", (

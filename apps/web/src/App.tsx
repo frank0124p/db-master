@@ -4,6 +4,7 @@ import { useStore, type Page, type Theme } from "./store.js";
 import { useT } from "./i18n.js";
 import { api, type ProductSuite, type SchemaLayer, type SchemaEnvironment } from "./api.js";
 import { useBreakpoint } from "./hooks/useBreakpoint.js";
+import { useLayerSettings } from "./hooks/useLayerSettings.js";
 import SchemaEditorPage from "./pages/SchemaEditorPage.js";
 import NamingDictPage from "./pages/NamingDictPage.js";
 import VersionHistoryPage from "./pages/VersionHistoryPage.js";
@@ -192,14 +193,7 @@ function NlGenerateModal({ onClose }: { onClose: () => void }) {
 
 const SUITE_COLORS = ["#7b8cff", "#4ade80", "#fbbf24", "#f87171", "#60a5fa", "#c084fc", "#fb923c"];
 
-const LAYER_LABELS: Record<SchemaLayer, string> = {
-  transaction: "交易層 Transaction",
-  r2u:         "寬表層 R2U",
-  unified:     "寬表層 Unified Layer",
-};
-
 // ── Schema list (shared between Sidebar and mobile drawer) ────────────────────
-const LAYER_BADGE: Record<SchemaLayer, string> = { transaction: "TX", r2u: "R2U", unified: "UL" };
 const ENV_COLOR: Record<SchemaEnvironment, string> = { DEV: "#60a5fa", TEST: "#4ade80", STAGING: "#fbbf24", PROD: "#f87171" };
 
 function SchemaItem({ name, active, suiteColor, layerType, environment, onClick }: { name: string; active: boolean; suiteColor?: string | null; layerType?: SchemaLayer | null; environment?: SchemaEnvironment | null; onClick: () => void }) {
@@ -218,7 +212,7 @@ function SchemaItem({ name, active, suiteColor, layerType, environment, onClick 
       )}
       {layerType && (
         <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", background: "var(--bg-4)", borderRadius: 3, padding: "1px 4px", flexShrink: 0, letterSpacing: "0.3px" }}>
-          {LAYER_BADGE[layerType]}
+          {layerType.slice(0, 3).toUpperCase()}
         </span>
       )}
     </div>
@@ -349,6 +343,7 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
   const [reloading, setReloading] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", domain: "semiconductor", suiteId: "", layerType: "", environment: "" });
   const t = useT();
+  const { schemaLayers } = useLayerSettings();
 
   async function reloadDdl() {
     if (reloading) return;
@@ -520,9 +515,7 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
             <FormRow label="Schema 用途層">
               <select className="form-input" value={form.layerType} onChange={e => setForm({ ...form, layerType: e.target.value })}>
                 <option value="">（未分類）</option>
-                <option value="transaction">交易層 Transaction</option>
-                <option value="r2u">寬表層 R2U（Ready to Use）</option>
-                <option value="unified">寬表層 Unified Layer</option>
+                {schemaLayers.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
               </select>
             </FormRow>
             <FormRow label="環境 Environment">

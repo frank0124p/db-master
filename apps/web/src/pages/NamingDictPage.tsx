@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { api, type NamingEntry } from "../api.js";
+import { useLayerSettings, layerColor } from "../hooks/useLayerSettings.js";
 
 const TAG_COLORS: Record<string, { bg: string; color: string }> = {
   識別碼:   { bg: "rgba(99,179,237,0.15)",  color: "#63B3ED" },
@@ -23,14 +24,7 @@ const TAG_COLORS: Record<string, { bg: string; color: string }> = {
 
 const ALL_TAGS = Object.keys(TAG_COLORS);
 
-const DICT_LAYER_CFG = {
-  general:     { label: "通用",    color: "var(--text-3)",  bg: "var(--bg-4)" },
-  transaction: { label: "交易層",  color: "#a78bfa",        bg: "rgba(167,139,250,0.15)" },
-  r2u:         { label: "R2U",     color: "#34d399",        bg: "rgba(52,211,153,0.15)" },
-  unified:     { label: "Unified", color: "#60a5fa",        bg: "rgba(96,165,250,0.15)" },
-} as const;
-const DICT_LAYERS = ["general", "transaction", "r2u", "unified"] as const;
-type DictLayer = typeof DICT_LAYERS[number];
+type DictLayer = string;
 
 function TagChip({ tag, onRemove }: { tag: string; onRemove?: () => void }) {
   const c = TAG_COLORS[tag] ?? { bg: "var(--bg-4)", color: "var(--text-3)" };
@@ -47,6 +41,7 @@ function TagChip({ tag, onRemove }: { tag: string; onRemove?: () => void }) {
 function DefinitionPanel({ entry, onClose }: { entry: NamingEntry; onClose: () => void }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
+  const { dictLayers: configLayers } = useLayerSettings();
   const [manualDesc, setManualDesc] = useState(entry.description ?? "");
   const [tags, setTags] = useState<string[]>(entry.tags ?? []);
   const [layers, setLayers] = useState<string[]>(entry.layers ?? []);
@@ -113,17 +108,16 @@ function DefinitionPanel({ entry, onClose }: { entry: NamingEntry; onClose: () =
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>適用分層</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {DICT_LAYERS.map(l => {
-                const cfg = DICT_LAYER_CFG[l];
-                const active = layers.includes(l);
+              {configLayers.map(l => {
+                const active = layers.includes(l.id);
                 return (
-                  <button key={l}
-                    onClick={() => setLayers(active ? layers.filter(x => x !== l) : [...layers, l])}
+                  <button key={l.id}
+                    onClick={() => setLayers(active ? layers.filter(x => x !== l.id) : [...layers, l.id])}
                     style={{ padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
-                      background: active ? cfg.bg : "var(--bg-3)",
-                      color: active ? cfg.color : "var(--text-3)",
-                      border: `1px solid ${active ? cfg.color : "var(--border)"}` }}>
-                    {cfg.label}
+                      background: active ? l.bg : "var(--bg-3)",
+                      color: active ? l.color : "var(--text-3)",
+                      border: `1px solid ${active ? l.color : "var(--border)"}` }}>
+                    {l.label}
                   </button>
                 );
               })}
@@ -302,6 +296,7 @@ function EntryModal({ entry, onClose }: { entry?: NamingEntry; onClose: () => vo
 export default function NamingDictPage() {
   const qc = useQueryClient();
   const { showToast } = useStore();
+  const { dictLayers: configLayers } = useLayerSettings();
   const [filter, setFilter] = useState("all");
   const [layerFilter, setLayerFilter] = useState<"" | DictLayer>("");
   const [showModal, setShowModal] = useState(false);
@@ -359,16 +354,15 @@ export default function NamingDictPage() {
             border: `1px solid ${layerFilter === "" ? "var(--accent)" : "var(--border)"}` }}>
           全部
         </button>
-        {DICT_LAYERS.map(l => {
-          const cfg = DICT_LAYER_CFG[l];
-          const active = layerFilter === l;
+        {configLayers.map(l => {
+          const active = layerFilter === l.id;
           return (
-            <button key={l} onClick={() => setLayerFilter(active ? "" : l)}
+            <button key={l.id} onClick={() => setLayerFilter(active ? "" : l.id)}
               style={{ padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
-                background: active ? cfg.bg : "var(--bg-3)",
-                color: active ? cfg.color : "var(--text-3)",
-                border: `1px solid ${active ? cfg.color : "var(--border)"}` }}>
-              {cfg.label}
+                background: active ? l.bg : "var(--bg-3)",
+                color: active ? l.color : "var(--text-3)",
+                border: `1px solid ${active ? l.color : "var(--border)"}` }}>
+              {l.label}
             </button>
           );
         })}
@@ -398,8 +392,7 @@ export default function NamingDictPage() {
                   {(e.layers ?? []).length === 0
                     ? <span style={{ fontSize: 10, color: "var(--text-3)" }}>—</span>
                     : (e.layers ?? []).map(l => {
-                        const cfg = DICT_LAYER_CFG[l as DictLayer];
-                        if (!cfg) return null;
+                        const cfg = configLayers.find(x => x.id === l) ?? { label: l, ...layerColor(0) };
                         return (
                           <span key={l} style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 6,
                             background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}33` }}>
