@@ -280,7 +280,11 @@ export default function ErDiagramPage() {
   const [showMermaid, setShowMermaid] = useState(false);
   const [manualPos, setManualPos] = useState<Map<number, { x: number; y: number }>>(new Map());
   const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
   const dragRef = useRef<{ tableId: number; startMX: number; startMY: number; origX: number; origY: number } | null>(null);
+  const panRef  = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null);
+  const didMoveRef = useRef(false);
+  const canvasScrollRef = useRef<HTMLDivElement>(null);
 
   const { data: schema } = useQuery({
     queryKey: ["schema", selectedSchemaId],
@@ -297,6 +301,18 @@ export default function ErDiagramPage() {
     }
   }, [schema?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Center the canvas view after layout is computed for this schema
+  useEffect(() => {
+    const el = canvasScrollRef.current;
+    if (!el || !schema) return;
+    requestAnimationFrame(() => {
+      const centerX = el.scrollWidth / 2 - el.clientWidth / 2;
+      const centerY = el.scrollHeight / 2 - el.clientHeight / 2;
+      el.scrollLeft = Math.max(0, centerX);
+      el.scrollTop  = Math.max(0, centerY);
+    });
+  }, [schema?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const visibleTables = (schema?.tables ?? []).filter(t => visible.has(t.id));
   const edges   = schema ? detectEdges(schema.tables, visible) : [];
   const fkEdges = edges.filter(e => e.type === "fk");
@@ -311,28 +327,53 @@ export default function ErDiagramPage() {
     positions.set(id, m ? { ...p, x: m.x, y: m.y } : p);
   }
 
-  const canvasW = (p: Map<number, NodePos>) => Math.max(600, ...[...p.values()].map(n => n.x + n.w + PAD));
-  const canvasH = (p: Map<number, NodePos>) => Math.max(400, ...[...p.values()].map(n => n.y + n.h + PAD));
+  // Extra canvas margin so cards are never at the very edge, and there's room to pan
+  const CANVAS_MARGIN = 240;
+  const canvasW = (p: Map<number, NodePos>) => Math.max(800, ...[...p.values()].map(n => n.x + n.w + CANVAS_MARGIN));
+  const canvasH = (p: Map<number, NodePos>) => Math.max(600, ...[...p.values()].map(n => n.y + n.h + CANVAS_MARGIN));
 
   function handleDragStart(tableId: number, e: React.PointerEvent) {
     const p = positions.get(tableId);
     if (!p) return;
     dragRef.current = { tableId, startMX: e.clientX, startMY: e.clientY, origX: p.x, origY: p.y };
+    didMoveRef.current = false;
     setDraggingId(tableId);
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }
 
-  function handleCanvasPointerMove(e: React.PointerEvent) {
-    if (!dragRef.current) return;
-    const { tableId, startMX, startMY, origX, origY } = dragRef.current;
-    const newX = Math.max(0, origX + e.clientX - startMX);
-    const newY = Math.max(0, origY + e.clientY - startMY);
-    setManualPos(prev => { const next = new Map(prev); next.set(tableId, { x: newX, y: newY }); return next; });
+  function handleBgPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.target !== e.currentTarget) return;
+    const el = canvasScrollRef.current;
+    if (!el) return;
+    panRef.current = { startX: e.clientX, startY: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop };
+    didMoveRef.current = false;
+    setIsPanning(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
   }
 
-  function handleCanvasPointerUp() {
+  function handlePointerMove(e: React.PointerEvent) {
+    if (dragRef.current) {
+      const { tableId, startMX, startMY, origX, origY } = dragRef.current;
+      const newX = Math.max(0, origX + e.clientX - startMX);
+      const newY = Math.max(0, origY + e.clientY - startMY);
+      setManualPos(prev => { const next = new Map(prev); next.set(tableId, { x: newX, y: newY }); return next; });
+      didMoveRef.current = true;
+      return;
+    }
+    if (panRef.current && canvasScrollRef.current) {
+      const dx = e.clientX - panRef.current.startX;
+      const dy = e.clientY - panRef.current.startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didMoveRef.current = true;
+      canvasScrollRef.current.scrollLeft = panRef.current.scrollX - dx;
+      canvasScrollRef.current.scrollTop  = panRef.current.scrollY - dy;
+    }
+  }
+
+  function handlePointerUp() {
     dragRef.current = null;
     setDraggingId(null);
+    panRef.current = null;
+    setIsPanning(false);
   }
 
   function resetLayout() {
@@ -469,21 +510,24 @@ export default function ErDiagramPage() {
                 </div>
               ))}
               <div style={{ fontSize: 9, color: "var(--text-3)", lineHeight: 1.5, marginTop: 4 }}>
-                點擊卡片展開該表及所有關聯表<br />
-                再點一次收合 / 點空白取消聚焦
+                點擊卡片展開關聯表，再點收合<br />
+                拖拉標題移動卡片<br />
+                拖拉空白區域平移畫布
               </div>
             </div>
           </div>
         )}
 
         {/* Canvas */}
-        <div style={{ flex: 1, overflow: "auto", background: "var(--bg-1)", position: "relative" }}
-          onClick={e => { if (e.target === e.currentTarget) setFocused(null); }}
-          onPointerMove={handleCanvasPointerMove}
-          onPointerUp={handleCanvasPointerUp}
-          onPointerLeave={handleCanvasPointerUp}>
-          <div style={{ position: "relative", width: cW, height: cH, minWidth: "100%", minHeight: "100%" }}
-            onClick={e => { if (e.target === e.currentTarget) setFocused(null); }}>
+        <div ref={canvasScrollRef}
+          style={{ flex: 1, overflow: "auto", background: "var(--bg-1)", position: "relative" }}>
+          <div style={{ position: "relative", width: cW, height: cH, minWidth: "100%", minHeight: "100%",
+            cursor: isPanning ? "grabbing" : draggingId ? "default" : "grab" }}
+            onPointerDown={handleBgPointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            onClick={e => { if (e.target === e.currentTarget && !didMoveRef.current) setFocused(null); }}>
             <EdgeOverlay edges={edges} pos={positions} focusedSet={focusedSet} />
             {visibleTables.map(t => {
               const p = positions.get(t.id);
@@ -499,7 +543,7 @@ export default function ErDiagramPage() {
                   isRef={fkEdges.some(e => e.toTable === t.name)}
                   isSrc={srcEdges.some(e => e.toTable === t.name)}
                   dragging={draggingId === t.id}
-                  onClick={() => { if (!dragRef.current) handleCardClick(t); }}
+                  onClick={() => { if (!didMoveRef.current) handleCardClick(t); }}
                   onDragStart={e => handleDragStart(t.id, e)}
                 />
               );
