@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore, type Page, type Theme } from "./store.js";
 import { useT } from "./i18n.js";
-import { api, type ProductSuite, type SchemaLayer, type SchemaEnvironment, type SearchResults } from "./api.js";
+import { api, type ProductSuite, type SchemaLayer, type SchemaEnvironment, type SearchResults, type SearchNamingResult } from "./api.js";
 import { useBreakpoint } from "./hooks/useBreakpoint.js";
 import { useLayerSettings } from "./hooks/useLayerSettings.js";
 import SchemaEditorPage from "./pages/SchemaEditorPage.js";
@@ -128,7 +128,10 @@ function GlobalSearchModal({ onClose }: { onClose: () => void }) {
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [q]);
 
-  const allItems: { type: "table" | "field"; label: string; sub: string; schemaId: number; tableId: number }[] = [
+  type NavItem = { type: "table" | "field"; label: string; sub: string; schemaId: number; tableId: number };
+  type DictItem = { type: "dict"; label: string; sub: string; entry: SearchNamingResult };
+
+  const navItems: NavItem[] = [
     ...(results?.tables ?? []).map(t => ({
       type: "table" as const, label: t.tableName,
       sub: `${t.schemaName}${t.tableComment ? ` · ${t.tableComment}` : ""}`,
@@ -140,24 +143,34 @@ function GlobalSearchModal({ onClose }: { onClose: () => void }) {
       schemaId: f.schemaId, tableId: f.tableId,
     })),
   ];
+  const dictItems: DictItem[] = (results?.naming ?? []).map(e => ({
+    type: "dict" as const, label: e.concept,
+    sub: `${e.stdName} · ${e.domain}`,
+    entry: e,
+  }));
+  const totalItems = navItems.length + dictItems.length;
 
   function pick(idx: number) {
-    const item = allItems[idx];
-    if (!item) return;
-    setSelectedSchemaId(item.schemaId);
-    setPage("editor");
+    if (idx < navItems.length) {
+      const item = navItems[idx]!;
+      setSelectedSchemaId(item.schemaId);
+      setPage("editor");
+    } else {
+      setPage("dict");
+    }
     onClose();
   }
 
   function handleKey(e: React.KeyboardEvent) {
     if (e.key === "Escape") { onClose(); return; }
-    if (e.key === "ArrowDown") { e.preventDefault(); setSelected(s => Math.min(s + 1, allItems.length - 1)); }
+    if (e.key === "ArrowDown") { e.preventDefault(); setSelected(s => Math.min(s + 1, totalItems - 1)); }
     if (e.key === "ArrowUp") { e.preventDefault(); setSelected(s => Math.max(s - 1, 0)); }
     if (e.key === "Enter") { e.preventDefault(); pick(selected); }
   }
 
-  const hasResults = allItems.length > 0;
+  const hasResults = totalItems > 0;
   const tableCount = results?.tables.length ?? 0;
+  const fieldCount = results?.fields.length ?? 0;
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 800, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 80 }}
@@ -168,7 +181,7 @@ function GlobalSearchModal({ onClose }: { onClose: () => void }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
           <span style={{ fontSize: 16, color: "var(--text-3)", flexShrink: 0 }}>⊕</span>
           <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={handleKey}
-            placeholder="搜尋 Table 或 Column 名稱..."
+            placeholder="搜尋 Table、Column 或命名規範..."
             style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 15, color: "var(--text-1)", fontFamily: "inherit" }} />
           {loading && <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0 }}>搜尋中...</span>}
           <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0, background: "var(--bg-3)", padding: "2px 6px", borderRadius: 4, border: "1px solid var(--border)" }}>Esc</span>
@@ -185,17 +198,26 @@ function GlobalSearchModal({ onClose }: { onClose: () => void }) {
                 {tableCount > 0 && (
                   <div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.6px", padding: "8px 16px 4px" }}>Table</div>
-                    {allItems.slice(0, tableCount).map((item, i) => (
-                      <SearchRow key={`t-${item.tableId}`} item={item} active={selected === i} onHover={() => setSelected(i)} onClick={() => pick(i)} />
+                    {navItems.slice(0, tableCount).map((item, i) => (
+                      <SearchRow key={`t-${item.tableId}`} badge="TABLE" label={item.label} sub={item.sub} active={selected === i} onHover={() => setSelected(i)} onClick={() => pick(i)} />
                     ))}
                   </div>
                 )}
-                {(results?.fields.length ?? 0) > 0 && (
+                {fieldCount > 0 && (
                   <div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.6px", padding: "8px 16px 4px" }}>Column</div>
-                    {allItems.slice(tableCount).map((item, i) => {
+                    {navItems.slice(tableCount).map((item, i) => {
                       const idx = tableCount + i;
-                      return <SearchRow key={`f-${item.tableId}-${item.label}-${i}`} item={item} active={selected === idx} onHover={() => setSelected(idx)} onClick={() => pick(idx)} />;
+                      return <SearchRow key={`f-${item.tableId}-${item.label}-${i}`} badge="COL" label={item.label} sub={item.sub} active={selected === idx} onHover={() => setSelected(idx)} onClick={() => pick(idx)} />;
+                    })}
+                  </div>
+                )}
+                {dictItems.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.6px", padding: "8px 16px 4px" }}>Dict</div>
+                    {dictItems.map((item, i) => {
+                      const idx = navItems.length + i;
+                      return <SearchRow key={`d-${item.entry.id}`} badge="DICT" label={item.label} sub={item.sub} active={selected === idx} onHover={() => setSelected(idx)} onClick={() => pick(idx)} />;
                     })}
                   </div>
                 )}
@@ -209,27 +231,28 @@ function GlobalSearchModal({ onClose }: { onClose: () => void }) {
           <span>↑↓ 選擇</span>
           <span>↵ 跳轉</span>
           <span>Esc 關閉</span>
-          {hasResults && <span style={{ marginLeft: "auto" }}>{results?.tables.length} 張表 · {results?.fields.length} 個欄位</span>}
+          {hasResults && <span style={{ marginLeft: "auto" }}>{tableCount} 張表 · {fieldCount} 個欄位 · {dictItems.length} 命名</span>}
         </div>
       </div>
     </div>
   );
 }
 
-function SearchRow({ item, active, onHover, onClick }: {
-  item: { type: "table" | "field"; label: string; sub: string };
+function SearchRow({ badge, label, sub, active, onHover, onClick }: {
+  badge: string; label: string; sub: string;
   active: boolean; onHover: () => void; onClick: () => void;
 }) {
+  const isAccent = badge === "TABLE";
   return (
     <div onMouseEnter={onHover} onClick={onClick}
       style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", cursor: "pointer",
         background: active ? "var(--accent-dim)" : "transparent", borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent" }}>
-      <span style={{ fontSize: 11, color: item.type === "table" ? "var(--accent)" : "var(--text-3)", background: item.type === "table" ? "var(--accent-dim)" : "var(--bg-3)", padding: "1px 5px", borderRadius: 3, flexShrink: 0, fontWeight: 600 }}>
-        {item.type === "table" ? "TABLE" : "COL"}
+      <span style={{ fontSize: 11, color: isAccent ? "var(--accent)" : "var(--text-3)", background: isAccent ? "var(--accent-dim)" : "var(--bg-3)", padding: "1px 5px", borderRadius: 3, flexShrink: 0, fontWeight: 600 }}>
+        {badge}
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: active ? "var(--accent)" : "var(--text-1)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</div>
-        <div style={{ fontSize: 11, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.sub}</div>
+        <div style={{ fontSize: 13, color: active ? "var(--accent)" : "var(--text-1)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+        <div style={{ fontSize: 11, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</div>
       </div>
     </div>
   );
@@ -463,7 +486,7 @@ function SuiteManageModal({ suites, schemas, activeSuiteId, onClose }: {
   );
 }
 
-function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
+function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => void; onSearch?: () => void }) {
   const qc = useQueryClient();
   const { selectedSchemaId, setSelectedSchemaId, showToast, activeSuiteId, setActiveSuiteId, setSuitePicked } = useStore();
   const { data: schemas } = useQuery({ queryKey: ["schemas"], queryFn: api.schemas.list });
@@ -532,6 +555,16 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
             style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>＋</button>
         </div>
       </div>
+
+      {onSearch && (
+        <div style={{ padding: "0 8px 6px", flexShrink: 0 }}>
+          <button onClick={onSearch} style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-3)", cursor: "pointer", textAlign: "left", fontSize: 12 }}>
+            <span style={{ fontSize: 13 }}>⊕</span>
+            <span style={{ flex: 1 }}>搜尋 Table / Column...</span>
+            <span style={{ fontSize: 10, background: "var(--bg-4)", border: "1px solid var(--border)", borderRadius: 3, padding: "1px 4px" }}>⌘K</span>
+          </button>
+        </div>
+      )}
 
       {suites && suites.length > 0 && (
         <div style={{ padding: "4px 8px 4px", display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0, alignItems: "center" }}>
@@ -675,16 +708,16 @@ function SidebarContent({ onSchemaSelect }: { onSchemaSelect?: () => void }) {
 }
 
 // Desktop/Tablet sidebar shell
-function Sidebar() {
+function Sidebar({ onSearch }: { onSearch?: () => void }) {
   return (
     <div style={{ width: 220, background: "var(--bg-2)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, overflow: "hidden" }}>
-      <SidebarContent />
+      {onSearch ? <SidebarContent onSearch={onSearch} /> : <SidebarContent />}
     </div>
   );
 }
 
 // ── Mobile drawer (nav + schema list) ─────────────────────────────────────────
-function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+function MobileDrawer({ open, onClose, onSearch }: { open: boolean; onClose: () => void; onSearch?: () => void }) {
   const { page, setPage } = useStore();
   const t = useT();
 
@@ -730,7 +763,9 @@ function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void })
 
         {/* Schema list */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <SidebarContent onSchemaSelect={onClose} />
+          {onSearch
+            ? <SidebarContent onSchemaSelect={onClose} onSearch={onSearch} />
+            : <SidebarContent onSchemaSelect={onClose} />}
         </div>
       </div>
     </>
@@ -902,7 +937,7 @@ export default function App() {
         {!isMobile && (
           <div className="sidebar-panel"
             style={{ width: (isDesktop || sidebarOpen) ? 220 : 0, opacity: (isDesktop || sidebarOpen) ? 1 : 0 }}>
-            {(isDesktop || sidebarOpen) && <Sidebar />}
+            {(isDesktop || sidebarOpen) && <Sidebar onSearch={() => setShowSearch(true)} />}
           </div>
         )}
 
@@ -925,7 +960,7 @@ export default function App() {
       </div>
 
       {/* Mobile slide-in drawer */}
-      {isMobile && <MobileDrawer open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />}
+      {isMobile && <MobileDrawer open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} onSearch={() => setShowSearch(true)} />}
 
       <Toast />
       {showSearch && <GlobalSearchModal onClose={() => setShowSearch(false)} />}

@@ -479,23 +479,28 @@ export const mockApi = {
     delete: async (_id: number): Promise<void> => { await delay(60); },
   },
   search: async (q: string) => {
-    const lower = q.toLowerCase();
+    await delay(80);
+    const lower = q.trim().toLowerCase();
+    if (!lower) return { tables: [], fields: [], naming: [] };
     const tables: import("../api.js").SearchTableResult[] = [];
     const fields: import("../api.js").SearchFieldResult[] = [];
-    const allDetails = [plmSchema, mesSchema];
-    for (const schema of allDetails) {
+    for (const schema of Object.values(schemaDetails)) {
       for (const table of schema.tables) {
         if (table.name.toLowerCase().includes(lower) || (table.comment ?? "").toLowerCase().includes(lower)) {
           tables.push({ schemaId: schema.id, schemaName: schema.name, tableId: table.id, tableName: table.name, tableComment: table.comment });
         }
         for (const field of table.fields) {
-          if (field.name.toLowerCase().includes(lower) || (field.comment ?? "").toLowerCase().includes(lower)) {
+          if (field.name.toLowerCase().includes(lower) || (field.comment ?? "").toLowerCase().includes(lower) || (field.aliases ?? []).some((a: string) => a.toLowerCase().includes(lower))) {
             fields.push({ schemaId: schema.id, schemaName: schema.name, tableId: table.id, tableName: table.name, fieldId: field.id, fieldName: field.name, fieldType: field.dataType, fieldComment: field.comment });
           }
         }
       }
     }
-    return { tables: tables.slice(0, 50), fields: fields.slice(0, 100) };
+    const namingHits = naming
+      .filter(e => e.concept.toLowerCase().includes(lower) || e.stdName.toLowerCase().includes(lower) || e.aliases.some((a: string) => a.toLowerCase().includes(lower)))
+      .slice(0, 30)
+      .map(e => ({ id: e.id, concept: e.concept, stdName: e.stdName, domain: e.domain }));
+    return { tables: tables.slice(0, 50), fields: fields.slice(0, 100), naming: namingHits };
   },
   reload: async () => ({ ok: true, reloadedAt: new Date().toISOString() }),
 };

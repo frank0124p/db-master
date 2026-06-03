@@ -1,5 +1,6 @@
 import { Router, type Router as ExpressRouter } from "express";
 import { listSchemas, getSchemaById } from "../repositories/schemas.js";
+import { listNamingEntries } from "../repositories/naming.js";
 
 const router: ExpressRouter = Router();
 
@@ -51,7 +52,17 @@ router.get("/", async (req, res, next) => {
       }
     }
 
-    res.json({ tables: tableResults.slice(0, 50), fields: fieldResults.slice(0, 100) });
+    const allNaming = await listNamingEntries();
+    const namingResults = allNaming
+      .filter(e =>
+        e.concept.toLowerCase().includes(q) ||
+        e.stdName.toLowerCase().includes(q) ||
+        e.aliases.some(a => a.toLowerCase().includes(q))
+      )
+      .slice(0, 30)
+      .map(e => ({ id: e.id, concept: e.concept, stdName: e.stdName, domain: e.domain }));
+
+    res.json({ tables: tableResults.slice(0, 50), fields: fieldResults.slice(0, 100), naming: namingResults });
   } catch (e) { next(e); }
 });
 

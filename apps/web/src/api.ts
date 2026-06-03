@@ -48,9 +48,13 @@ export interface SearchFieldResult {
   tableId: number; tableName: string;
   fieldId: number; fieldName: string; fieldType: string; fieldComment: string | null;
 }
+export interface SearchNamingResult {
+  id: number; concept: string; stdName: string; domain: string;
+}
 export interface SearchResults {
   tables: SearchTableResult[];
   fields: SearchFieldResult[];
+  naming?: SearchNamingResult[];
 }
 
 export interface WideTableVersionEntry {
