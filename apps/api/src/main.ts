@@ -27,6 +27,7 @@ import llmRouter from "./routes/llm.js";
 import settingsRouter from "./routes/settings.js";
 import datahubRouter from "./routes/datahub.js";
 import suitesRouter from "./routes/suites.js";
+import searchRouter from "./routes/search.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -68,6 +69,7 @@ app.use("/api/v1/llm", llmRouter);
 app.use("/api/v1/settings", settingsRouter);
 app.use("/api/v1/datahub", datahubRouter);
 app.use("/api/v1/suites", suitesRouter);
+app.use("/api/v1/search", searchRouter);
 
 async function start() {
   await runMigration();

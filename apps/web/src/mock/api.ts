@@ -478,5 +478,24 @@ export const mockApi = {
     }),
     delete: async (_id: number): Promise<void> => { await delay(60); },
   },
+  search: async (q: string) => {
+    const lower = q.toLowerCase();
+    const tables: import("../api.js").SearchTableResult[] = [];
+    const fields: import("../api.js").SearchFieldResult[] = [];
+    const allDetails = [plmSchema, mesSchema];
+    for (const schema of allDetails) {
+      for (const table of schema.tables) {
+        if (table.name.toLowerCase().includes(lower) || (table.comment ?? "").toLowerCase().includes(lower)) {
+          tables.push({ schemaId: schema.id, schemaName: schema.name, tableId: table.id, tableName: table.name, tableComment: table.comment });
+        }
+        for (const field of table.fields) {
+          if (field.name.toLowerCase().includes(lower) || (field.comment ?? "").toLowerCase().includes(lower)) {
+            fields.push({ schemaId: schema.id, schemaName: schema.name, tableId: table.id, tableName: table.name, fieldId: field.id, fieldName: field.name, fieldType: field.dataType, fieldComment: field.comment });
+          }
+        }
+      }
+    }
+    return { tables: tables.slice(0, 50), fields: fields.slice(0, 100) };
+  },
   reload: async () => ({ ok: true, reloadedAt: new Date().toISOString() }),
 };

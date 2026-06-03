@@ -39,6 +39,20 @@ export interface MatchResult {
 export interface FieldCheckResult { fieldName: string; result: MatchResult; }
 export interface TableNamingCheck { tableId: number; tableName: string; fields: FieldCheckResult[]; }
 
+export interface SearchTableResult {
+  schemaId: number; schemaName: string;
+  tableId: number; tableName: string; tableComment: string | null;
+}
+export interface SearchFieldResult {
+  schemaId: number; schemaName: string;
+  tableId: number; tableName: string;
+  fieldId: number; fieldName: string; fieldType: string; fieldComment: string | null;
+}
+export interface SearchResults {
+  tables: SearchTableResult[];
+  fields: SearchFieldResult[];
+}
+
 export interface WideTableVersionEntry {
   id: number; name: string; description: string | null;
   sources: { tableName: string; joinType: string }[];
@@ -385,6 +399,7 @@ const realApi = {
       req<ProductSuite>(`/suites/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/suites/${id}`, { method: "DELETE" }),
   },
+  search: (q: string) => req<SearchResults>(`/search?q=${encodeURIComponent(q)}`),
   reload: () => req<{ ok: boolean; reloadedAt: string }>("/reload", { method: "POST" }),
 };
 

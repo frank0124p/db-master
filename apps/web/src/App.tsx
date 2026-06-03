@@ -1,8 +1,8 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore, type Page, type Theme } from "./store.js";
 import { useT } from "./i18n.js";
-import { api, type ProductSuite, type SchemaLayer, type SchemaEnvironment } from "./api.js";
+import { api, type ProductSuite, type SchemaLayer, type SchemaEnvironment, type SearchResults } from "./api.js";
 import { useBreakpoint } from "./hooks/useBreakpoint.js";
 import { useLayerSettings } from "./hooks/useLayerSettings.js";
 import SchemaEditorPage from "./pages/SchemaEditorPage.js";
@@ -101,6 +101,137 @@ function NavBtn({ active, onClick, children }: { active: boolean; onClick: () =>
         whiteSpace: "nowrap" }}>
       {children}
     </button>
+  );
+}
+
+// ── Global Search Modal ───────────────────────────────────────────────────────
+function GlobalSearchModal({ onClose }: { onClose: () => void }) {
+  const { setSelectedSchemaId, setPage } = useStore();
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<SearchResults | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!q.trim()) { setResults(null); setSelected(0); return; }
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try { setResults(await api.search(q.trim())); setSelected(0); }
+      catch { /* ignore */ }
+      finally { setLoading(false); }
+    }, 250);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [q]);
+
+  const allItems: { type: "table" | "field"; label: string; sub: string; schemaId: number; tableId: number }[] = [
+    ...(results?.tables ?? []).map(t => ({
+      type: "table" as const, label: t.tableName,
+      sub: `${t.schemaName}${t.tableComment ? ` · ${t.tableComment}` : ""}`,
+      schemaId: t.schemaId, tableId: t.tableId,
+    })),
+    ...(results?.fields ?? []).map(f => ({
+      type: "field" as const, label: f.fieldName,
+      sub: `${f.schemaName} › ${f.tableName} · ${f.fieldType}${f.fieldComment ? ` · ${f.fieldComment}` : ""}`,
+      schemaId: f.schemaId, tableId: f.tableId,
+    })),
+  ];
+
+  function pick(idx: number) {
+    const item = allItems[idx];
+    if (!item) return;
+    setSelectedSchemaId(item.schemaId);
+    setPage("editor");
+    onClose();
+  }
+
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === "Escape") { onClose(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); setSelected(s => Math.min(s + 1, allItems.length - 1)); }
+    if (e.key === "ArrowUp") { e.preventDefault(); setSelected(s => Math.max(s - 1, 0)); }
+    if (e.key === "Enter") { e.preventDefault(); pick(selected); }
+  }
+
+  const hasResults = allItems.length > 0;
+  const tableCount = results?.tables.length ?? 0;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 800, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 80 }}
+      onClick={onClose}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 12, width: "min(640px, 92vw)", boxShadow: "0 16px 60px rgba(0,0,0,0.6)", overflow: "hidden" }}
+        onClick={e => e.stopPropagation()}>
+        {/* Search input */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+          <span style={{ fontSize: 16, color: "var(--text-3)", flexShrink: 0 }}>⊕</span>
+          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={handleKey}
+            placeholder="搜尋 Table 或 Column 名稱..."
+            style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 15, color: "var(--text-1)", fontFamily: "inherit" }} />
+          {loading && <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0 }}>搜尋中...</span>}
+          <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0, background: "var(--bg-3)", padding: "2px 6px", borderRadius: 4, border: "1px solid var(--border)" }}>Esc</span>
+        </div>
+
+        {/* Results */}
+        {q.trim() && (
+          <div style={{ maxHeight: 420, overflowY: "auto" }}>
+            {!hasResults && !loading && (
+              <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 13, color: "var(--text-3)" }}>找不到符合「{q}」的結果</div>
+            )}
+            {hasResults && (
+              <>
+                {tableCount > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.6px", padding: "8px 16px 4px" }}>Table</div>
+                    {allItems.slice(0, tableCount).map((item, i) => (
+                      <SearchRow key={`t-${item.tableId}`} item={item} active={selected === i} onHover={() => setSelected(i)} onClick={() => pick(i)} />
+                    ))}
+                  </div>
+                )}
+                {(results?.fields.length ?? 0) > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.6px", padding: "8px 16px 4px" }}>Column</div>
+                    {allItems.slice(tableCount).map((item, i) => {
+                      const idx = tableCount + i;
+                      return <SearchRow key={`f-${item.tableId}-${item.label}-${i}`} item={item} active={selected === idx} onHover={() => setSelected(idx)} onClick={() => pick(idx)} />;
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Footer hint */}
+        <div style={{ padding: "8px 16px", borderTop: "1px solid var(--border)", display: "flex", gap: 12, fontSize: 11, color: "var(--text-3)" }}>
+          <span>↑↓ 選擇</span>
+          <span>↵ 跳轉</span>
+          <span>Esc 關閉</span>
+          {hasResults && <span style={{ marginLeft: "auto" }}>{results?.tables.length} 張表 · {results?.fields.length} 個欄位</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SearchRow({ item, active, onHover, onClick }: {
+  item: { type: "table" | "field"; label: string; sub: string };
+  active: boolean; onHover: () => void; onClick: () => void;
+}) {
+  return (
+    <div onMouseEnter={onHover} onClick={onClick}
+      style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", cursor: "pointer",
+        background: active ? "var(--accent-dim)" : "transparent", borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent" }}>
+      <span style={{ fontSize: 11, color: item.type === "table" ? "var(--accent)" : "var(--text-3)", background: item.type === "table" ? "var(--accent-dim)" : "var(--bg-3)", padding: "1px 5px", borderRadius: 3, flexShrink: 0, fontWeight: 600 }}>
+        {item.type === "table" ? "TABLE" : "COL"}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, color: active ? "var(--accent)" : "var(--text-1)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</div>
+        <div style={{ fontSize: 11, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.sub}</div>
+      </div>
+    </div>
   );
 }
 
@@ -684,6 +815,18 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showSearch, setShowSearch] = useState(false);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setShowSearch(v => !v);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Close mobile menu when resizing to desktop
   useEffect(() => { if (isDesktop) setMobileMenuOpen(false); }, [isDesktop]);
@@ -727,6 +870,12 @@ export default function App() {
             </button>
           )}
 
+          <button onClick={() => setShowSearch(true)} title="全局搜尋 (⌘K)"
+            style={{ ...iconBtnStyle, fontSize: 14, gap: 4, width: "auto", padding: "0 8px", minWidth: 30 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-4)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-3)"; }}>
+            ⊕{!isMobile && <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 2 }}>⌘K</span>}
+          </button>
           <LangToggle />
           <ThemeToggle />
 
@@ -779,6 +928,7 @@ export default function App() {
       {isMobile && <MobileDrawer open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />}
 
       <Toast />
+      {showSearch && <GlobalSearchModal onClose={() => setShowSearch(false)} />}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
 
       <style>{`
