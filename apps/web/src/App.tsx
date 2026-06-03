@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore, type Page, type Theme } from "./store.js";
 import { useT } from "./i18n.js";
-import { api, type ProductSuite, type SchemaLayer, type SchemaEnvironment, type SearchResults, type SearchNamingResult } from "./api.js";
+import { api, type ProductSuite, type SchemaLayer, type SchemaEnvironment, type SearchResults, type SearchNamingResult, type DomainDef } from "./api.js";
 import { useBreakpoint } from "./hooks/useBreakpoint.js";
 import { useLayerSettings } from "./hooks/useLayerSettings.js";
 import SchemaEditorPage from "./pages/SchemaEditorPage.js";
@@ -265,6 +265,7 @@ function NlGenerateModal({ onClose }: { onClose: () => void }) {
   const t = useT();
   const [prompt, setPrompt] = useState("");
   const [domain, setDomain] = useState("semiconductor");
+  const { data: nlDomains } = useQuery({ queryKey: ["domains"], queryFn: () => api.settings.getDomains() });
   const [streaming, setStreaming] = useState(false);
   const [tokens, setTokens] = useState("");
   const [status, setStatus] = useState("");
@@ -322,8 +323,9 @@ function NlGenerateModal({ onClose }: { onClose: () => void }) {
           <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>領域</div>
           <select value={domain} onChange={e => setDomain(e.target.value)} disabled={streaming}
             style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-1)" }}>
-            <option value="semiconductor">半導體製造</option>
-            <option value="general">通用</option>
+            {(nlDomains ?? [{ id: "semiconductor", name: "半導體製造", order: 0, color: null }, { id: "general", name: "通用", order: 1, color: null }]).map(d => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
           </select>
           <span style={{ fontSize: 12, color: "var(--text-3)" }}>{status}</span>
           <div style={{ flex: 1 }} />
@@ -486,6 +488,108 @@ function SuiteManageModal({ suites, schemas, activeSuiteId, onClose }: {
   );
 }
 
+const DOMAIN_COLORS = ["#7b8cff", "#4ade80", "#fbbf24", "#f87171", "#60a5fa", "#c084fc", "#fb923c", "#2dd4bf"];
+
+function FolderEditorModal({ domains, onClose }: { domains: DomainDef[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editColor, setEditColor] = useState<string | null>(null);
+
+  const createMut = useMutation({
+    mutationFn: () => api.settings.createDomain({ name: newName.trim(), color: newColor }),
+    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["domains"] }); setNewName(""); setNewColor(null); showToast("領域已建立"); },
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, name, color }: { id: string; name: string; color: string | null }) => api.settings.updateDomain(id, { name, color }),
+    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["domains"] }); setEditId(null); showToast("領域已更新"); },
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.settings.deleteDomain(id),
+    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["domains"] }); showToast("領域已刪除"); },
+  });
+  const reorderMut = useMutation({
+    mutationFn: (ids: string[]) => api.settings.reorderDomains(ids),
+    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["domains"] }); },
+  });
+
+  function move(idx: number, dir: -1 | 1) {
+    const ids = domains.map(d => d.id);
+    const swap = idx + dir;
+    if (swap < 0 || swap >= ids.length) return;
+    [ids[idx], ids[swap]] = [ids[swap]!, ids[idx]!];
+    reorderMut.mutate(ids);
+  }
+
+  const ColorPicker = ({ value, onChange }: { value: string | null; onChange: (c: string | null) => void }) => (
+    <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+      {DOMAIN_COLORS.map(c => (
+        <div key={c} onClick={() => onChange(value === c ? null : c)}
+          style={{ width: 13, height: 13, borderRadius: "50%", background: c, cursor: "pointer", flexShrink: 0,
+            border: value === c ? "2px solid var(--text-1)" : "2px solid transparent" }} />
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 700, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: "min(500px, 92vw)", padding: 20, boxShadow: "0 8px 32px rgba(0,0,0,0.5)", maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>管理領域 (Domain)</div>
+        <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 14 }}>領域為側欄第一層分類，對應 Schema 的 domain 欄位。</div>
+
+        <div style={{ flex: 1, overflowY: "auto", marginBottom: 16 }}>
+          {domains.length === 0 && (
+            <div style={{ fontSize: 12, color: "var(--text-3)", padding: "12px 0" }}>尚無領域，在下方建立第一個</div>
+          )}
+          {domains.map((d, idx) => (
+            <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", marginBottom: 5, background: "var(--bg-3)" }}>
+              {editId === d.id ? (
+                <>
+                  <input value={editName} onChange={e => setEditName(e.target.value)}
+                    style={{ flex: 1, background: "var(--bg-4)", border: "1px solid var(--border)", color: "var(--text-1)", padding: "4px 8px", borderRadius: 4, fontSize: 13, outline: "none" }} />
+                  <ColorPicker value={editColor} onChange={setEditColor} />
+                  <button className="btn btn-primary" style={{ fontSize: 11, padding: "3px 8px" }}
+                    onClick={() => updateMut.mutate({ id: d.id, name: editName.trim() || d.name, color: editColor })}>儲存</button>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setEditId(null)}>取消</button>
+                </>
+              ) : (
+                <>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: d.color ?? "var(--text-3)", flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>{d.id}</span>
+                  <span style={{ fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
+                  <button onClick={() => move(idx, -1)} disabled={idx === 0}
+                    style={{ width: 20, height: 20, border: "none", background: "transparent", color: "var(--text-2)", cursor: idx === 0 ? "default" : "pointer", fontSize: 12, opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
+                  <button onClick={() => move(idx, 1)} disabled={idx === domains.length - 1}
+                    style={{ width: 20, height: 20, border: "none", background: "transparent", color: "var(--text-2)", cursor: idx === domains.length - 1 ? "default" : "pointer", fontSize: 12, opacity: idx === domains.length - 1 ? 0.3 : 1 }}>↓</button>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => { setEditId(d.id); setEditName(d.name); setEditColor(d.color); }}>編輯</button>
+                  <button className="btn btn-danger" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => deleteMut.mutate(d.id)}>刪除</button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+          <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.5px" }}>新增領域</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input className="form-input" placeholder="領域名稱（例：採購、人資）" value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && newName.trim() && createMut.mutate()}
+              style={{ flex: 1 }} />
+            <ColorPicker value={newColor} onChange={setNewColor} />
+            <button className="btn btn-primary" style={{ fontSize: 11 }} disabled={!newName.trim() || createMut.isPending} onClick={() => createMut.mutate()}>建立</button>
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+          <button className="btn btn-ghost" onClick={onClose}>關閉</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => void; onSearch?: () => void }) {
   const qc = useQueryClient();
   const { selectedSchemaId, setSelectedSchemaId, showToast, activeSuiteId, setActiveSuiteId, setSuitePicked } = useStore();
@@ -494,8 +598,11 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
   const [showModal, setShowModal] = useState(false);
   const [showNl, setShowNl] = useState(false);
   const [showSuiteModal, setShowSuiteModal] = useState(false);
+  const [showFolderEditor, setShowFolderEditor] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", domain: "semiconductor", suiteId: "", layerType: "", environment: "" });
+  const { data: domains } = useQuery({ queryKey: ["domains"], queryFn: () => api.settings.getDomains() });
+  const domainList = domains ?? [];
   const t = useT();
   const { schemaLayers } = useLayerSettings();
 
@@ -532,19 +639,13 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
     ? (schemas ?? [])
     : (schemas ?? []).filter(s => s.suiteId === activeSuiteId);
 
-  const wideTableSubs = ["r2u", "unified"] as const;
-  const hierarchicalGroups = activeSuiteId !== null ? (() => {
-    const txItems = filteredSchemas.filter(s => s.layerType === "transaction");
-    const wideItems = filteredSchemas.filter(s => s.layerType === "r2u" || s.layerType === "unified");
-    const noneItems = filteredSchemas.filter(s => s.layerType === null);
-    return { txItems, wideItems, noneItems };
-  })() : null;
-
   return (
     <>
       <div style={{ padding: "12px 14px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.8px" }}>{t("sidebar.schemas")}</span>
         <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => setShowFolderEditor(true)} title="管理領域資料夾"
+            style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>⊟</button>
           <button onClick={() => setShowSuiteModal(true)} title="管理 Suite"
             style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>⊛</button>
           <button onClick={() => setShowNl(true)} title={t("sidebar.ai_gen")}
@@ -597,59 +698,91 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
       )}
 
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
-        {hierarchicalGroups ? (() => {
-          const { txItems, wideItems, noneItems } = hierarchicalGroups;
+        {(() => {
           const renderItem = (s: import("./api.js").Schema) => (
             <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
               suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
               layerType={s.layerType} environment={s.environment}
               onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
           );
-          const sectionHeader = (label: string, indent = false) => (
-            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.6px", padding: `${indent ? 4 : 8}px ${indent ? 12 : 4}px 3px` }}>{label}</div>
+
+          const layerSubHeader = (label: string) => (
+            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", padding: "4px 4px 2px 14px" }}>{label}</div>
           );
+
+          const renderLayerGroups = (schemasInDomain: import("./api.js").Schema[]) => {
+            const byLayer = new Map<string | null, import("./api.js").Schema[]>();
+            for (const s of schemasInDomain) {
+              const k = s.layerType;
+              if (!byLayer.has(k)) byLayer.set(k, []);
+              byLayer.get(k)!.push(s);
+            }
+            return (
+              <>
+                {schemaLayers.map(layer => {
+                  const items = byLayer.get(layer.id as SchemaLayer) ?? [];
+                  if (items.length === 0) return null;
+                  return <div key={layer.id}>{layerSubHeader(layer.label)}{items.map(renderItem)}</div>;
+                })}
+                {(byLayer.get(null) ?? []).map(renderItem)}
+              </>
+            );
+          };
+
+          if (domainList.length === 0) {
+            return filteredSchemas.map(s => (
+              <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
+                suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
+                layerType={s.layerType} environment={s.environment}
+                onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
+            ));
+          }
+
+          const byDomain = new Map<string, import("./api.js").Schema[]>();
+          const undomain: import("./api.js").Schema[] = [];
+          for (const s of filteredSchemas) {
+            if (domainList.some(d => d.id === s.domain)) {
+              if (!byDomain.has(s.domain)) byDomain.set(s.domain, []);
+              byDomain.get(s.domain)!.push(s);
+            } else {
+              undomain.push(s);
+            }
+          }
+
+          const nonEmpty = domainList.filter(d => (byDomain.get(d.id)?.length ?? 0) > 0);
+          const showHeaders = nonEmpty.length > 1 || (nonEmpty.length === 1 && undomain.length > 0);
+
+          if (!showHeaders) {
+            return renderLayerGroups(filteredSchemas);
+          }
+
           return (
             <>
-              {txItems.length > 0 && (
-                <div>
-                  {sectionHeader("交易層 Transaction")}
-                  {txItems.map(renderItem)}
-                </div>
-              )}
-              {wideItems.length > 0 && (
-                <div>
-                  {sectionHeader("寬表層 Wide Table")}
-                  {wideTableSubs.map(sub => {
-                    const items = wideItems.filter(s => s.layerType === sub);
-                    if (items.length === 0) return null;
-                    return (
-                      <div key={sub}>
-                        {sectionHeader(sub === "r2u" ? "R2U（Ready to Use）" : "Unified Layer", true)}
-                        {items.map(renderItem)}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {noneItems.length > 0 && (
-                <div>
-                  {sectionHeader("未分類")}
-                  {noneItems.map(renderItem)}
+              {domainList.map(domain => {
+                const domainSchemas = byDomain.get(domain.id) ?? [];
+                if (domainSchemas.length === 0) return null;
+                return (
+                  <div key={domain.id} style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", padding: "5px 6px 3px 8px", borderLeft: `3px solid ${domain.color ?? "var(--border-light)"}`, color: domain.color ?? "var(--text-2)", marginBottom: 1 }}>
+                      {domain.name}
+                    </div>
+                    {renderLayerGroups(domainSchemas)}
+                  </div>
+                );
+              })}
+              {undomain.length > 0 && (
+                <div style={{ marginBottom: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", padding: "5px 4px 3px", letterSpacing: "0.4px" }}>未指定領域</div>
+                  {renderLayerGroups(undomain)}
                 </div>
               )}
             </>
           );
-        })() : (
-          filteredSchemas.map(s => (
-            <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
-              suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
-              layerType={s.layerType} environment={s.environment}
-              onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
-          ))
-        )}
+        })()}
       </div>
 
       {showNl && <NlGenerateModal onClose={() => setShowNl(false)} />}
+      {showFolderEditor && <FolderEditorModal domains={domainList} onClose={() => setShowFolderEditor(false)} />}
       {showSuiteModal && (
         <SuiteManageModal
           suites={suites ?? []}
@@ -670,8 +803,9 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
             </FormRow>
             <FormRow label={t("form.domain")}>
               <select className="form-input" value={form.domain} onChange={e => setForm({ ...form, domain: e.target.value })}>
-                <option value="semiconductor">{t("form.semiconductor")}</option>
-                <option value="general">{t("form.general")}</option>
+                {(domainList.length > 0 ? domainList : [{ id: "semiconductor", name: t("form.semiconductor"), order: 0, color: null }, { id: "general", name: t("form.general"), order: 1, color: null }]).map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
               </select>
             </FormRow>
             {suites && suites.length > 0 && (

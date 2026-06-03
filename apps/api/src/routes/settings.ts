@@ -3,6 +3,7 @@ import type { Router as RouterType } from "express";
 import { z } from "zod";
 import { getLlmSettings, updateLlmSettings, getMinioSettings, updateMinioSettings } from "../repositories/settings.js";
 import { getLayerSettings, updateLayerSettings } from "../repositories/layerSettings.js";
+import { listDomains, createDomain, updateDomain, deleteDomain, reorderDomains } from "../repositories/domainSettings.js";
 import { resetLlmConfig } from "../services/llm.js";
 import { initMinio, testConnection, pushAll, restoreAll, isMinioReady } from "../services/minio.js";
 
@@ -140,6 +141,39 @@ router.patch("/layers", async (req: Request, res: Response, next) => {
     }
     res.json(await updateLayerSettings(parsed.data));
   } catch (e) { next(e); }
+});
+
+// ── Domain Folders ────────────────────────────────────────────────────────────
+
+router.get("/domains", async (_req, res, next) => {
+  try { res.json(await listDomains()); } catch (e) { next(e); }
+});
+
+router.post("/domains", async (req, res, next) => {
+  try {
+    const { name, id, color } = req.body as { name?: string; id?: string; color?: string | null };
+    if (!name?.trim()) { res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "name required" } }); return; }
+    res.status(201).json(await createDomain({ name, id, color }));
+  } catch (e) { next(e); }
+});
+
+router.patch("/domains/reorder", async (req, res, next) => {
+  try {
+    const { ids } = req.body as { ids?: string[] };
+    if (!Array.isArray(ids)) { res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "ids array required" } }); return; }
+    res.json(await reorderDomains(ids));
+  } catch (e) { next(e); }
+});
+
+router.patch("/domains/:id", async (req, res, next) => {
+  try {
+    const { name, order, color } = req.body as Partial<{ name: string; order: number; color: string | null }>;
+    res.json(await updateDomain(req.params["id"]!, { ...(name !== undefined && { name }), ...(order !== undefined && { order }), ...(color !== undefined && { color }) }));
+  } catch (e) { next(e); }
+});
+
+router.delete("/domains/:id", async (req, res, next) => {
+  try { await deleteDomain(req.params["id"]!); res.status(204).end(); } catch (e) { next(e); }
 });
 
 export default router;

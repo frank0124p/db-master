@@ -203,6 +203,13 @@ export interface LayerSettings {
   dictLayers: LayerDef[];
 }
 
+export interface DomainDef {
+  id: string;      // matches schema.domain string
+  name: string;    // display label
+  order: number;
+  color: string | null;
+}
+
 export interface LlmSettings {
   provider: "anthropic" | "openai";
   apiKey: string;
@@ -359,6 +366,14 @@ const realApi = {
     getLayers: () => req<LayerSettings>("/settings/layers"),
     updateLayers: (patch: Partial<LayerSettings>) =>
       req<LayerSettings>("/settings/layers", { method: "PATCH", body: JSON.stringify(patch) }),
+    getDomains: () => req<DomainDef[]>("/settings/domains"),
+    createDomain: (b: { name: string; id?: string; color?: string | null }) =>
+      req<DomainDef>("/settings/domains", { method: "POST", body: JSON.stringify(b) }),
+    updateDomain: (id: string, patch: Partial<Pick<DomainDef, "name" | "order" | "color">>) =>
+      req<DomainDef>(`/settings/domains/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    deleteDomain: (id: string) => req<void>(`/settings/domains/${id}`, { method: "DELETE" }),
+    reorderDomains: (ids: string[]) =>
+      req<DomainDef[]>("/settings/domains/reorder", { method: "PATCH", body: JSON.stringify({ ids }) }),
   },
   naming: {
     list: (domain?: string) => req<NamingEntry[]>(`/naming-dictionary${domain ? `?domain=${domain}` : ""}`),

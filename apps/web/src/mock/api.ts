@@ -16,7 +16,7 @@ import type {
   NamingEntry, SchemaVersion,
   WideTableSummary, WideTableDetail, WideTablePreview,
   DryRunResult, ImportResult, RuleDetail, RuleSnapshot,
-  TableNamingCheck, LayerSettings,
+  TableNamingCheck, LayerSettings, DomainDef,
 } from "../api.js";
 
 // ── in-memory mutable state ───────────────────────────────────────────────────
@@ -25,6 +25,10 @@ let schemas = [...mockSchemas];
 const schemaDetails: Record<number, SchemaDetail> = { 1: { ...plmSchema }, 2: { ...mesSchema } };
 let naming = [...mockNaming];
 let rules = [...mockRules];
+let mockDomains: DomainDef[] = [
+  { id: "semiconductor", name: "半導體製造", order: 0, color: null },
+  { id: "general",       name: "通用",       order: 1, color: null },
+];
 
 function getDetail(id: number): SchemaDetail {
   return schemaDetails[id] ?? { ...plmSchema, id, tables: [] };
@@ -454,6 +458,34 @@ export const mockApi = {
       schemaLayers: patch.schemaLayers ?? [{ id: "transaction", label: "Transaction" }, { id: "r2u", label: "R2U" }, { id: "unified", label: "Unified" }],
       dictLayers:   patch.dictLayers   ?? [{ id: "transaction", label: "Transaction" }, { id: "r2u", label: "R2U" }, { id: "unified", label: "Unified" }, { id: "general", label: "General" }],
     }),
+    getDomains: async (): Promise<DomainDef[]> => {
+      await delay(50);
+      return [...mockDomains];
+    },
+    createDomain: async (b: { name: string; id?: string; color?: string | null }): Promise<DomainDef> => {
+      await delay(80);
+      const id = (b.id?.trim() || b.name.trim().toLowerCase().replace(/\s+/g, "_")).replace(/[^a-z0-9_-]/g, "");
+      const entry: DomainDef = { id, name: b.name.trim(), order: mockDomains.length, color: b.color ?? null };
+      mockDomains = [...mockDomains, entry];
+      return entry;
+    },
+    updateDomain: async (id: string, patch: Partial<Pick<DomainDef, "name" | "order" | "color">>): Promise<DomainDef> => {
+      await delay(60);
+      mockDomains = mockDomains.map(d => d.id === id ? { ...d, ...patch } : d);
+      return mockDomains.find(d => d.id === id)!;
+    },
+    deleteDomain: async (id: string): Promise<void> => {
+      await delay(60);
+      mockDomains = mockDomains.filter(d => d.id !== id);
+    },
+    reorderDomains: async (ids: string[]): Promise<DomainDef[]> => {
+      await delay(60);
+      const map = new Map(mockDomains.map(d => [d.id, d]));
+      const reordered = ids.map((id, i) => ({ ...map.get(id)!, order: i }));
+      const rest = mockDomains.filter(d => !ids.includes(d.id)).map((d, i) => ({ ...d, order: ids.length + i }));
+      mockDomains = [...reordered, ...rest].sort((a, b) => a.order - b.order);
+      return [...mockDomains];
+    },
   },
   datahub: {
     getSettings: async () => ({ settings: { url: "", token: "", platform: "mysql", env: "PROD" as const } }),
