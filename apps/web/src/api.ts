@@ -20,7 +20,7 @@ export interface Field {
   comment: string | null; position: number;
   sourceTable?: string | null; sourceField?: string | null;
 }
-export interface Table { id: number; name: string; comment: string | null; tags?: string[]; environment?: string | null; layerType?: string | null; fields: Field[]; sampleData?: Record<string, unknown>[]; }
+export interface Table { id: number; name: string; comment: string | null; tags?: string[]; environment?: string | null; layerType?: string | null; status?: "active" | "deprecated" | null; fields: Field[]; sampleData?: Record<string, unknown>[]; }
 export interface SchemaDetail extends Schema { tables: Table[]; }
 
 export interface NamingEntry {
@@ -271,7 +271,7 @@ const realApi = {
   tables: {
     create: (schemaId: number, b: { name: string; comment?: string }) =>
       req<Table>(`/schemas/${schemaId}/tables`, { method: "POST", body: JSON.stringify(b) }),
-    update: (id: number, b: Partial<{ name: string; comment: string | null; tags: string[]; environment: string | null; layer_type: string | null; sample_data: Record<string, unknown>[] }>) =>
+    update: (id: number, b: Partial<{ name: string; comment: string | null; tags: string[]; environment: string | null; layer_type: string | null; status: "active" | "deprecated" | null; sample_data: Record<string, unknown>[] }>) =>
       req<void>(`/tables/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/tables/${id}`, { method: "DELETE" }),
   },

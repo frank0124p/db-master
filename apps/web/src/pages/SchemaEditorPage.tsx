@@ -785,15 +785,17 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
   const [tableEnv, setTableEnv] = useState<string>(table.environment ?? "");
   const [tableLayer, setTableLayer] = useState<string>(table.layerType ?? "");
   const [tableTags, setTableTags] = useState<string[]>(table.tags ?? []);
+  const [tableStatus, setTableStatus] = useState<string>(table.status ?? "");
   const [tagInput, setTagInput] = useState("");
 
   useEffect(() => {
     setTableEnv(table.environment ?? "");
     setTableLayer(table.layerType ?? "");
     setTableTags(table.tags ?? []);
+    setTableStatus(table.status ?? "");
   }, [table.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function saveTableAnnotation(patch: Partial<{ environment: string | null; layer_type: string | null; tags: string[] }>) {
+  async function saveTableAnnotation(patch: Partial<{ environment: string | null; layer_type: string | null; status: "active" | "deprecated" | null; tags: string[] }>) {
     await api.tables.update(table.id, patch);
     refresh();
   }
@@ -985,6 +987,19 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
             style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "var(--bg-3)", color: tableLayer ? "var(--accent)" : "var(--text-3)", cursor: "pointer" }}>
             <option value="">— 分層 —</option>
             {schemaLayers.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
+          <select value={tableStatus}
+            onChange={e => {
+              const v = e.target.value as "active" | "deprecated" | "";
+              setTableStatus(v);
+              void saveTableAnnotation({ status: v || null });
+            }}
+            style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: `1px solid ${tableStatus === "deprecated" ? "rgba(251,113,133,0.4)" : tableStatus === "active" ? "rgba(45,212,160,0.4)" : "var(--border)"}`,
+              background: tableStatus === "deprecated" ? "rgba(251,113,133,0.08)" : tableStatus === "active" ? "rgba(45,212,160,0.08)" : "var(--bg-3)",
+              color: tableStatus === "deprecated" ? "var(--error)" : tableStatus === "active" ? "var(--success)" : "var(--text-3)", cursor: "pointer" }}>
+            <option value="">— 使用狀態 —</option>
+            <option value="active">Active</option>
+            <option value="deprecated">Deprecated</option>
           </select>
           {tableTags.map(tag => (
             <span key={tag} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, padding: "2px 7px", borderRadius: 12, background: "var(--accent)", color: "#fff", fontWeight: 600 }}>
@@ -1948,6 +1963,7 @@ function TableItem({ table, active, issueCount, onClick, onDelete }: { table: Ta
   const [hover, setHover] = useState(false);
   const env = table.environment as SchemaEnvironment | null | undefined;
   const tags = table.tags ?? [];
+  const status = table.status;
   return (
     <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       style={{ padding: "6px 8px", borderRadius: "var(--radius)", cursor: "pointer", marginBottom: 1, background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent" }}
@@ -1964,9 +1980,21 @@ function TableItem({ table, active, issueCount, onClick, onDelete }: { table: Ta
               </span>
             )}
           </div>
-          {/* env + tags row */}
-          {(env || tags.length > 0) && (
+          {/* status + env + tags row */}
+          {(status || env || tags.length > 0) && (
             <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, flexWrap: "wrap" }}>
+              {status === "deprecated" && (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
+                  background: "rgba(251,113,133,0.1)", color: "var(--error)", border: "1px solid rgba(251,113,133,0.35)", letterSpacing: "0.3px" }}>
+                  DEPRECATED
+                </span>
+              )}
+              {status === "active" && (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
+                  background: "rgba(45,212,160,0.1)", color: "var(--success)", border: "1px solid rgba(45,212,160,0.35)", letterSpacing: "0.3px" }}>
+                  ACTIVE
+                </span>
+              )}
               {env && (
                 <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
                   background: `${ENV_COLORS[env]}1a`, color: ENV_COLORS[env], border: `1px solid ${ENV_COLORS[env]}44`, letterSpacing: "0.3px" }}>
