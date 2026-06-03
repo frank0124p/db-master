@@ -1864,16 +1864,16 @@ function SchemaMetaBar({ schema }: { schema: SchemaDetail }) {
   const env = schema.environment as SchemaEnvironment | null;
 
   return (
-    <div style={{ padding: "6px 10px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+    <div style={{ padding: "4px 10px 6px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
       {/* Environment */}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", flexShrink: 0 }}>ENV</span>
+        <span style={{ fontSize: 9, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", flexShrink: 0, width: 24 }}>ENV</span>
         <div style={{ position: "relative" }}>
           <button onClick={() => setShowEnvMenu(v => !v)}
-            style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, border: `1px solid ${env ? `${ENV_COLORS[env]}44` : "var(--border)"}`,
-              background: env ? `${ENV_COLORS[env]}22` : "var(--bg-3)", color: env ? ENV_COLORS[env] : "var(--text-3)",
-              cursor: "pointer", letterSpacing: "0.3px" }}>
-            {env ?? "未指定"} ▾
+            style={{ fontSize: 10, fontWeight: env ? 700 : 400, padding: "1px 6px", borderRadius: 3, border: `1px solid ${env ? `${ENV_COLORS[env]}44` : "var(--border)"}`,
+              background: env ? `${ENV_COLORS[env]}18` : "transparent", color: env ? ENV_COLORS[env] : "var(--text-3)",
+              cursor: "pointer", letterSpacing: env ? "0.3px" : 0 }}>
+            {env ?? "—"} ▾
           </button>
           {showEnvMenu && (
             <>
@@ -1899,19 +1899,19 @@ function SchemaMetaBar({ schema }: { schema: SchemaDetail }) {
         </div>
       </div>
       {/* Tags */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", flexShrink: 0 }}>TAG</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 9, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", flexShrink: 0, width: 24 }}>TAG</span>
         {schema.tags.map(tag => (
-          <span key={tag} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent)", display: "flex", alignItems: "center", gap: 3 }}>
+          <span key={tag} style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3, background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid rgba(56,182,240,0.2)", display: "flex", alignItems: "center", gap: 2 }}>
             {tag}
             <button onClick={() => void removeTag(tag)}
-              style={{ border: "none", background: "none", color: "var(--accent)", cursor: "pointer", fontSize: 10, padding: 0, lineHeight: 1, opacity: 0.7 }}>✕</button>
+              style={{ border: "none", background: "none", color: "var(--accent)", cursor: "pointer", fontSize: 9, padding: 0, lineHeight: 1, opacity: 0.6 }}>✕</button>
           </span>
         ))}
         <input value={tagInput} onChange={e => setTagInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); void addTag(tagInput); } }}
-          placeholder="+ 新增標籤"
-          style={{ fontSize: 10, border: "1px dashed var(--border)", borderRadius: 4, padding: "2px 6px", background: "transparent", color: "var(--text-2)", outline: "none", width: 70, minWidth: 0 }} />
+          placeholder="+ tag"
+          style={{ fontSize: 9, border: "none", borderRadius: 3, padding: "1px 4px", background: "transparent", color: "var(--text-3)", outline: "none", width: 40, minWidth: 0 }} />
       </div>
     </div>
   );
@@ -1990,7 +1990,7 @@ export default function SchemaEditorPage() {
   return (
     <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
       {/* Table list panel */}
-      <div style={{ width: 200, background: "var(--bg-2)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: 200, background: "var(--bg-1)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span className="panel-title">Tables</span>
           <div style={{ display: "flex", gap: 4 }}>
@@ -2070,7 +2070,7 @@ function TableItem({ table, active, issueCount, onClick, onDelete }: { table: Ta
   const status = table.status;
   return (
     <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ padding: "6px 8px", borderRadius: "var(--radius)", cursor: "pointer", marginBottom: 1, background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent" }}
+      style={{ padding: "6px 8px", borderRadius: "var(--radius)", cursor: "pointer", marginBottom: 1, background: active ? "var(--accent-dim)" : hover ? "var(--bg-2)" : "transparent" }}
       onClick={onClick}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 0 }}>

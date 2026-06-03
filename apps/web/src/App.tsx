@@ -356,7 +356,7 @@ function SchemaItem({ name, active, suiteColor, layerType, environment, onClick 
     <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       style={{ padding: "7px 8px", borderRadius: "var(--radius)", cursor: "pointer",
         display: "flex", alignItems: "center", gap: 8, marginBottom: 1,
-        background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent" }}>
+        background: active ? "var(--accent-dim)" : hover ? "var(--bg-2)" : "transparent" }}>
       <div style={{ width: 6, height: 6, borderRadius: "50%", background: suiteColor ?? (active ? "var(--accent)" : "var(--text-3)"), flexShrink: 0 }} />
       <div style={{ fontSize: 12, color: active ? "var(--accent)" : "var(--text-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
       {environment && (
@@ -557,11 +557,14 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
       </div>
 
       {onSearch && (
-        <div style={{ padding: "0 8px 6px", flexShrink: 0 }}>
-          <button onClick={onSearch} style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-3)", cursor: "pointer", textAlign: "left", fontSize: 12 }}>
-            <span style={{ fontSize: 13 }}>⊕</span>
+        <div style={{ padding: "0 10px 8px", flexShrink: 0 }}>
+          <button onClick={onSearch}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "4px 6px", borderRadius: 5, border: "1px solid transparent", background: "transparent", color: "var(--text-3)", cursor: "pointer", textAlign: "left", fontSize: 11, transition: "background 0.12s, border-color 0.12s" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-3)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.borderColor = "transparent"; }}>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>⊕</span>
             <span style={{ flex: 1 }}>搜尋 Table / Column...</span>
-            <span style={{ fontSize: 10, background: "var(--bg-4)", border: "1px solid var(--border)", borderRadius: 3, padding: "1px 4px" }}>⌘K</span>
+            <span style={{ fontSize: 9, background: "var(--bg-3)", border: "1px solid var(--border)", borderRadius: 3, padding: "1px 4px", opacity: 0.7 }}>⌘K</span>
           </button>
         </div>
       )}
@@ -710,7 +713,7 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
 // Desktop/Tablet sidebar shell
 function Sidebar({ onSearch }: { onSearch?: () => void }) {
   return (
-    <div style={{ width: 220, background: "var(--bg-2)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, overflow: "hidden" }}>
+    <div style={{ width: 220, background: "var(--bg-1)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, overflow: "hidden" }}>
       {onSearch ? <SidebarContent onSearch={onSearch} /> : <SidebarContent />}
     </div>
   );
