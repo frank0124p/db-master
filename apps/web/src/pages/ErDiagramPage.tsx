@@ -304,12 +304,30 @@ export default function ErDiagramPage() {
     : null;
 
   function handleCardClick(table: Table) {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(table.id)) next.delete(table.id); else next.add(table.id);
-      return next;
-    });
-    setFocused(prev => prev === table.name ? null : table.name);
+    const connectedNames = new Set([
+      table.name,
+      ...edges
+        .filter(e => e.fromTable === table.name || e.toTable === table.name)
+        .flatMap(e => [e.fromTable, e.toTable]),
+    ]);
+
+    if (focused === table.name) {
+      // Second click: collapse all connected cards and clear focus
+      setExpanded(prev => {
+        const next = new Set(prev);
+        for (const t of visibleTables) { if (connectedNames.has(t.name)) next.delete(t.id); }
+        return next;
+      });
+      setFocused(null);
+    } else {
+      // First click: expand this card + all directly connected cards, set focus
+      setExpanded(prev => {
+        const next = new Set(prev);
+        for (const t of visibleTables) { if (connectedNames.has(t.name)) next.add(t.id); }
+        return next;
+      });
+      setFocused(table.name);
+    }
   }
 
   function toggleVisible(id: number) {
@@ -407,8 +425,8 @@ export default function ErDiagramPage() {
                 </div>
               ))}
               <div style={{ fontSize: 9, color: "var(--text-3)", lineHeight: 1.5, marginTop: 4 }}>
-                點擊卡片展開欄位 / 聚焦關聯<br />
-                點擊空白取消聚焦
+                點擊卡片展開該表及所有關聯表<br />
+                再點一次收合 / 點空白取消聚焦
               </div>
             </div>
           </div>
