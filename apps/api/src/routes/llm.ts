@@ -1,5 +1,6 @@
 import { Router, type Router as ExpressRouter } from "express";
-import { generateSchemaStream } from "../services/llm.js";
+import { z } from "zod";
+import { generateSchemaStream, translateText } from "../services/llm.js";
 import { getSkillsForDomain, formatSkillsForPrompt } from "../services/skills.js";
 import { listNamingEntries } from "../repositories/naming.js";
 import { createSchema, getSchemaById } from "../repositories/schemas.js";
@@ -81,6 +82,24 @@ router.post("/generate", async (req, res, next) => {
     const saved = await getSchemaById(schema.id);
     send({ type: "done", schemaId: saved.id, schemaName: saved.name, tableCount: saved.tables.length });
     res.end();
+  } catch (e) { next(e); }
+});
+
+// POST /api/v1/llm/translate
+const TranslateBody = z.object({
+  text:       z.string().min(1),
+  context:    z.string().optional(),
+  targetLang: z.string().optional(),
+});
+
+router.post("/translate", async (req, res, next) => {
+  try {
+    const parsed = TranslateBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", detail: parsed.error.format() } });
+      return;
+    }
+    res.json(await translateText(parsed.data));
   } catch (e) { next(e); }
 });
 

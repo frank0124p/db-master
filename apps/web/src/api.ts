@@ -363,6 +363,10 @@ const realApi = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, domain }),
       }),
+    translate: (b: { text: string; context?: string; targetLang?: string }) =>
+      req<{ translated: string; detectedLang: string; snakeCaseSuggestion?: string }>(
+        "/llm/translate", { method: "POST", body: JSON.stringify(b) }
+      ),
   },
   datahub: {
     getSettings: () => req<{ settings: Partial<DataHubSettings> }>("/datahub/settings"),

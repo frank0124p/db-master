@@ -420,6 +420,18 @@ export const mockApi = {
       });
       return new Response(mockSse, { headers: { "Content-Type": "text/event-stream" } });
     },
+    translate: async (b: { text: string; context?: string; targetLang?: string }): Promise<{ translated: string; detectedLang: string; snakeCaseSuggestion?: string }> => {
+      await delay(600);
+      void b.targetLang;
+      const mockMap: Record<string, { translated: string; detectedLang: string; snakeCaseSuggestion?: string }> = {
+        "Artikel": { translated: "零件 / 物品", detectedLang: "German", snakeCaseSuggestion: "article_id" },
+        "Bezeichnung": { translated: "名稱 / 描述", detectedLang: "German", snakeCaseSuggestion: "description" },
+        "Menge": { translated: "數量", detectedLang: "German", snakeCaseSuggestion: "quantity" },
+        "Datum": { translated: "日期", detectedLang: "German", snakeCaseSuggestion: "date" },
+      };
+      const key = Object.keys(mockMap).find(k => b.text.includes(k));
+      return key ? mockMap[key]! : { translated: `（翻譯）${b.text}`, detectedLang: "unknown" };
+    },
   },
   skills: {
     list: async () => ({ skills: [] }),

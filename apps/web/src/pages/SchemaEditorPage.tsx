@@ -125,6 +125,7 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast,
   const [editingComment, setEditingComment] = useState(false);
   const [commentDraft, setCommentDraft] = useState(field.comment ?? "");
   const [aiLoading, setAiLoading] = useState(false);
+  const [translateLoading, setTranslateLoading] = useState(false);
   // sensitive + aliases
   const [sensitive, setSensitive] = useState(field.isSensitive ?? false);
   const [aliases, setAliases] = useState<string[]>(field.aliases ?? []);
@@ -190,6 +191,35 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast,
     } catch { showToast("AI 建議失敗"); }
     finally { setAiLoading(false); }
   }
+  async function translateComment() {
+    const text = commentDraft.trim() || field.name;
+    if (!text) return;
+    setTranslateLoading(true);
+    try {
+      const res = await api.llm.translate({ text, context: `欄位 ${field.name} (${field.dataType}) 在 ${tableName} 表格中` });
+      const parts = [res.translated];
+      if (res.detectedLang && res.detectedLang !== "unknown") parts.push(`（${res.detectedLang}）`);
+      setCommentDraft(parts.join(" "));
+      if (res.snakeCaseSuggestion && res.snakeCaseSuggestion !== field.name) {
+        showToast(`🌐 建議英文欄位名：${res.snakeCaseSuggestion}`);
+      }
+      setEditingComment(true);
+    } catch { showToast("翻譯失敗"); }
+    finally { setTranslateLoading(false); }
+  }
+  async function translateFieldName() {
+    if (!name.trim()) return;
+    setTranslateLoading(true);
+    try {
+      const res = await api.llm.translate({ text: name, context: `資料庫欄位名稱，所屬表格：${tableName}` });
+      if (res.snakeCaseSuggestion) {
+        showToast(`🌐 ${res.detectedLang}: "${name}" → 建議名稱: ${res.snakeCaseSuggestion}，翻譯：${res.translated}`);
+      } else {
+        showToast(`🌐 ${res.detectedLang}: "${name}" → ${res.translated}`);
+      }
+    } catch { showToast("翻譯失敗"); }
+    finally { setTranslateLoading(false); }
+  }
   async function toggleSensitive() {
     const next = !sensitive; setSensitive(next);
     await api.fields.update(field.id, { is_sensitive: next }); onRefresh();
@@ -233,6 +263,9 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast,
           <button onClick={toggleSensitive} title={sensitive ? "敏感資料（點擊取消）" : "標記為敏感資料"}
             style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "2px 3px", borderRadius: 3, opacity: sensitive ? 1 : 0.25, color: sensitive ? "var(--error)" : "var(--text-3)", transition: "opacity 0.15s" }}
             className="del-btn">🔒</button>
+          <button onClick={() => void translateFieldName()} title="翻譯欄位名稱並建議標準名" disabled={translateLoading}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, padding: "2px 3px", borderRadius: 3, opacity: 0, color: "var(--info)", transition: "opacity 0.15s" }}
+            className="del-btn">{translateLoading ? "…" : "🌐"}</button>
         </div>
         {/* Aliases */}
         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 3, marginTop: aliases.length > 0 || showAliasInput ? 4 : 0, paddingLeft: 2 }}>
@@ -284,6 +317,10 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast,
               style={{ fontSize: 11, color: "var(--text-1)", background: "var(--bg-3)", border: "1px solid var(--accent)", borderRadius: 4, padding: "4px 6px", resize: "vertical", outline: "none", width: "100%", fontFamily: "inherit" }} />
             <div style={{ display: "flex", gap: 4 }}>
               <button onClick={() => void saveComment()} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer" }}>儲存</button>
+              <button onClick={() => void translateComment()} disabled={translateLoading} title="翻譯為中文"
+                style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: "rgba(96,200,250,0.08)", color: "var(--info)", border: "1px solid var(--info)", cursor: "pointer" }}>
+                {translateLoading ? "…" : "🌐 翻譯"}
+              </button>
               <button onClick={() => { setCommentDraft(field.comment ?? ""); setEditingComment(false); }} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: "var(--bg-4)", color: "var(--text-2)", border: "1px solid var(--border)", cursor: "pointer" }}>取消</button>
             </div>
           </div>
@@ -293,11 +330,18 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast,
               style={{ flex: 1, fontSize: 12, color: commentDraft ? "var(--text-2)" : "var(--text-3)", fontStyle: commentDraft ? "normal" : "italic", cursor: "text", lineHeight: 1.5, wordBreak: "break-word" }}>
               {commentDraft || "點擊新增描述…"}
             </span>
-            <button className="ai-btn" onClick={() => void aiSuggestComment()} title="AI 生成描述"
-              disabled={aiLoading}
-              style={{ fontSize: 11, padding: "1px 5px", borderRadius: 4, border: "1px solid var(--accent)", background: "var(--accent-dim)", color: "var(--accent)", cursor: "pointer", flexShrink: 0, opacity: 0, transition: "opacity 0.15s" }}>
-              {aiLoading ? "…" : "✦ AI"}
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0 }}>
+              <button className="ai-btn" onClick={() => void aiSuggestComment()} title="AI 生成描述"
+                disabled={aiLoading}
+                style={{ fontSize: 11, padding: "1px 5px", borderRadius: 4, border: "1px solid var(--accent)", background: "var(--accent-dim)", color: "var(--accent)", cursor: "pointer", opacity: 0, transition: "opacity 0.15s" }}>
+                {aiLoading ? "…" : "✦ AI"}
+              </button>
+              <button className="ai-btn" onClick={() => void translateComment()} title="翻譯描述文字為中文"
+                disabled={translateLoading}
+                style={{ fontSize: 11, padding: "1px 5px", borderRadius: 4, border: "1px solid var(--info)", background: "rgba(96,200,250,0.08)", color: "var(--info)", cursor: "pointer", opacity: 0, transition: "opacity 0.15s" }}>
+                {translateLoading ? "…" : "🌐"}
+              </button>
+            </div>
           </div>
         )}
       </td>

@@ -461,6 +461,49 @@ ${ALLOWED_TAGS.join("、")}
   };
 }
 
+export async function translateText(input: {
+  text: string; context?: string; targetLang?: string;
+}): Promise<{ translated: string; detectedLang: string; snakeCaseSuggestion?: string }> {
+  const target = input.targetLang ?? "zh-TW（繁體中文）";
+  const prompt = `你是多語言資料庫術語翻譯助理。請將以下文字翻譯為 ${target}，並保留技術術語的準確性。
+
+${input.context ? `上下文：${input.context}\n` : ""}原文：
+${input.text}
+
+請以 JSON 格式回覆：
+{
+  "translated": "翻譯後的文字",
+  "detectedLang": "偵測到的原文語言（如 German、English、Japanese 等）",
+  "snakeCaseSuggestion": "若原文是欄位名稱，提供建議的 snake_case 英文標準名（否則留空字串）"
+}
+
+只回覆 JSON，不要其他文字。`;
+
+  const cfg = await getConfig();
+  const model = await resolveModel("suggest");
+  let text: string;
+
+  if (cfg.provider === "openai") {
+    text = await completeOpenAI(prompt, model, 256);
+  } else {
+    const client = await getAnthropicClient();
+    const message = await client.messages.create({
+      model, max_tokens: 256,
+      messages: [{ role: "user", content: prompt }],
+    });
+    text = message.content[0]?.type === "text" ? message.content[0].text.trim() : "{}";
+  }
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return { translated: input.text, detectedLang: "unknown" };
+  const parsed = JSON.parse(jsonMatch[0]) as { translated?: string; detectedLang?: string; snakeCaseSuggestion?: string };
+  return {
+    translated: parsed.translated ?? input.text,
+    detectedLang: parsed.detectedLang ?? "unknown",
+    snakeCaseSuggestion: parsed.snakeCaseSuggestion || undefined,
+  };
+}
+
 export async function suggestFieldComment(input: {
   fieldName: string; dataType: string; tableName: string; tableComment?: string | null; domain: string;
 }): Promise<{ comment: string }> {
