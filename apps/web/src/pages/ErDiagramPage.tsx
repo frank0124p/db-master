@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { api, type Table } from "../api.js";
@@ -193,29 +193,34 @@ function EdgeOverlay({ edges, pos, focusedSet }: {
 }
 
 // ── Table Card ────────────────────────────────────────────────────────────────
-function TableCard({ table, pos, expanded, dimmed, isRef, isSrc, onClick }: {
+function TableCard({ table, pos, expanded, dimmed, isRef, isSrc, dragging, onClick, onDragStart }: {
   table: Table; pos: NodePos;
   expanded: boolean; dimmed: boolean;
   isRef: boolean; isSrc: boolean;
+  dragging: boolean;
   onClick: () => void;
+  onDragStart: (e: React.PointerEvent) => void;
 }) {
   const fields = [...table.fields].sort((a, b) => a.position - b.position);
 
   return (
     <div onClick={onClick} style={{
       position: "absolute", left: pos.x, top: pos.y, width: pos.w,
-      borderRadius: 10, overflow: "hidden", cursor: "pointer",
+      borderRadius: 10, overflow: "hidden", cursor: dragging ? "grabbing" : "pointer",
       border: `2px solid ${dimmed ? "rgba(123,140,255,0.1)" : "rgba(123,140,255,0.35)"}`,
       background: "var(--bg-2)",
       opacity: dimmed ? 0.25 : 1,
-      transition: "border-color 0.15s, opacity 0.15s",
-      boxShadow: !dimmed ? "0 2px 12px rgba(0,0,0,0.18)" : "none",
+      transition: dragging ? "border-color 0.15s, opacity 0.15s" : "left 0.22s ease, top 0.22s ease, border-color 0.15s, opacity 0.15s",
+      boxShadow: dragging ? "0 8px 32px rgba(0,0,0,0.32)" : !dimmed ? "0 2px 12px rgba(0,0,0,0.18)" : "none",
+      zIndex: dragging ? 10 : 1,
+      userSelect: "none",
     }}
       onMouseEnter={e => { if (!dimmed) (e.currentTarget as HTMLDivElement).style.borderColor = "var(--accent)"; }}
       onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = dimmed ? "rgba(123,140,255,0.1)" : "rgba(123,140,255,0.35)"; }}>
 
-      {/* Header */}
-      <div style={{ padding: "8px 12px", background: "rgba(123,140,255,0.06)", borderBottom: expanded ? "1px solid rgba(123,140,255,0.12)" : "none", display: "flex", alignItems: "flex-start", gap: 6 }}>
+      {/* Header — drag handle */}
+      <div onPointerDown={e => { e.stopPropagation(); onDragStart(e); }}
+        style={{ padding: "8px 12px", background: "rgba(123,140,255,0.06)", borderBottom: expanded ? "1px solid rgba(123,140,255,0.12)" : "none", display: "flex", alignItems: "flex-start", gap: 6, cursor: dragging ? "grabbing" : "grab" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
             {isRef && <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 2, background: "rgba(251,191,36,0.18)", color: "var(--warning)" }}>REF</span>}
@@ -273,6 +278,9 @@ export default function ErDiagramPage() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [focused,  setFocused]  = useState<string | null>(null);
   const [showMermaid, setShowMermaid] = useState(false);
+  const [manualPos, setManualPos] = useState<Map<number, { x: number; y: number }>>(new Map());
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const dragRef = useRef<{ tableId: number; startMX: number; startMY: number; origX: number; origY: number } | null>(null);
 
   const { data: schema } = useQuery({
     queryKey: ["schema", selectedSchemaId],
@@ -285,6 +293,7 @@ export default function ErDiagramPage() {
       setVisible(new Set(schema.tables.map(t => t.id)));
       setExpanded(new Set());
       setFocused(null);
+      setManualPos(new Map());
     }
   }, [schema?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -293,10 +302,44 @@ export default function ErDiagramPage() {
   const fkEdges = edges.filter(e => e.type === "fk");
   const srcEdges = edges.filter(e => e.type === "source");
 
-  const positions = computeLayout(schema?.tables ?? [], visible, expanded, edges);
+  const autoPositions = computeLayout(schema?.tables ?? [], visible, expanded, edges);
+
+  // Merge auto layout with manual overrides
+  const positions = new Map<number, NodePos>();
+  for (const [id, p] of autoPositions) {
+    const m = manualPos.get(id);
+    positions.set(id, m ? { ...p, x: m.x, y: m.y } : p);
+  }
 
   const canvasW = (p: Map<number, NodePos>) => Math.max(600, ...[...p.values()].map(n => n.x + n.w + PAD));
   const canvasH = (p: Map<number, NodePos>) => Math.max(400, ...[...p.values()].map(n => n.y + n.h + PAD));
+
+  function handleDragStart(tableId: number, e: React.PointerEvent) {
+    const p = positions.get(tableId);
+    if (!p) return;
+    dragRef.current = { tableId, startMX: e.clientX, startMY: e.clientY, origX: p.x, origY: p.y };
+    setDraggingId(tableId);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function handleCanvasPointerMove(e: React.PointerEvent) {
+    if (!dragRef.current) return;
+    const { tableId, startMX, startMY, origX, origY } = dragRef.current;
+    const newX = Math.max(0, origX + e.clientX - startMX);
+    const newY = Math.max(0, origY + e.clientY - startMY);
+    setManualPos(prev => { const next = new Map(prev); next.set(tableId, { x: newX, y: newY }); return next; });
+  }
+
+  function handleCanvasPointerUp() {
+    dragRef.current = null;
+    setDraggingId(null);
+  }
+
+  function resetLayout() {
+    setManualPos(new Map());
+    setExpanded(new Set());
+    setFocused(null);
+  }
 
   // Focus mode: set of connected table names
   const focusedSet: Set<string> | null = focused
@@ -377,6 +420,7 @@ export default function ErDiagramPage() {
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <button className="btn btn-ghost" onClick={() => setExpanded(new Set(visibleTables.map(t => t.id)))}>全展開</button>
           <button className="btn btn-ghost" onClick={() => { setExpanded(new Set()); setFocused(null); }}>全收合</button>
+          <button className="btn btn-ghost" onClick={resetLayout} title="清除手動拖拉位置，恢復自動排版">整理版面</button>
           <button className="btn btn-ghost" onClick={() => setShowMermaid(v => !v)}>Mermaid</button>
           <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(buildMermaid()).then(() => showToast("✓ Mermaid 已複製"))}>複製</button>
         </div>
@@ -434,7 +478,10 @@ export default function ErDiagramPage() {
 
         {/* Canvas */}
         <div style={{ flex: 1, overflow: "auto", background: "var(--bg-1)", position: "relative" }}
-          onClick={e => { if (e.target === e.currentTarget) setFocused(null); }}>
+          onClick={e => { if (e.target === e.currentTarget) setFocused(null); }}
+          onPointerMove={handleCanvasPointerMove}
+          onPointerUp={handleCanvasPointerUp}
+          onPointerLeave={handleCanvasPointerUp}>
           <div style={{ position: "relative", width: cW, height: cH, minWidth: "100%", minHeight: "100%" }}
             onClick={e => { if (e.target === e.currentTarget) setFocused(null); }}>
             <EdgeOverlay edges={edges} pos={positions} focusedSet={focusedSet} />
@@ -451,7 +498,9 @@ export default function ErDiagramPage() {
                   dimmed={dimmed}
                   isRef={fkEdges.some(e => e.toTable === t.name)}
                   isSrc={srcEdges.some(e => e.toTable === t.name)}
-                  onClick={() => handleCardClick(t)}
+                  dragging={draggingId === t.id}
+                  onClick={() => { if (!dragRef.current) handleCardClick(t); }}
+                  onDragStart={e => handleDragStart(t.id, e)}
                 />
               );
             })}
