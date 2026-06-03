@@ -1,56 +1,66 @@
 @import "tailwindcss";
 
-/* ── Dark theme (default) ───────────────────────────────────────────────────── */
+/* ── Dark theme (default) — fresh / airy ────────────────────────────────────── */
 :root {
-  --bg-1: #0f0f13;
-  --bg-2: #17171d;
-  --bg-3: #1f1f28;
-  --bg-4: #27272f;
-  --text-1: #e4e4f0;
-  --text-2: #8888a8;
-  --text-3: #555568;
-  --accent: #7b8cff;
-  --accent-dim: #7b8cff22;
-  --success: #4ade80;
-  --success-dim: #4ade8022;
-  --warning: #fbbf24;
-  --warning-dim: #fbbf2422;
-  --error: #f87171;
-  --error-dim: #f8717122;
-  --info: #60a5fa;
-  --border: #2a2a38;
-  --border-light: #35353f;
+  /* Backgrounds: subtle blue-slate, steps are close so blocks blend softly */
+  --bg-1: #13161f;
+  --bg-2: #181c28;
+  --bg-3: #1d2133;
+  --bg-4: #23273d;
+  /* Text */
+  --text-1: #d6dbed;
+  --text-2: #7b899e;
+  --text-3: #4c5669;
+  /* Accent — sky blue, fresh */
+  --accent: #38b6f0;
+  --accent-dim: #38b6f014;
+  /* Semantic */
+  --success: #2dd4a0;
+  --success-dim: #2dd4a012;
+  --warning: #f5c542;
+  --warning-dim: #f5c54212;
+  --error: #fb7185;
+  --error-dim: #fb718512;
+  --info: #60c8fa;
+  /* Borders: subtle, same colour family as bg */
+  --border: #232840;
+  --border-light: #2c324e;
   --radius: 6px;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
   --font-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
-  --shadow-md: 0 4px 20px rgba(0,0,0,0.5);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
+  --shadow-sm: 0 1px 6px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 18px rgba(0,0,0,0.38);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.48);
 }
 
-/* ── Light theme ────────────────────────────────────────────────────────────── */
+/* ── Light theme — fresh / airy ─────────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg-1: #f2f2f7;
-  --bg-2: #ffffff;
-  --bg-3: #f0f0f5;
-  --bg-4: #e6e6f0;
-  --text-1: #18182c;
-  --text-2: #52527a;
-  --text-3: #9494b0;
-  --accent: #4c5cf0;
-  --accent-dim: #4c5cf012;
-  --success: #16a34a;
-  --success-dim: #16a34a14;
-  --warning: #d97706;
-  --warning-dim: #d9770614;
-  --error: #dc2626;
-  --error-dim: #dc262614;
-  --info: #2563eb;
-  --border: #dddde8;
-  --border-light: #cacad8;
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 20px rgba(0,0,0,0.1);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.14);
+  /* Backgrounds: near-white with faint blue tint; steps are subtle */
+  --bg-1: #f4f6fb;
+  --bg-2: #f9fafd;
+  --bg-3: #edf0f7;
+  --bg-4: #e4e8f2;
+  /* Text */
+  --text-1: #1b2035;
+  --text-2: #596278;
+  --text-3: #8a95aa;
+  /* Accent — sky blue */
+  --accent: #0099d0;
+  --accent-dim: #0099d010;
+  /* Semantic */
+  --success: #00a878;
+  --success-dim: #00a87812;
+  --warning: #c98a00;
+  --warning-dim: #c98a0012;
+  --error: #e03050;
+  --error-dim: #e0305010;
+  --info: #0080b8;
+  /* Borders: soft, low contrast */
+  --border: #d8deed;
+  --border-light: #c4ccde;
+  --shadow-sm: 0 1px 6px rgba(30,40,80,0.07);
+  --shadow-md: 0 4px 18px rgba(30,40,80,0.09);
+  --shadow-lg: 0 8px 32px rgba(30,40,80,0.13);
 }
 
 /* ── Reset & base ───────────────────────────────────────────────────────────── */
