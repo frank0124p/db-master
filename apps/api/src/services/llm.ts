@@ -460,3 +460,37 @@ ${ALLOWED_TAGS.join("、")}
     tags: validTags,
   };
 }
+
+export async function suggestFieldComment(input: {
+  fieldName: string; dataType: string; tableName: string; tableComment?: string | null; domain: string;
+}): Promise<{ comment: string }> {
+  const prompt = `你是資料庫設計助理。請根據下方欄位資訊，以繁體中文寫一句簡潔的欄位用途說明（30-80字，說明欄位的業務含義與用途）。
+
+資訊：
+- 欄位名稱：${input.fieldName}
+- 資料型態：${input.dataType}
+- 所屬表格：${input.tableName}${input.tableComment ? `（${input.tableComment}）` : ""}
+- 領域：${input.domain === "semiconductor" ? "半導體製造 / PLM" : "通用"}
+
+請只回覆 JSON，格式：{"comment": "欄位說明文字"}，不要其他文字。`;
+
+  const cfg = await getConfig();
+  const model = await resolveModel("suggest");
+  let text: string;
+
+  if (cfg.provider === "openai") {
+    text = await completeOpenAI(prompt, model, 256);
+  } else {
+    const client = await getAnthropicClient();
+    const message = await client.messages.create({
+      model, max_tokens: 256,
+      messages: [{ role: "user", content: prompt }],
+    });
+    text = message.content[0]?.type === "text" ? message.content[0].text.trim() : "{}";
+  }
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return { comment: "" };
+  const parsed = JSON.parse(jsonMatch[0]) as { comment?: string };
+  return { comment: parsed.comment ?? "" };
+}

@@ -6,6 +6,7 @@ export async function createField(tableId: number, input: {
   name: string; data_type: string; nullable?: boolean; default_value?: string | null;
   is_primary_key?: boolean; is_unique?: boolean; comment?: string | null; position?: number;
   source_table?: string | null; source_field?: string | null;
+  is_sensitive?: boolean; aliases?: string[];
 }) {
   const schemaId = await store.indexGet("tableSchema", tableId);
   if (schemaId === null) throw new NotFoundError("Table", tableId);
@@ -27,6 +28,8 @@ export async function createField(tableId: number, input: {
     position,
     sourceTable: input.source_table ?? null,
     sourceField: input.source_field ?? null,
+    isSensitive: input.is_sensitive ?? false,
+    aliases: input.aliases ?? [],
   };
 
   tbl.fields.push(field);
@@ -40,6 +43,7 @@ export async function updateField(id: number, input: Partial<{
   name: string; data_type: string; nullable: boolean; default_value: string | null;
   is_primary_key: boolean; is_unique: boolean; comment: string | null; position: number;
   source_table: string | null; source_field: string | null;
+  is_sensitive: boolean; aliases: string[];
 }>) {
   const tableId = await store.indexGet("fieldTable", id);
   if (tableId === null) throw new NotFoundError("Field", id);
@@ -62,6 +66,8 @@ export async function updateField(id: number, input: Partial<{
   if (input.position !== undefined) f.position = input.position;
   if (input.source_table !== undefined) f.sourceTable = input.source_table;
   if (input.source_field !== undefined) f.sourceField = input.source_field;
+  if (input.is_sensitive !== undefined) f.isSensitive = input.is_sensitive;
+  if (input.aliases !== undefined) f.aliases = input.aliases;
 
   tbl.updatedAt = new Date().toISOString();
   await store.writeJson(filePath, tbl);

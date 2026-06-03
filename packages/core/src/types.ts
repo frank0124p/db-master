@@ -124,6 +124,8 @@ export const CreateFieldInput = z.object({
   position: z.number().int().optional(),
   source_table: z.string().max(128).optional().nullable(),
   source_field: z.string().max(128).optional().nullable(),
+  is_sensitive: z.boolean().optional(),
+  aliases: z.array(z.string().max(64)).optional(),
 });
 export type CreateFieldInput = z.infer<typeof CreateFieldInput>;
 

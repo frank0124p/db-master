@@ -234,6 +234,10 @@ export const mockApi = {
     },
     update: async (_id: number, _b: unknown): Promise<void> => { await delay(60); },
     delete: async (_id: number): Promise<void> => { await delay(60); },
+    suggestComment: async (b: { fieldName: string; dataType: string; tableName: string; tableComment?: string | null; domain: string }): Promise<{ comment: string }> => {
+      await delay(800);
+      return { comment: `${b.tableName} 中 ${b.fieldName} 欄位：儲存 ${b.fieldName.replace(/_/g, " ")} 資訊（${b.dataType}）。` };
+    },
   },
 
   wideTables: {

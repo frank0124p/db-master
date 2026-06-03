@@ -8,6 +8,7 @@ export interface FieldEntry {
   defaultValue: string | null; isPrimaryKey: boolean; isUnique: boolean;
   comment: string | null; position: number;
   sourceTable?: string | null; sourceField?: string | null;
+  isSensitive?: boolean; aliases?: string[];
 }
 
 export interface TableFile {

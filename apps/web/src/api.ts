@@ -19,8 +19,10 @@ export interface Field {
   defaultValue: string | null; isPrimaryKey: boolean; isUnique: boolean;
   comment: string | null; position: number;
   sourceTable?: string | null; sourceField?: string | null;
+  isSensitive?: boolean; aliases?: string[];
 }
 export interface Table { id: number; name: string; comment: string | null; tags?: string[]; environment?: string | null; layerType?: string | null; status?: "active" | "deprecated" | null; fields: Field[]; sampleData?: Record<string, unknown>[]; }
+
 export interface SchemaDetail extends Schema { tables: Table[]; }
 
 export interface NamingEntry {
@@ -284,8 +286,11 @@ const realApi = {
       name: string; data_type: string; nullable: boolean; default_value: string | null;
       is_primary_key: boolean; is_unique: boolean; comment: string | null;
       source_table: string | null; source_field: string | null;
+      is_sensitive: boolean; aliases: string[];
     }>) => req<void>(`/fields/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     delete: (id: number) => req<void>(`/fields/${id}`, { method: "DELETE" }),
+    suggestComment: (b: { fieldName: string; dataType: string; tableName: string; tableComment?: string | null; domain: string }) =>
+      req<{ comment: string }>("/fields/suggest-comment", { method: "POST", body: JSON.stringify(b) }),
   },
   wideTables: {
     list: (schemaId: number) => req<WideTableSummary[]>(`/schemas/${schemaId}/wide-tables`),

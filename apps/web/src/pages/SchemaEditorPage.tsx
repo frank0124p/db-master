@@ -108,13 +108,11 @@ function SingleFieldDictModal({ fieldName, comment, domain, onClose, onAdded }: 
 }
 
 // ── Field row ────────────────────────────────────────────────────────────────
-function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast }: {
-  field: Field;
-  tableId: number;
-  domain: string;
+function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast, tableName, tableComment }: {
+  field: Field; tableId: number; domain: string;
   namingEntries: import("../api.js").NamingEntry[];
-  onRefresh: () => void;
-  showToast: (m: string) => void;
+  onRefresh: () => void; showToast: (m: string) => void;
+  tableName: string; tableComment: string | null;
 }) {
   const [name, setName] = useState(field.name);
   const [showHint, setShowHint] = useState(false);
@@ -123,13 +121,25 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast 
   const [editingSource, setEditingSource] = useState(false);
   const [srcTable, setSrcTable] = useState(field.sourceTable ?? "");
   const [srcField, setSrcField] = useState(field.sourceField ?? "");
+  // comment
+  const [editingComment, setEditingComment] = useState(false);
+  const [commentDraft, setCommentDraft] = useState(field.comment ?? "");
+  const [aiLoading, setAiLoading] = useState(false);
+  // sensitive + aliases
+  const [sensitive, setSensitive] = useState(field.isSensitive ?? false);
+  const [aliases, setAliases] = useState<string[]>(field.aliases ?? []);
+  const [aliasInput, setAliasInput] = useState("");
+  const [showAliasInput, setShowAliasInput] = useState(false);
+
   const hintRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
   const { checkFieldName } = useNamingCheck(namingEntries);
 
   useEffect(() => { setSrcTable(field.sourceTable ?? ""); setSrcField(field.sourceField ?? ""); }, [field.sourceTable, field.sourceField]);
-
   useEffect(() => { setName(field.name); }, [field.name]);
+  useEffect(() => { setCommentDraft(field.comment ?? ""); }, [field.comment]);
+  useEffect(() => { setSensitive(field.isSensitive ?? false); }, [field.isSensitive]);
+  useEffect(() => { setAliases(field.aliases ?? []); }, [field.aliases]);
 
   function onFocus() {
     const r = checkFieldName(name);
@@ -138,45 +148,61 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast 
   function onInput(v: string) {
     setName(v);
     const r = checkFieldName(v);
-    setHintResult(r);
-    setShowHint(r.status !== "exact");
+    setHintResult(r); setShowHint(r.status !== "exact");
   }
   async function onBlur() {
     setTimeout(() => setShowHint(false), 150);
     if (name !== field.name && name.trim()) {
-      await api.fields.update(field.id, { name: name.trim() });
-      onRefresh();
+      await api.fields.update(field.id, { name: name.trim() }); onRefresh();
     }
   }
   async function adopt(stdName: string) {
-    setName(stdName);
-    setShowHint(false);
-    await api.fields.update(field.id, { name: stdName });
-    onRefresh();
+    setName(stdName); setShowHint(false);
+    await api.fields.update(field.id, { name: stdName }); onRefresh();
     showToast(`✓ 已採用建議：${stdName}`);
   }
-  async function updateType(data_type: string) {
-    await api.fields.update(field.id, { data_type });
-    onRefresh();
-  }
-  async function toggleNullable() {
-    await api.fields.update(field.id, { nullable: !field.nullable });
-    onRefresh();
-  }
+  async function updateType(data_type: string) { await api.fields.update(field.id, { data_type }); onRefresh(); }
+  async function toggleNullable() { await api.fields.update(field.id, { nullable: !field.nullable }); onRefresh(); }
   async function deleteField() {
     if (!confirm(`刪除欄位 "${field.name}"？`)) return;
-    await api.fields.delete(field.id);
-    onRefresh();
+    await api.fields.delete(field.id); onRefresh();
   }
-
   async function saveSource() {
     setEditingSource(false);
-    const newSrcTable = srcTable.trim() || null;
-    const newSrcField = srcField.trim() || null;
-    if (newSrcTable !== (field.sourceTable ?? null) || newSrcField !== (field.sourceField ?? null)) {
-      await api.fields.update(field.id, { source_table: newSrcTable, source_field: newSrcField });
-      onRefresh();
+    const nt = srcTable.trim() || null, nf = srcField.trim() || null;
+    if (nt !== (field.sourceTable ?? null) || nf !== (field.sourceField ?? null)) {
+      await api.fields.update(field.id, { source_table: nt, source_field: nf }); onRefresh();
     }
+  }
+  async function saveComment() {
+    setEditingComment(false);
+    const c = commentDraft.trim() || null;
+    if (c !== (field.comment ?? null)) {
+      await api.fields.update(field.id, { comment: c }); onRefresh();
+    }
+  }
+  async function aiSuggestComment() {
+    setAiLoading(true);
+    try {
+      const res = await api.fields.suggestComment({ fieldName: field.name, dataType: field.dataType, tableName, tableComment, domain });
+      setCommentDraft(res.comment);
+      setEditingComment(true);
+    } catch { showToast("AI 建議失敗"); }
+    finally { setAiLoading(false); }
+  }
+  async function toggleSensitive() {
+    const next = !sensitive; setSensitive(next);
+    await api.fields.update(field.id, { is_sensitive: next }); onRefresh();
+  }
+  async function addAlias() {
+    const a = aliasInput.trim();
+    if (!a || aliases.includes(a)) { setAliasInput(""); return; }
+    const next = [...aliases, a]; setAliases(next); setAliasInput("");
+    await api.fields.update(field.id, { aliases: next });
+  }
+  async function removeAlias(alias: string) {
+    const next = aliases.filter(a => a !== alias); setAliases(next);
+    await api.fields.update(field.id, { aliases: next });
   }
 
   const r = checkFieldName(name);
@@ -188,67 +214,107 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast 
     <tr style={{ borderBottom: "1px solid var(--border)" }}
       onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = "var(--bg-2)"}
       onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = "transparent"}>
-      <td style={{ padding: "8px 10px", verticalAlign: "middle", position: "relative" }}>
-        {field.isPrimaryKey && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 10, fontSize: 10, fontWeight: 600, background: "var(--accent-dim)", color: "var(--accent)", marginRight: 4 }}>🔑 PK</span>}
-        <div style={{ position: "relative", display: "inline-block" }}>
-          <input value={name}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            onChange={e => onInput(e.target.value)}
-            style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-1)", background: "transparent", border: "1px solid transparent", padding: "3px 6px", borderRadius: 4, width: 160, outline: "none", transition: "all 0.15s" }}
-            onMouseEnter={e => (e.target as HTMLInputElement).style.borderColor = "var(--border-light)"}
-            onMouseLeave={e => { if (document.activeElement !== e.target) (e.target as HTMLInputElement).style.borderColor = "transparent"; }}
-            onFocusCapture={e => (e.target as HTMLInputElement).style.borderColor = "var(--accent)"}
-            onBlurCapture={e => (e.target as HTMLInputElement).style.borderColor = "transparent"}
-          />
-          {showHint && hintResult && hintResult.status !== "exact" && (
-            <div ref={hintRef}>
-              <NamingHint result={hintResult} onAdopt={adopt} onIgnore={() => setShowHint(false)} />
-            </div>
+
+      {/* Field name + sensitive icon + aliases */}
+      <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {field.isPrimaryKey && <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 5px", borderRadius: 8, background: "var(--accent-dim)", color: "var(--accent)", flexShrink: 0 }}>PK</span>}
+          <div style={{ position: "relative", flex: 1 }}>
+            <input value={name} onFocus={onFocus} onBlur={onBlur} onChange={e => onInput(e.target.value)}
+              style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-1)", background: "transparent", border: "1px solid transparent", padding: "3px 6px", borderRadius: 4, width: 148, outline: "none", transition: "all 0.15s" }}
+              onMouseEnter={e => (e.target as HTMLInputElement).style.borderColor = "var(--border-light)"}
+              onMouseLeave={e => { if (document.activeElement !== e.target) (e.target as HTMLInputElement).style.borderColor = "transparent"; }}
+              onFocusCapture={e => (e.target as HTMLInputElement).style.borderColor = "var(--accent)"}
+              onBlurCapture={e => (e.target as HTMLInputElement).style.borderColor = "transparent"} />
+            {showHint && hintResult && hintResult.status !== "exact" && (
+              <div ref={hintRef}><NamingHint result={hintResult} onAdopt={adopt} onIgnore={() => setShowHint(false)} /></div>
+            )}
+          </div>
+          <button onClick={toggleSensitive} title={sensitive ? "敏感資料（點擊取消）" : "標記為敏感資料"}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "2px 3px", borderRadius: 3, opacity: sensitive ? 1 : 0.25, color: sensitive ? "var(--error)" : "var(--text-3)", transition: "opacity 0.15s" }}
+            className="del-btn">🔒</button>
+        </div>
+        {/* Aliases */}
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 3, marginTop: aliases.length > 0 || showAliasInput ? 4 : 0, paddingLeft: 2 }}>
+          {aliases.map(a => (
+            <span key={a} style={{ fontSize: 9, padding: "1px 5px", borderRadius: 10, background: "var(--bg-4)", color: "var(--text-3)", display: "flex", alignItems: "center", gap: 2 }}>
+              {a}
+              <button onClick={() => void removeAlias(a)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer", fontSize: 9, padding: 0, lineHeight: 1 }}>×</button>
+            </span>
+          ))}
+          {showAliasInput ? (
+            <input autoFocus value={aliasInput} onChange={e => setAliasInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); void addAlias(); } if (e.key === "Escape") setShowAliasInput(false); }}
+              onBlur={() => { void addAlias(); setShowAliasInput(false); }}
+              placeholder="別名…"
+              style={{ fontSize: 9, width: 60, border: "1px solid var(--accent)", borderRadius: 10, padding: "1px 5px", background: "var(--bg-3)", color: "var(--text-2)", outline: "none" }} />
+          ) : (
+            <button onClick={() => setShowAliasInput(true)} className="del-btn"
+              style={{ fontSize: 9, padding: "1px 5px", borderRadius: 10, border: "1px dashed var(--border-light)", background: "none", color: "var(--text-3)", cursor: "pointer", opacity: 0 }}>
+              + 別名
+            </button>
           )}
         </div>
       </td>
-      <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
+
+      <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
         <select value={field.dataType} onChange={e => updateType(e.target.value)}
           style={{ background: "var(--bg-3)", border: "1px solid var(--border)", color: "var(--text-1)", padding: "3px 6px", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 11, outline: "none" }}>
           {DATA_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
       </td>
-      <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
-        <div onClick={toggleNullable} style={{ width: 32, height: 16, background: field.nullable ? "var(--accent)" : "var(--bg-4)", borderRadius: 8, position: "relative", cursor: "pointer", border: `1px solid ${field.nullable ? "var(--accent)" : "var(--border-light)"}`, transition: "all 0.2s" }}>
+      <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
+        <div onClick={toggleNullable} style={{ width: 32, height: 16, background: field.nullable ? "var(--accent)" : "var(--bg-4)", borderRadius: 8, position: "relative", cursor: "pointer", border: `1px solid ${field.nullable ? "var(--accent)" : "var(--border-light)"}`, transition: "all 0.2s", marginTop: 3 }}>
           <div style={{ position: "absolute", width: 10, height: 10, background: field.nullable ? "#fff" : "var(--text-3)", borderRadius: "50%", top: 2, left: field.nullable ? 18 : 2, transition: "all 0.2s" }} />
         </div>
       </td>
-      <td style={{ padding: "8px 10px", verticalAlign: "middle", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-3)" }}>{field.defaultValue || "—"}</td>
-      <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
+      <td style={{ padding: "8px 10px", verticalAlign: "top", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-3)", paddingTop: 11 }}>{field.defaultValue || "—"}</td>
+      <td style={{ padding: "8px 10px", verticalAlign: "top", paddingTop: 11 }}>
         <span onClick={() => { setHintResult(r); setShowHint(!showHint); }} style={{ color: statusColor, fontSize: 14, cursor: "pointer" }} title={r.status}>{statusIcon}</span>
       </td>
-      <td style={{ padding: "8px 10px", verticalAlign: "middle", color: "var(--text-2)", fontSize: 12 }}>{field.comment || ""}</td>
-      <td style={{ padding: "8px 10px", verticalAlign: "middle", minWidth: 140, maxWidth: 200 }}>
-        {editingSource ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <input
-              autoFocus
-              value={srcTable}
-              onChange={e => setSrcTable(e.target.value)}
-              placeholder="source_table"
-              onBlur={() => void saveSource()}
-              onKeyDown={e => { if (e.key === "Enter") void saveSource(); if (e.key === "Escape") { setSrcTable(field.sourceTable ?? ""); setSrcField(field.sourceField ?? ""); setEditingSource(false); } }}
-              style={{ fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--bg-3)", border: "1px solid var(--accent)", borderRadius: 3, padding: "2px 5px", color: "var(--text-1)", outline: "none", width: "100%" }}
-            />
-            <input
-              value={srcField}
-              onChange={e => setSrcField(e.target.value)}
-              placeholder="source_field"
-              onBlur={() => void saveSource()}
-              onKeyDown={e => { if (e.key === "Enter") void saveSource(); if (e.key === "Escape") { setSrcTable(field.sourceTable ?? ""); setSrcField(field.sourceField ?? ""); setEditingSource(false); } }}
-              style={{ fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--bg-3)", border: "1px solid var(--accent)", borderRadius: 3, padding: "2px 5px", color: "var(--text-1)", outline: "none", width: "100%" }}
-            />
+
+      {/* Comment — click to edit, AI suggest on hover */}
+      <td style={{ padding: "8px 10px", verticalAlign: "top", minWidth: 180 }}
+        onMouseEnter={e => { const b = e.currentTarget.querySelector(".ai-btn") as HTMLElement; if (b) b.style.opacity = "1"; }}
+        onMouseLeave={e => { const b = e.currentTarget.querySelector(".ai-btn") as HTMLElement; if (b) b.style.opacity = "0"; }}>
+        {editingComment ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <textarea autoFocus value={commentDraft} onChange={e => setCommentDraft(e.target.value)} rows={2}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void saveComment(); } if (e.key === "Escape") { setCommentDraft(field.comment ?? ""); setEditingComment(false); } }}
+              style={{ fontSize: 11, color: "var(--text-1)", background: "var(--bg-3)", border: "1px solid var(--accent)", borderRadius: 4, padding: "4px 6px", resize: "vertical", outline: "none", width: "100%", fontFamily: "inherit" }} />
+            <div style={{ display: "flex", gap: 4 }}>
+              <button onClick={() => void saveComment()} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: "var(--accent)", color: "#fff", border: "none", cursor: "pointer" }}>儲存</button>
+              <button onClick={() => { setCommentDraft(field.comment ?? ""); setEditingComment(false); }} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: "var(--bg-4)", color: "var(--text-2)", border: "1px solid var(--border)", cursor: "pointer" }}>取消</button>
+            </div>
           </div>
         ) : (
-          <div
-            onClick={() => setEditingSource(true)}
-            title="點擊編輯來源欄位"
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 4, minHeight: 22 }}>
+            <span onClick={() => setEditingComment(true)} title="點擊編輯描述"
+              style={{ flex: 1, fontSize: 12, color: commentDraft ? "var(--text-2)" : "var(--text-3)", fontStyle: commentDraft ? "normal" : "italic", cursor: "text", lineHeight: 1.5, wordBreak: "break-word" }}>
+              {commentDraft || "點擊新增描述…"}
+            </span>
+            <button className="ai-btn" onClick={() => void aiSuggestComment()} title="AI 生成描述"
+              disabled={aiLoading}
+              style={{ fontSize: 11, padding: "1px 5px", borderRadius: 4, border: "1px solid var(--accent)", background: "var(--accent-dim)", color: "var(--accent)", cursor: "pointer", flexShrink: 0, opacity: 0, transition: "opacity 0.15s" }}>
+              {aiLoading ? "…" : "✦ AI"}
+            </button>
+          </div>
+        )}
+      </td>
+
+      {/* Source */}
+      <td style={{ padding: "8px 10px", verticalAlign: "top", minWidth: 130, maxWidth: 180 }}>
+        {editingSource ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <input autoFocus value={srcTable} onChange={e => setSrcTable(e.target.value)} placeholder="source_table"
+              onBlur={() => void saveSource()} onKeyDown={e => { if (e.key === "Enter") void saveSource(); if (e.key === "Escape") { setSrcTable(field.sourceTable ?? ""); setSrcField(field.sourceField ?? ""); setEditingSource(false); } }}
+              style={{ fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--bg-3)", border: "1px solid var(--accent)", borderRadius: 3, padding: "2px 5px", color: "var(--text-1)", outline: "none", width: "100%" }} />
+            <input value={srcField} onChange={e => setSrcField(e.target.value)} placeholder="source_field"
+              onBlur={() => void saveSource()} onKeyDown={e => { if (e.key === "Enter") void saveSource(); if (e.key === "Escape") { setSrcTable(field.sourceTable ?? ""); setSrcField(field.sourceField ?? ""); setEditingSource(false); } }}
+              style={{ fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--bg-3)", border: "1px solid var(--accent)", borderRadius: 3, padding: "2px 5px", color: "var(--text-1)", outline: "none", width: "100%" }} />
+          </div>
+        ) : (
+          <div onClick={() => setEditingSource(true)} title="點擊編輯來源欄位"
             style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, border: "1px solid transparent", transition: "border-color 0.15s" }}
             onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--border-light)")}
             onMouseLeave={e => (e.currentTarget.style.borderColor = "transparent")}>
@@ -257,17 +323,16 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast 
                 <span style={{ color: "var(--text-3)" }}>{field.sourceTable}</span>
                 {field.sourceField && <><span style={{ color: "var(--border-light)", margin: "0 2px" }}>.</span><span style={{ color: "var(--text-2)" }}>{field.sourceField}</span></>}
               </span>
-            ) : (
-              <span style={{ fontSize: 10, color: "var(--border-light)", fontStyle: "italic" }}>—</span>
-            )}
+            ) : <span style={{ fontSize: 10, color: "var(--border-light)", fontStyle: "italic" }}>—</span>}
           </div>
         )}
       </td>
-      <td style={{ padding: "8px 10px", verticalAlign: "middle" }}>
+
+      {/* Actions */}
+      <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           {r.status === "unknown" && (
-            <button onClick={() => setShowDictModal(true)}
-              title="加入命名字典"
+            <button onClick={() => setShowDictModal(true)} title="加入命名字典"
               style={{ background: "transparent", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 13, opacity: 0, lineHeight: 1 }}
               className="del-btn">＋</button>
           )}
@@ -276,13 +341,8 @@ function FieldRow({ field, tableId, domain, namingEntries, onRefresh, showToast 
       </td>
     </tr>
     {showDictModal && createPortal(
-      <SingleFieldDictModal
-        fieldName={name}
-        comment={field.comment}
-        domain={domain}
-        onClose={() => setShowDictModal(false)}
-        onAdded={() => void qc.invalidateQueries({ queryKey: ["naming"] })}
-      />,
+      <SingleFieldDictModal fieldName={name} comment={field.comment} domain={domain}
+        onClose={() => setShowDictModal(false)} onAdded={() => void qc.invalidateQueries({ queryKey: ["naming"] })} />,
       document.body
     )}
     </>
@@ -1019,14 +1079,14 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {[t("col.field_name"), t("col.type"), t("col.nullable"), t("col.default"), t("col.naming"), t("col.comment"), "來源", ""].map((h, i) => (
+                {[t("col.field_name"), t("col.type"), t("col.nullable"), t("col.default"), t("col.naming"), "描述 / 別名", "來源", ""].map((h, i) => (
                   <th key={i} style={{ textAlign: "left", padding: "6px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid var(--border)" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {table.fields.sort((a, b) => a.position - b.position).map(f => (
-                <FieldRow key={f.id} field={f} tableId={table.id} domain={schema.domain} namingEntries={namingEntries} onRefresh={refresh} showToast={showToast} />
+                <FieldRow key={f.id} field={f} tableId={table.id} domain={schema.domain} namingEntries={namingEntries} onRefresh={refresh} showToast={showToast} tableName={table.name} tableComment={table.comment} />
               ))}
               <AddFieldRow tableId={table.id} onRefresh={refresh} />
             </tbody>
@@ -1110,7 +1170,7 @@ function ClassifiedFieldView({ table, schema, namingEntries, onRefresh }: { tabl
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <tbody>
                 {fields.map(f => (
-                  <FieldRow key={f.id} field={f} tableId={table.id} domain={schema.domain} namingEntries={namingEntries} onRefresh={onRefresh} showToast={showToast} />
+                  <FieldRow key={f.id} field={f} tableId={table.id} domain={schema.domain} namingEntries={namingEntries} onRefresh={onRefresh} showToast={showToast} tableName={table.name} tableComment={table.comment} />
                 ))}
               </tbody>
             </table>
