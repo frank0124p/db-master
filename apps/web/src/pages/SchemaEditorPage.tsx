@@ -1946,24 +1946,45 @@ export default function SchemaEditorPage() {
 
 function TableItem({ table, active, issueCount, onClick, onDelete }: { table: Table; active: boolean; issueCount: number; onClick: () => void; onDelete: () => void }) {
   const [hover, setHover] = useState(false);
+  const env = table.environment as SchemaEnvironment | null | undefined;
+  const tags = table.tags ?? [];
   return (
     <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ padding: "6px 8px", borderRadius: "var(--radius)", cursor: "pointer", marginBottom: 1, background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+      style={{ padding: "6px 8px", borderRadius: "var(--radius)", cursor: "pointer", marginBottom: 1, background: active ? "var(--accent-dim)" : hover ? "var(--bg-3)" : "transparent" }}
       onClick={onClick}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <div style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: active ? "var(--accent)" : "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{table.name}</div>
-          {issueCount > 0 && (
-            <span title={`${issueCount} 個命名問題`}
-              style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, padding: "0px 5px", borderRadius: 8,
-                background: "rgba(251,191,36,0.18)", color: "var(--warning)", border: "1px solid rgba(251,191,36,0.35)", lineHeight: "14px" }}>
-              ⚠{issueCount}
-            </span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <div style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: active ? "var(--accent)" : "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{table.name}</div>
+            {issueCount > 0 && (
+              <span title={`${issueCount} 個命名問題`}
+                style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, padding: "0px 5px", borderRadius: 8,
+                  background: "rgba(251,191,36,0.18)", color: "var(--warning)", border: "1px solid rgba(251,191,36,0.35)", lineHeight: "14px" }}>
+                ⚠{issueCount}
+              </span>
+            )}
+          </div>
+          {/* env + tags row */}
+          {(env || tags.length > 0) && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, flexWrap: "wrap" }}>
+              {env && (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
+                  background: `${ENV_COLORS[env]}1a`, color: ENV_COLORS[env], border: `1px solid ${ENV_COLORS[env]}44`, letterSpacing: "0.3px" }}>
+                  {env}
+                </span>
+              )}
+              {tags.map(tag => (
+                <span key={tag} style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3,
+                  background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid rgba(56,182,240,0.25)" }}>
+                  {tag}
+                </span>
+              ))}
+            </div>
           )}
+          <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>{table.fields.length} fields</div>
         </div>
-        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{table.fields.length} fields</div>
+        {hover && <button onClick={e => { e.stopPropagation(); onDelete(); }} style={{ background: "transparent", border: "none", color: "var(--text-3)", cursor: "pointer", fontSize: 13, padding: "0 2px", flexShrink: 0, marginTop: 1 }}>✕</button>}
       </div>
-      {hover && <button onClick={e => { e.stopPropagation(); onDelete(); }} style={{ background: "transparent", border: "none", color: "var(--text-3)", cursor: "pointer", fontSize: 13, padding: "0 2px", flexShrink: 0 }}>✕</button>}
     </div>
   );
 }
