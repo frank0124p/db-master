@@ -117,6 +117,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; color: var(--te
   transition: width 0.22s ease, opacity 0.22s ease;
   overflow: hidden;
   flex-shrink: 0;
+  display: flex;         /* stretch child Sidebar to full height */
 }
 
 /* Backdrop */
