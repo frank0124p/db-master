@@ -32,10 +32,30 @@ function detectEdges(tables: Table[], visible: Set<number>): GraphEdge[] {
   for (const table of tables) {
     if (!visible.has(table.id)) continue;
     for (const f of table.fields) {
-      // FK by naming convention
+      // FK by naming convention — handles abbreviated stems and self-referential hierarchies
       if (f.name.endsWith("_id") && !f.isPrimaryKey) {
         const stem = f.name.slice(0, -3);
-        const ref = tables.find(t => t.name === stem || t.name === `${stem}s` || t.name === `${stem}es`);
+
+        function stemMatches(n: string, s: string): boolean {
+          return n === s || n === `${s}s` || n === `${s}es` ||
+            n.endsWith(`_${s}s`) || n.endsWith(`_${s}es`) ||
+            n.endsWith(s.replace(/y$/, "ies")) || n.endsWith(`_${s.replace(/y$/, "ies")}`) ||
+            (n.startsWith(s) && n.length - s.length <= 6);
+        }
+
+        // Try direct stem match (non-self first)
+        let ref = tables.find(t => t.id !== table.id && stemMatches(t.name, stem));
+
+        // If not found, try stripping hierarchy prefixes (parent_X_id, root_X_id, …)
+        if (!ref) {
+          const unprefixed = stem.replace(/^(parent|child|root|prev|next|master|sub)_/, "");
+          if (unprefixed !== stem) {
+            ref = unprefixed
+              ? tables.find(t => stemMatches(t.name, unprefixed))  // includes self
+              : tables.find(t => t.id === table.id);               // parent_id → self
+          }
+        }
+
         if (ref && vis.has(ref.name)) {
           edges.push({ fromTable: table.name, fromField: f.name, toTable: ref.name, toField: "id", type: "fk", nullable: f.nullable });
         }
@@ -153,23 +173,29 @@ function EdgeOverlay({ edges, pos, focusedSet }: {
 
         let x1: number, y1: number, x2: number, y2: number, cp1x: number, cp2x: number;
 
-        if (from.x >= to.x + to.w) {
-          // Normal: child is to the right
+        if (from === to) {
+          // Self-referential loop — exit and re-enter the right side
+          x1 = from.x + from.w; y1 = from.y + from.h * 0.35;
+          x2 = to.x  + to.w;    y2 = to.y  + to.h  * 0.65;
+          const loopR = 48 + i * 10;
+          cp1x = x1 + loopR; cp2x = x2 + loopR;
+        } else if (from.x >= to.x + to.w) {
+          // Normal: child is to the right — exit left, enter right
           x1 = from.x;          y1 = fromCY;
           x2 = to.x + to.w + 8; y2 = toCY;
           const sp = Math.max(44, (x1 - x2) * 0.42);
           cp1x = x1 - sp; cp2x = x2 + sp;
         } else if (to.x >= from.x + from.w) {
-          // Parent is to the right (reversed — unusual with our layout)
+          // Parent is to the right (reversed)
           x1 = from.x + from.w; y1 = fromCY;
           x2 = to.x - 8;        y2 = toCY;
           const sp = Math.max(44, (x2 - x1) * 0.42);
           cp1x = x1 + sp; cp2x = x2 - sp;
         } else {
-          // Same column — arc around left side
-          x1 = from.x; y1 = fromCY;
-          x2 = to.x;   y2 = toCY;
-          const offset = -(72 + i * 12);
+          // Same column, different cards — arc around the RIGHT side
+          x1 = from.x + from.w; y1 = fromCY;
+          x2 = to.x + to.w;     y2 = toCY;
+          const offset = 60 + i * 14;
           cp1x = x1 + offset; cp2x = x2 + offset;
         }
 
@@ -222,10 +248,10 @@ function TableCard({ table, pos, expanded, dimmed, isRef, isSrc, dragging, onCli
       <div onPointerDown={e => { e.stopPropagation(); onDragStart(e); }}
         style={{ padding: "8px 12px", background: "rgba(123,140,255,0.06)", borderBottom: expanded ? "1px solid rgba(123,140,255,0.12)" : "none", display: "flex", alignItems: "flex-start", gap: 6, cursor: dragging ? "grabbing" : "grab" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-            {isRef && <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 2, background: "rgba(251,191,36,0.18)", color: "var(--warning)" }}>REF</span>}
-            {isSrc && <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 2, background: "rgba(52,211,153,0.15)", color: "#34d399" }}>SRC</span>}
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{table.name}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{table.name}</span>
+            {isRef && <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 2, background: "rgba(251,191,36,0.18)", color: "var(--warning)", flexShrink: 0 }}>REF</span>}
+            {isSrc && <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 2, background: "rgba(52,211,153,0.15)", color: "#34d399", flexShrink: 0 }}>SRC</span>}
           </div>
           {table.comment && <div style={{ fontSize: 9, color: "var(--text-3)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{table.comment}</div>}
         </div>
@@ -292,26 +318,83 @@ export default function ErDiagramPage() {
     enabled: !!selectedSchemaId,
   });
 
+  // Reset state + center view whenever the schema changes.
+  // Centering is computed here (not in a separate effect) because setVisible triggers
+  // a second render — a separate centering effect would fire before that render,
+  // when positions are still empty.
   useEffect(() => {
-    if (schema) {
-      setVisible(new Set(schema.tables.map(t => t.id)));
-      setExpanded(new Set());
-      setFocused(null);
-      setManualPos(new Map());
+    if (!schema) return;
+    const initVisible = new Set(schema.tables.map(t => t.id));
+    setVisible(initVisible);
+    setExpanded(new Set());
+    setFocused(null);
+    setManualPos(new Map());
+
+    const initEdges = detectEdges(schema.tables, initVisible);
+    const initPos   = computeLayout(schema.tables, initVisible, new Set(), initEdges);
+    if (initPos.size > 0) {
+      let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+      for (const p of initPos.values()) {
+        minX = Math.min(minX, p.x);       minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x + p.w); maxY = Math.max(maxY, p.y + p.h);
+      }
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      // Double RAF: first waits for state flush + render, second waits for paint.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const el = canvasScrollRef.current;
+        if (!el) return;
+        el.scrollLeft = Math.max(0, cx - el.clientWidth  / 2);
+        el.scrollTop  = Math.max(0, cy - el.clientHeight / 2);
+      }));
     }
   }, [schema?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Center the canvas view after layout is computed for this schema
+  // Window-level pointer listeners — the only reliable way to track drag movement
+  // when the pointer is captured by a card child element (or moves fast off it).
+  // draggingId is set only once actual movement crosses the 4px threshold, so a
+  // plain click never sets it and the click event fires normally → collapse works.
   useEffect(() => {
-    const el = canvasScrollRef.current;
-    if (!el || !schema) return;
-    requestAnimationFrame(() => {
-      const centerX = el.scrollWidth / 2 - el.clientWidth / 2;
-      const centerY = el.scrollHeight / 2 - el.clientHeight / 2;
-      el.scrollLeft = Math.max(0, centerX);
-      el.scrollTop  = Math.max(0, centerY);
-    });
-  }, [schema?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    function onMove(e: PointerEvent) {
+      if (dragRef.current) {
+        const { tableId, startMX, startMY, origX, origY } = dragRef.current;
+        const dx = e.clientX - startMX;
+        const dy = e.clientY - startMY;
+        if (!didMoveRef.current) {
+          if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+          didMoveRef.current = true;
+          setDraggingId(tableId);
+        }
+        setManualPos(prev => {
+          const next = new Map(prev);
+          next.set(tableId, { x: Math.max(0, origX + dx), y: Math.max(0, origY + dy) });
+          return next;
+        });
+        return;
+      }
+      if (panRef.current && canvasScrollRef.current) {
+        const dx = e.clientX - panRef.current.startX;
+        const dy = e.clientY - panRef.current.startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didMoveRef.current = true;
+        canvasScrollRef.current.scrollLeft = panRef.current.scrollX - dx;
+        canvasScrollRef.current.scrollTop  = panRef.current.scrollY - dy;
+      }
+    }
+    function onUp() {
+      if (dragRef.current || panRef.current) {
+        dragRef.current = null;
+        setDraggingId(null);
+        panRef.current = null;
+        setIsPanning(false);
+      }
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup',   onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup',   onUp);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const visibleTables = (schema?.tables ?? []).filter(t => visible.has(t.id));
   const edges   = schema ? detectEdges(schema.tables, visible) : [];
@@ -335,10 +418,10 @@ export default function ErDiagramPage() {
   function handleDragStart(tableId: number, e: React.PointerEvent) {
     const p = positions.get(tableId);
     if (!p) return;
+    // Only record start; draggingId is set in window pointermove when movement starts,
+    // so a plain click never sets draggingId and the click event fires normally.
     dragRef.current = { tableId, startMX: e.clientX, startMY: e.clientY, origX: p.x, origY: p.y };
     didMoveRef.current = false;
-    setDraggingId(tableId);
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }
 
   function handleBgPointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -348,32 +431,6 @@ export default function ErDiagramPage() {
     panRef.current = { startX: e.clientX, startY: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop };
     didMoveRef.current = false;
     setIsPanning(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }
-
-  function handlePointerMove(e: React.PointerEvent) {
-    if (dragRef.current) {
-      const { tableId, startMX, startMY, origX, origY } = dragRef.current;
-      const newX = Math.max(0, origX + e.clientX - startMX);
-      const newY = Math.max(0, origY + e.clientY - startMY);
-      setManualPos(prev => { const next = new Map(prev); next.set(tableId, { x: newX, y: newY }); return next; });
-      didMoveRef.current = true;
-      return;
-    }
-    if (panRef.current && canvasScrollRef.current) {
-      const dx = e.clientX - panRef.current.startX;
-      const dy = e.clientY - panRef.current.startY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didMoveRef.current = true;
-      canvasScrollRef.current.scrollLeft = panRef.current.scrollX - dx;
-      canvasScrollRef.current.scrollTop  = panRef.current.scrollY - dy;
-    }
-  }
-
-  function handlePointerUp() {
-    dragRef.current = null;
-    setDraggingId(null);
-    panRef.current = null;
-    setIsPanning(false);
   }
 
   function resetLayout() {
@@ -524,9 +581,6 @@ export default function ErDiagramPage() {
           <div style={{ position: "relative", width: cW, height: cH, minWidth: "100%", minHeight: "100%",
             cursor: isPanning ? "grabbing" : draggingId ? "default" : "grab" }}
             onPointerDown={handleBgPointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
             onClick={e => { if (e.target === e.currentTarget && !didMoveRef.current) setFocused(null); }}>
             <EdgeOverlay edges={edges} pos={positions} focusedSet={focusedSet} />
             {visibleTables.map(t => {
