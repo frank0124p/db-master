@@ -8,8 +8,10 @@ const router: ExpressRouter = Router();
 
 router.get("/", async (req, res, next) => {
   try {
-    const domain = (req.query as Record<string, string | undefined>)["domain"];
-    res.json(await repo.listNamingEntries(domain));
+    const q = req.query as Record<string, string | undefined>;
+    const domain = q["domain"];
+    const status = q["status"] as "pending" | "approved" | "rejected" | undefined;
+    res.json(await repo.listNamingEntries(domain, status));
   } catch (e) { next(e); }
 });
 
@@ -37,6 +39,31 @@ router.delete("/:id", async (req, res, next) => {
   try {
     await repo.deleteNamingEntry(Number((req.params as Record<string, string>)["id"]));
     res.status(204).end();
+  } catch (e) { next(e); }
+});
+
+// POST /api/v1/naming-dictionary/:id/approve
+router.post("/:id/approve", async (req, res, next) => {
+  try {
+    res.json(await repo.approveNamingEntry(Number((req.params as Record<string, string>)["id"])));
+  } catch (e) { next(e); }
+});
+
+// POST /api/v1/naming-dictionary/:id/reject
+router.post("/:id/reject", async (req, res, next) => {
+  try {
+    res.json(await repo.rejectNamingEntry(Number((req.params as Record<string, string>)["id"])));
+  } catch (e) { next(e); }
+});
+
+// POST /api/v1/naming-dictionary/:id/reviewers — assign reviewers
+router.post("/:id/reviewers", async (req, res, next) => {
+  try {
+    const id = Number((req.params as Record<string, string>)["id"]);
+    const body = z.object({
+      reviewers: z.array(z.object({ userId: z.string(), name: z.string() })),
+    }).parse(req.body);
+    res.json(await repo.assignReviewers(id, body.reviewers));
   } catch (e) { next(e); }
 });
 

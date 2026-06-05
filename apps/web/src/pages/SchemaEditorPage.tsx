@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store.js";
@@ -6,6 +6,7 @@ import { useT } from "../i18n.js";
 import { api, type Field, type Table, type SchemaDetail, type NamingEntry, type MatchResult, type ImportCheckResult, type ViolationSummary, type SchemaVersion, type TableNamingCheck, type SchemaEnvironment } from "../api.js";
 import { MarkdownView } from "../MarkdownView.js";
 import { useLayerSettings } from "../hooks/useLayerSettings.js";
+import { runRules, BUILT_IN_RULES, type CheckResult } from "@schema-studio/core";
 
 const DATA_TYPES = ["BIGINT", "INT", "SMALLINT", "TINYINT", "DECIMAL(15,4)", "DOUBLE", "FLOAT",
   "VARCHAR(32)", "VARCHAR(64)", "VARCHAR(128)", "VARCHAR(255)", "TEXT", "MEDIUMTEXT",
@@ -842,6 +843,22 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
   const [dialectCheckResult, setDialectCheckResult] = useState<ImportCheckResult | null>(null);
   const [showDialectPopover, setShowDialectPopover] = useState(false);
   const dialectRevRef = useRef(0);
+  const [showRulePopover, setShowRulePopover] = useState(false);
+
+  const ruleCheck = useMemo((): CheckResult => {
+    const defaultSettings = new Map(
+      BUILT_IN_RULES.map(r => [r.id, { ruleId: r.id, severity: r.defaultSeverity, enabled: true, config: r.defaultConfig ?? {} }])
+    );
+    const tableCtx = {
+      name: table.name, comment: table.comment,
+      fields: table.fields.map(f => ({
+        name: f.name, dataType: f.dataType, nullable: f.nullable, isPrimaryKey: f.isPrimaryKey,
+        isUnique: f.isUnique, isAutoIncrement: false, defaultValue: f.defaultValue, comment: f.comment,
+        position: f.position,
+      })),
+    };
+    return runRules([tableCtx], BUILT_IN_RULES, defaultSettings);
+  }, [table]);
 
   function refresh() {
     void qc.invalidateQueries({ queryKey: ["schema", schemaId] });
@@ -1062,6 +1079,49 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
           </div>
           <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setShowAiSuggest(true)}>✦ AI 建議</button>
           <button className="btn btn-ghost" onClick={exportDDL}>↓ 匯出 DDL</button>
+          {(ruleCheck.summary.errors + ruleCheck.summary.warnings > 0) && (
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setShowRulePopover(v => !v)}
+                style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 10, cursor: "pointer", outline: "none", whiteSpace: "nowrap",
+                  background: ruleCheck.summary.errors > 0 ? "rgba(248,113,113,0.12)" : "rgba(251,191,36,0.12)",
+                  color: ruleCheck.summary.errors > 0 ? "var(--error,#f87171)" : "var(--warning)",
+                  border: `1px solid ${ruleCheck.summary.errors > 0 ? "rgba(248,113,113,0.3)" : "rgba(251,191,36,0.3)"}` }}>
+                {ruleCheck.summary.errors > 0 ? `✕ ${ruleCheck.summary.errors} 規則錯誤` : `⚠ ${ruleCheck.summary.warnings} 規則警告`} ▾
+              </button>
+              {showRulePopover && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 98 }} onClick={() => setShowRulePopover(false)} />
+                  <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 99,
+                    width: "min(380px, 92vw)", background: "var(--bg-2)", border: "1px solid var(--border-light)",
+                    borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.45)", overflow: "hidden" }}>
+                    <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>規則 &amp; Skill 檢查</span>
+                      <div style={{ display: "flex", gap: 8, fontSize: 11 }}>
+                        {ruleCheck.summary.errors > 0 && <span style={{ color: "var(--error,#f87171)" }}>✕ {ruleCheck.summary.errors} 錯誤</span>}
+                        {ruleCheck.summary.warnings > 0 && <span style={{ color: "var(--warning)" }}>⚠ {ruleCheck.summary.warnings} 警告</span>}
+                      </div>
+                    </div>
+                    <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                      {ruleCheck.violations.map((v, i) => {
+                        const [icon, color] = v.severity === "error" ? ["✕", "var(--error,#f87171)"] : ["⚠", "var(--warning)"];
+                        return (
+                          <div key={i} style={{ display: "flex", gap: 10, padding: "8px 14px", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
+                            <span style={{ color, fontWeight: 700, flexShrink: 0 }}>{icon}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", marginBottom: 2 }}>
+                                {v.tableName}{v.fieldName ? `.${v.fieldName}` : ""}
+                              </div>
+                              <div style={{ color: "var(--text-2)", lineHeight: 1.4 }}>{v.message}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <button className="btn btn-primary" onClick={openSaveModal}>儲存版本</button>
         </div>
         </div>
@@ -1433,6 +1493,16 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
     queryFn: () => api.schemas.versions.list(schemaId),
     enabled: ddlScope === "history",
   });
+  const [savingVersion, setSavingVersion] = useState(false);
+  async function quickSaveVersion() {
+    setSavingVersion(true);
+    try {
+      const v = await api.schemas.versions.save(schemaId);
+      await qc.invalidateQueries({ queryKey: ["versions", schemaId] });
+      showToast(`✓ v${v.versionNo} 已儲存`);
+    } catch { showToast("版本儲存失敗"); }
+    finally { setSavingVersion(false); }
+  }
 
   // Single table DDL from live data
   const tableDdl = table ? generateTableDdl(table) : null;
@@ -1562,6 +1632,11 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
               {preChecking ? "檢查中…" : applying ? "套用中…" : "套用"}
             </button>
           </>
+        ) : ddlScope === "history" ? (
+          <button onClick={() => void quickSaveVersion()} disabled={savingVersion}
+            style={{ padding: "3px 9px", borderRadius: 4, border: "1px solid var(--accent)", background: "var(--accent-dim)", color: "var(--accent)", fontSize: 11, cursor: savingVersion ? "not-allowed" : "pointer", fontWeight: 500 }}>
+            {savingVersion ? "儲存中…" : "＋ 儲存版本"}
+          </button>
         ) : null}
         <button onClick={() => { setEditMode(false); setCollapsed(true); }} title="收合"
           style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 13, padding: "2px 2px", lineHeight: 1 }}
@@ -1602,6 +1677,14 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
               <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8, background: "var(--bg-3)" }}>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>v{v.versionNo}</span>
                 <span style={{ flex: 1, fontSize: 12, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.message ?? "（無說明）"}</span>
+                {v.ddlCheck && (
+                  <span style={{ fontSize: 9, fontWeight: 700, flexShrink: 0, padding: "1px 6px", borderRadius: 8,
+                    background: v.ddlCheck.errors > 0 ? "rgba(248,113,113,0.15)" : v.ddlCheck.warnings > 0 ? "rgba(251,191,36,0.15)" : "rgba(74,222,128,0.15)",
+                    color: v.ddlCheck.errors > 0 ? "var(--error,#f87171)" : v.ddlCheck.warnings > 0 ? "var(--warning)" : "var(--success)",
+                    border: `1px solid ${v.ddlCheck.errors > 0 ? "rgba(248,113,113,0.3)" : v.ddlCheck.warnings > 0 ? "rgba(251,191,36,0.3)" : "rgba(74,222,128,0.3)"}` }}>
+                    {v.ddlCheck.errors > 0 ? `✕ ${v.ddlCheck.errors}e` : v.ddlCheck.warnings > 0 ? `⚠ ${v.ddlCheck.warnings}w` : "✓ DDL"}
+                  </span>
+                )}
                 <span style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0 }}>{new Date(v.createdAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
               </div>
               {/* Diff summary */}
@@ -1636,7 +1719,15 @@ function DdlPanel({ table, schema, schemaId, onApplied }: { table: Table | null;
                   )}
                 </div>
               ) : (
-                <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-3)" }}>初始版本（無 diff）</div>
+                <div style={{ padding: "8px 12px" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>初始快照 · {v.snapshot.tables.length} 張 Table</div>
+                  {v.snapshot.tables.map(t => (
+                    <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0", fontSize: 11 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-2)" }}>{t.name}</span>
+                      <span style={{ color: "var(--text-3)", fontSize: 10 }}>{t.fields.length} 欄位</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           ))}

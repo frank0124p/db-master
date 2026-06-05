@@ -234,6 +234,10 @@
     "22": "wip_move",
     "23": "wip_defect"
   },
-  "namingIdToStdName": {},
+  "namingIdToStdName": {
+    "1": "chip_temp_max",
+    "2": "die_bond_strength",
+    "3": "etch_depth_nm"
+  },
   "wideTableIdToName": {}
 }

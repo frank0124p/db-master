@@ -71,6 +71,12 @@ export const NamingEntryRowSchema = z.object({
 });
 export type NamingEntryRow = z.infer<typeof NamingEntryRowSchema>;
 
+export interface ReviewerStatus {
+  userId: string;
+  name: string;
+  signedAt: string | null;
+}
+
 export interface NamingEntry {
   id: number;
   concept: string;
@@ -82,6 +88,17 @@ export interface NamingEntry {
   aiDescription: string | null;
   description: string | null;
   updatedAt: string;
+  status: "pending" | "approved" | "rejected";
+  reviewers: ReviewerStatus[];
+}
+
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  role: import("./roles.js").RoleId;
+  suiteIds: number[];
+  createdAt: string;
 }
 
 // ── SchemaLayer ──

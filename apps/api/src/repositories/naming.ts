@@ -18,6 +18,8 @@ interface NamingFile {
   id: number; concept: string; stdName: string; aliases: string[];
   domain: string; tags: string[]; layers: string[]; aiDescription: string | null;
   description: string | null; createdAt: string; updatedAt: string;
+  status: "pending" | "approved" | "rejected";
+  reviewers?: { userId: string; name: string; signedAt: string | null }[];
 }
 
 function namingFile(stdName: string): string {
@@ -35,16 +37,21 @@ function toEntry(f: NamingFile): NamingEntry {
     id: f.id, concept: f.concept, stdName: f.stdName, aliases: f.aliases,
     domain: f.domain, tags: f.tags, layers: f.layers ?? [],
     aiDescription: f.aiDescription, description: f.description, updatedAt: f.updatedAt,
+    status: f.status ?? "approved",
+    reviewers: f.reviewers ?? [],
   };
 }
 
-export async function listNamingEntries(domain?: string): Promise<NamingEntry[]> {
+export async function listNamingEntries(domain?: string, status?: "pending" | "approved" | "rejected"): Promise<NamingEntry[]> {
   const slugs = await store.listJsonFileSlugs(store.dataPath("naming"));
   const entries: NamingEntry[] = [];
+  const statusFilter = status ?? "approved";
   for (const slug of slugs) {
     const f = await store.readJson<NamingFile>(namingFile(slug));
     if (!f) continue;
     if (domain && f.domain !== domain) continue;
+    const entryStatus = f.status ?? "approved";
+    if (entryStatus !== statusFilter) continue;
     entries.push(toEntry(f));
   }
   return entries.sort((a, b) => a.stdName.localeCompare(b.stdName));
@@ -66,6 +73,7 @@ export async function createNamingEntry(input: CreateNamingEntryInput): Promise<
     tags: input.tags ?? [], layers: input.layers ?? [],
     aiDescription: input.ai_description ?? null,
     description: input.description ?? null, createdAt: now, updatedAt: now,
+    status: "pending",
   };
   await store.writeJson(namingFile(input.std_name), f);
   await store.indexSetStr("namingIdToStdName", id, input.std_name);
@@ -104,4 +112,42 @@ export async function deleteNamingEntry(id: number): Promise<void> {
   if (!f) throw new NotFoundError("NamingEntry", id);
   await store.deleteFile(filePath);
   await store.indexDelete("namingIdToStdName", id);
+}
+
+export async function approveNamingEntry(id: number): Promise<NamingEntry> {
+  const filePath = await resolveNamingFile(id);
+  const f = await store.readJson<NamingFile>(filePath);
+  if (!f) throw new NotFoundError("NamingEntry", id);
+  f.status = "approved";
+  f.updatedAt = new Date().toISOString();
+  await store.writeJson(filePath, f);
+  return toEntry(f);
+}
+
+export async function rejectNamingEntry(id: number): Promise<NamingEntry> {
+  const filePath = await resolveNamingFile(id);
+  const f = await store.readJson<NamingFile>(filePath);
+  if (!f) throw new NotFoundError("NamingEntry", id);
+  f.status = "rejected";
+  f.updatedAt = new Date().toISOString();
+  await store.writeJson(filePath, f);
+  return toEntry(f);
+}
+
+export async function assignReviewers(
+  id: number,
+  reviewerIds: { userId: string; name: string }[]
+): Promise<NamingEntry> {
+  const filePath = await resolveNamingFile(id);
+  const f = await store.readJson<NamingFile>(filePath);
+  if (!f) throw new NotFoundError("NamingEntry", id);
+  // Preserve existing signatures, add new, remove ones not in list
+  const existing = f.reviewers ?? [];
+  f.reviewers = reviewerIds.map(r => {
+    const prev = existing.find(e => e.userId === r.userId);
+    return { userId: r.userId, name: r.name, signedAt: prev?.signedAt ?? null };
+  });
+  f.updatedAt = new Date().toISOString();
+  await store.writeJson(filePath, f);
+  return toEntry(f);
 }

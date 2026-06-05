@@ -17,9 +17,24 @@ import type {
   WideTableSummary, WideTableDetail, WideTablePreview,
   DryRunResult, ImportResult, RuleDetail, RuleSnapshot,
   TableNamingCheck, LayerSettings, DomainDef,
+  AppUser, RoleDef,
 } from "../api.js";
 
 // ── in-memory mutable state ───────────────────────────────────────────────────
+
+let mockUsers: AppUser[] = [
+  { id: "u_admin", name: "系統管理員", email: "admin@example.com", role: "admin", suiteIds: [], createdAt: "2026-01-01T00:00:00.000Z" },
+  { id: "u_plm_owner", name: "PLM 負責人", email: "plm-owner@example.com", role: "suite_owner", suiteIds: [1], createdAt: "2026-01-01T00:00:00.000Z" },
+  { id: "u_mes_owner", name: "MES 負責人", email: "mes-owner@example.com", role: "suite_owner", suiteIds: [2], createdAt: "2026-01-01T00:00:00.000Z" },
+  { id: "u_maintainer", name: "字典維護者", email: "maintainer@example.com", role: "maintainer", suiteIds: [], createdAt: "2026-01-01T00:00:00.000Z" },
+];
+
+const mockRoleDefs: Record<string, RoleDef> = {
+  admin: { label: "最高管理員", description: "全域管理員，擁有所有操作權限。", color: "#fb7185", permissions: { approveNaming: true, rejectNaming: true, assignReviewers: true, createNaming: true, editNaming: true, deleteNaming: true, manageUsers: true } },
+  suite_owner: { label: "Suite Owner", description: "產品套件負責人，可審核自己套件範圍內的命名詞彙。", color: "#f59e0b", permissions: { approveNaming: true, rejectNaming: true, assignReviewers: true, createNaming: true, editNaming: true, deleteNaming: false, manageUsers: false } },
+  maintainer: { label: "Maintainer", description: "維護者，可新增與編輯詞彙，無法審核。", color: "#38b6f0", permissions: { approveNaming: false, rejectNaming: false, assignReviewers: false, createNaming: true, editNaming: true, deleteNaming: false, manageUsers: false } },
+  viewer: { label: "檢視者", description: "唯讀，只能瀏覽字典與 Schema。", color: "#7b899e", permissions: { approveNaming: false, rejectNaming: false, assignReviewers: false, createNaming: false, editNaming: false, deleteNaming: false, manageUsers: false } },
+};
 
 let schemas = [...mockSchemas];
 const schemaDetails: Record<number, SchemaDetail> = { 1: { ...plmSchema }, 2: { ...mesSchema } };
@@ -350,9 +365,14 @@ export const mockApi = {
   },
 
   naming: {
-    list: async (_domain?: string): Promise<NamingEntry[]> => {
+    list: async (_domain?: string, _status?: "pending" | "approved" | "rejected"): Promise<NamingEntry[]> => {
       await delay(80);
-      return [...naming];
+      const s = _status ?? "approved";
+      return naming.filter(e => (e.status ?? "approved") === s);
+    },
+    listPending: async (): Promise<NamingEntry[]> => {
+      await delay(80);
+      return naming.filter(e => (e.status ?? "approved") === "pending");
     },
     create: async (b: { concept: string; std_name: string; aliases: string[]; domain?: string; description?: string }): Promise<NamingEntry> => {
       await delay(100);
@@ -360,7 +380,7 @@ export const mockApi = {
         id: uid(), concept: b.concept, stdName: b.std_name,
         aliases: b.aliases, domain: b.domain ?? "semiconductor",
         tags: [], layers: [], aiDescription: null, description: b.description ?? null,
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(), status: "pending", reviewers: [],
       };
       naming = [...naming, entry];
       return entry;
@@ -377,6 +397,7 @@ export const mockApi = {
         layers: b.layers ?? e.layers,
         aiDescription: b.ai_description ?? e.aiDescription,
         description: b.description ?? e.description,
+        reviewers: e.reviewers ?? [],
       } : e);
       return naming.find(e => e.id === id)!;
     },
@@ -393,6 +414,29 @@ export const mockApi = {
           stdName: n, matchedAlias: null, distance: null,
         },
       }));
+    },
+    approve: async (id: number): Promise<NamingEntry> => {
+      await delay(80);
+      naming = naming.map(e => e.id === id ? { ...e, status: "approved" as const, updatedAt: new Date().toISOString() } : e);
+      return naming.find(e => e.id === id)!;
+    },
+    reject: async (id: number): Promise<NamingEntry> => {
+      await delay(80);
+      naming = naming.map(e => e.id === id ? { ...e, status: "rejected" as const, updatedAt: new Date().toISOString() } : e);
+      return naming.find(e => e.id === id)!;
+    },
+    assignReviewers: async (id: number, reviewers: { userId: string; name: string }[]): Promise<NamingEntry> => {
+      await delay(80);
+      naming = naming.map(e => {
+        if (e.id !== id) return e;
+        const existing = e.reviewers ?? [];
+        const updated = reviewers.map(r => {
+          const prev = existing.find(x => x.userId === r.userId);
+          return { userId: r.userId, name: r.name, signedAt: prev?.signedAt ?? null };
+        });
+        return { ...e, reviewers: updated, updatedAt: new Date().toISOString() };
+      });
+      return naming.find(e => e.id === id)!;
     },
     suggestAI: async (id: number): Promise<NamingEntry> => {
       // ┌─────────────────────────────────────────────────────────────────────┐
@@ -497,6 +541,38 @@ export const mockApi = {
       pushedAt: new Date().toISOString(), status: "failed" as const,
     }),
     getPushLog: async () => [],
+  },
+  users: {
+    list: async (): Promise<AppUser[]> => {
+      await delay(60);
+      return [...mockUsers];
+    },
+    roles: async (): Promise<Record<string, RoleDef>> => {
+      await delay(40);
+      return { ...mockRoleDefs };
+    },
+    create: async (b: { name: string; email: string; role: AppUser["role"]; suiteIds?: number[] }): Promise<AppUser> => {
+      await delay(80);
+      const user: AppUser = {
+        id: `u${Date.now()}`,
+        name: b.name,
+        email: b.email,
+        role: b.role,
+        suiteIds: b.suiteIds ?? [],
+        createdAt: new Date().toISOString(),
+      };
+      mockUsers = [...mockUsers, user];
+      return user;
+    },
+    update: async (id: string, b: Partial<{ name: string; email: string; role: AppUser["role"]; suiteIds: number[] }>): Promise<AppUser> => {
+      await delay(60);
+      mockUsers = mockUsers.map(u => u.id === id ? { ...u, ...b } : u);
+      return mockUsers.find(u => u.id === id)!;
+    },
+    delete: async (id: string): Promise<void> => {
+      await delay(60);
+      mockUsers = mockUsers.filter(u => u.id !== id);
+    },
   },
   suites: {
     list: async () => [],

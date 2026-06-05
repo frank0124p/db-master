@@ -2,10 +2,10 @@
   "schemas": 5,
   "tables": 23,
   "fields": 181,
-  "namingEntries": 0,
-  "versions": 0,
+  "namingEntries": 3,
+  "versions": 1,
   "wideTables": 0,
   "wideSources": 0,
   "wideColumns": 0,
-  "suites": 1
+  "suites": 2
 }

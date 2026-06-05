@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode, type CSSProperties } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore, type Page, type Theme } from "./store.js";
 import { useT } from "./i18n.js";
@@ -375,6 +375,69 @@ function SchemaItem({ name, active, suiteColor, layerType, environment, onClick 
   );
 }
 
+function SchemaTreeItem({ schema, suiteColor, isSelected, onSelect, expanded, onToggle }: {
+  schema: import("./api.js").Schema;
+  suiteColor: string | null;
+  isSelected: boolean;
+  onSelect: () => void;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const { data: detail } = useQuery({
+    queryKey: ["schemas", schema.id],
+    queryFn: () => api.schemas.get(schema.id),
+    enabled: expanded,
+    staleTime: 30_000,
+  });
+  const [hover, setHover] = useState(false);
+  return (
+    <div>
+      <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{ display: "flex", alignItems: "center", marginBottom: 1, borderRadius: "var(--radius)",
+          background: isSelected ? "var(--accent-dim)" : hover ? "var(--bg-2)" : "transparent" }}>
+        <div onClick={e => { e.stopPropagation(); onToggle(); }}
+          style={{ width: 20, flexShrink: 0, alignSelf: "stretch", display: "flex", alignItems: "center",
+            justifyContent: "center", cursor: "pointer", color: "var(--text-3)", fontSize: 9,
+            opacity: hover ? 1 : 0.6 }}>
+          {expanded ? "▾" : "▸"}
+        </div>
+        <div onClick={onSelect}
+          style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6,
+            padding: "6px 8px 6px 2px", cursor: "pointer" }}>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+            background: suiteColor ?? (isSelected ? "var(--accent)" : "var(--text-3)") }} />
+          <div style={{ fontSize: 12, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            color: isSelected ? "var(--accent)" : "var(--text-2)" }}>{schema.name}</div>
+          {schema.environment && (
+            <span style={{ fontSize: 9, fontWeight: 700, flexShrink: 0, letterSpacing: "0.3px",
+              color: ENV_COLOR[schema.environment], background: `${ENV_COLOR[schema.environment]}22`,
+              border: `1px solid ${ENV_COLOR[schema.environment]}44`, borderRadius: 3, padding: "1px 4px" }}>
+              {schema.environment}
+            </span>
+          )}
+        </div>
+      </div>
+      {expanded && (
+        <div style={{ paddingLeft: 20, paddingBottom: 2 }}>
+          {detail
+            ? detail.tables.map(table => (
+                <div key={table.id} onClick={onSelect}
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 8px",
+                    borderRadius: 3, cursor: "pointer", color: "var(--text-3)", fontSize: 11 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.color = "var(--text-2)"; (e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.color = "var(--text-3)"; (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
+                  <span style={{ fontSize: 9, flexShrink: 0, opacity: 0.6 }}>⊞</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{table.name}</span>
+                </div>
+              ))
+            : <div style={{ fontSize: 10, color: "var(--text-3)", padding: "4px 8px" }}>載入中…</div>
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Suite Management Modal ────────────────────────────────────────────────────
 function SuiteManageModal({ suites, schemas, activeSuiteId, onClose }: {
   suites: ProductSuite[];
@@ -600,6 +663,14 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
   const [showSuiteModal, setShowSuiteModal] = useState(false);
   const [showFolderEditor, setShowFolderEditor] = useState(false);
   const [reloading, setReloading] = useState(false);
+  const [treeCollapsed, setTreeCollapsed] = useState<Set<string>>(new Set());
+  function toggleTree(key: string) {
+    setTreeCollapsed(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  }
+  const [expandedSchemas, setExpandedSchemas] = useState<Set<number>>(new Set());
+  function toggleSchema(id: number) {
+    setExpandedSchemas(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
   const [form, setForm] = useState({ name: "", description: "", domain: "semiconductor", suiteId: "", layerType: "", environment: "" });
   const { data: domains } = useQuery({ queryKey: ["domains"], queryFn: () => api.settings.getDomains() });
   const domainList = domains ?? [];
@@ -635,15 +706,14 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
   }
 
   const suiteMap = new Map((suites ?? []).map(s => [s.id, s]));
-  const filteredSchemas = activeSuiteId === null
-    ? (schemas ?? [])
-    : (schemas ?? []).filter(s => s.suiteId === activeSuiteId);
 
   return (
     <>
       <div style={{ padding: "12px 14px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.8px" }}>{t("sidebar.schemas")}</span>
         <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => setSuitePicked(false)} title="切換 Suite"
+            style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>⇄</button>
           <button onClick={() => setShowFolderEditor(true)} title="管理領域資料夾"
             style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>⊟</button>
           <button onClick={() => setShowSuiteModal(true)} title="管理 Suite"
@@ -670,112 +740,165 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
         </div>
       )}
 
-      {suites && suites.length > 0 && (
-        <div style={{ padding: "4px 8px 4px", display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0, alignItems: "center" }}>
-          <button onClick={() => setSuitePicked(false)}
-            title="切換 Suite"
-            style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, border: "1px solid var(--border)", cursor: "pointer", background: "transparent", color: "var(--text-3)", marginRight: 2 }}>
-            ⇄
-          </button>
-          <button onClick={() => setActiveSuiteId(null)}
-            style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: "1px solid var(--border)", cursor: "pointer", fontWeight: activeSuiteId === null ? 700 : 400,
-              background: activeSuiteId === null ? "var(--accent-dim)" : "transparent",
-              color: activeSuiteId === null ? "var(--accent)" : "var(--text-3)" }}>
-            全部
-          </button>
-          {suites.map(s => (
-            <button key={s.id} onClick={() => setActiveSuiteId(s.id)}
-              style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, border: `1px solid ${activeSuiteId === s.id ? (s.color ?? "var(--accent)") : "var(--border)"}`, cursor: "pointer",
-                background: activeSuiteId === s.id ? `${s.color ?? "var(--accent)"}22` : "transparent",
-                color: activeSuiteId === s.id ? (s.color ?? "var(--accent)") : "var(--text-3)",
-                fontWeight: activeSuiteId === s.id ? 700 : 400,
-                display: "flex", alignItems: "center", gap: 4 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color ?? "var(--text-3)", display: "inline-block", flexShrink: 0 }} />
-              {s.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
         {(() => {
-          const renderItem = (s: import("./api.js").Schema) => (
-            <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
-              suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
-              layerType={s.layerType} environment={s.environment}
-              onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
+          const allSchemas = schemas ?? [];
+          const allSuites = suites ?? [];
+
+          const renderSchemaItem = (sc: import("./api.js").Schema, suiteColor: string | null) => (
+            <SchemaTreeItem key={sc.id} schema={sc} suiteColor={suiteColor}
+              isSelected={selectedSchemaId === sc.id}
+              onSelect={() => { setSelectedSchemaId(sc.id); onSchemaSelect?.(); }}
+              expanded={expandedSchemas.has(sc.id)}
+              onToggle={() => toggleSchema(sc.id)} />
           );
 
-          const layerSubHeader = (label: string) => (
-            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", padding: "4px 4px 2px 14px" }}>{label}</div>
+          // Group all schemas by suiteId
+          const bySuite = new Map<number | null, import("./api.js").Schema[]>();
+          for (const sc of allSchemas) {
+            const k = sc.suiteId ?? null;
+            if (!bySuite.has(k)) bySuite.set(k, []);
+            bySuite.get(k)!.push(sc);
+          }
+
+          const treeRow = (
+            content: ReactNode,
+            indent: number,
+            onClick?: () => void,
+            extraStyle?: CSSProperties,
+          ) => (
+            <div onClick={onClick}
+              style={{ display: "flex", alignItems: "center", gap: 5, paddingLeft: indent, paddingRight: 8, minHeight: 22, cursor: onClick ? "pointer" : undefined, userSelect: "none", ...extraStyle }}>
+              {content}
+            </div>
           );
-
-          const renderLayerGroups = (schemasInDomain: import("./api.js").Schema[]) => {
-            const byLayer = new Map<string | null, import("./api.js").Schema[]>();
-            for (const s of schemasInDomain) {
-              const k = s.layerType;
-              if (!byLayer.has(k)) byLayer.set(k, []);
-              byLayer.get(k)!.push(s);
-            }
-            return (
-              <>
-                {schemaLayers.map(layer => {
-                  const items = byLayer.get(layer.id as SchemaLayer) ?? [];
-                  if (items.length === 0) return null;
-                  return <div key={layer.id}>{layerSubHeader(layer.label)}{items.map(renderItem)}</div>;
-                })}
-                {(byLayer.get(null) ?? []).map(renderItem)}
-              </>
-            );
-          };
-
-          if (domainList.length === 0) {
-            return filteredSchemas.map(s => (
-              <SchemaItem key={s.id} name={s.name} active={selectedSchemaId === s.id}
-                suiteColor={s.suiteId != null ? (suiteMap.get(s.suiteId)?.color ?? null) : null}
-                layerType={s.layerType} environment={s.environment}
-                onClick={() => { setSelectedSchemaId(s.id); onSchemaSelect?.(); }} />
-            ));
-          }
-
-          const byDomain = new Map<string, import("./api.js").Schema[]>();
-          const undomain: import("./api.js").Schema[] = [];
-          for (const s of filteredSchemas) {
-            if (domainList.some(d => d.id === s.domain)) {
-              if (!byDomain.has(s.domain)) byDomain.set(s.domain, []);
-              byDomain.get(s.domain)!.push(s);
-            } else {
-              undomain.push(s);
-            }
-          }
-
-          const nonEmpty = domainList.filter(d => (byDomain.get(d.id)?.length ?? 0) > 0);
-          const showHeaders = nonEmpty.length > 1 || (nonEmpty.length === 1 && undomain.length > 0);
-
-          if (!showHeaders) {
-            return renderLayerGroups(filteredSchemas);
-          }
 
           return (
             <>
-              {domainList.map(domain => {
-                const domainSchemas = byDomain.get(domain.id) ?? [];
-                if (domainSchemas.length === 0) return null;
+              {allSuites.map(suite => {
+                const suiteSchemas = bySuite.get(suite.id) ?? [];
+                const suiteKey = `s-${suite.id}`;
+                const suiteOpen = !treeCollapsed.has(suiteKey);
+
+                const byDomain = new Map<string, import("./api.js").Schema[]>();
+                const undomained: import("./api.js").Schema[] = [];
+                for (const sc of suiteSchemas) {
+                  if (domainList.some(d => d.id === sc.domain)) {
+                    if (!byDomain.has(sc.domain)) byDomain.set(sc.domain, []);
+                    byDomain.get(sc.domain)!.push(sc);
+                  } else {
+                    undomained.push(sc);
+                  }
+                }
+
                 return (
-                  <div key={domain.id} style={{ marginBottom: 6 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", padding: "5px 6px 3px 8px", borderLeft: `3px solid ${domain.color ?? "var(--border-light)"}`, color: domain.color ?? "var(--text-2)", marginBottom: 1 }}>
-                      {domain.name}
-                    </div>
-                    {renderLayerGroups(domainSchemas)}
+                  <div key={suite.id} style={{ marginBottom: 2 }}>
+                    {treeRow(
+                      <>
+                        <span style={{ fontSize: 8, color: "var(--text-3)", width: 8, flexShrink: 0 }}>{suiteOpen ? "▾" : "▸"}</span>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: suite.color ?? "var(--accent)", flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-1)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{suite.name}</span>
+                        <span style={{ fontSize: 9, color: "var(--text-3)", flexShrink: 0 }}>{suiteSchemas.length}</span>
+                      </>,
+                      8, () => toggleTree(suiteKey),
+                      { borderLeft: `3px solid ${suite.color ?? "var(--accent)"}`, paddingTop: 4, paddingBottom: 4 },
+                    )}
+
+                    {suiteOpen && (
+                      <div>
+                        {domainList.map(domain => {
+                          const domainSchemas = byDomain.get(domain.id) ?? [];
+                          if (domainSchemas.length === 0) return null;
+                          const domainKey = `d-${suite.id}-${domain.id}`;
+                          const domainOpen = !treeCollapsed.has(domainKey);
+
+                          const byLayer = new Map<string | null, import("./api.js").Schema[]>();
+                          for (const sc of domainSchemas) {
+                            if (!byLayer.has(sc.layerType)) byLayer.set(sc.layerType, []);
+                            byLayer.get(sc.layerType)!.push(sc);
+                          }
+
+                          return (
+                            <div key={domain.id}>
+                              {treeRow(
+                                <>
+                                  <span style={{ fontSize: 8, color: "var(--text-3)", width: 8, flexShrink: 0 }}>{domainOpen ? "▾" : "▸"}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: domain.color ?? "var(--text-2)", letterSpacing: "0.3px", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{domain.name}</span>
+                                  <span style={{ fontSize: 9, color: "var(--text-3)", flexShrink: 0 }}>{domainSchemas.length}</span>
+                                </>,
+                                20, () => toggleTree(domainKey),
+                              )}
+                              {domainOpen && (
+                                <div>
+                                  {schemaLayers.map(layer => {
+                                    const layerSchemas = byLayer.get(layer.id as SchemaLayer) ?? [];
+                                    if (layerSchemas.length === 0) return null;
+                                    const layerKey = `l-${suite.id}-${domain.id}-${layer.id}`;
+                                    const layerOpen = !treeCollapsed.has(layerKey);
+                                    return (
+                                      <div key={layer.id}>
+                                        {treeRow(
+                                          <>
+                                            <span style={{ fontSize: 8, color: "var(--text-3)", width: 8, flexShrink: 0 }}>{layerOpen ? "▾" : "▸"}</span>
+                                            <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{layer.label}</span>
+                                          </>,
+                                          32, () => toggleTree(layerKey),
+                                        )}
+                                        {layerOpen && <div style={{ paddingLeft: 28 }}>{layerSchemas.map(sc => renderSchemaItem(sc, suite.color ?? null))}</div>}
+                                      </div>
+                                    );
+                                  })}
+                                  {(byLayer.get(null) ?? []).length > 0 && (
+                                    <div style={{ paddingLeft: 28 }}>{(byLayer.get(null) ?? []).map(sc => renderSchemaItem(sc, suite.color ?? null))}</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {undomained.map(sc => (
+                          <div key={sc.id} style={{ paddingLeft: 20 }}>{renderSchemaItem(sc, suite.color ?? null)}</div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
-              {undomain.length > 0 && (
-                <div style={{ marginBottom: 4 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", padding: "5px 4px 3px", letterSpacing: "0.4px" }}>未指定領域</div>
-                  {renderLayerGroups(undomain)}
+
+              {/* Schemas with no suite */}
+              {(bySuite.get(null) ?? []).length > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", padding: "4px 8px 2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>未指定 Suite</div>
+                  {(bySuite.get(null) ?? []).map(sc => renderSchemaItem(sc, null))}
                 </div>
               )}
+
+              {/* No suites at all — flat list grouped by domain + layer */}
+              {allSuites.length === 0 && (() => {
+                const byDomain = new Map<string, import("./api.js").Schema[]>();
+                const undomain: import("./api.js").Schema[] = [];
+                for (const sc of allSchemas) {
+                  if (domainList.some(d => d.id === sc.domain)) {
+                    if (!byDomain.has(sc.domain)) byDomain.set(sc.domain, []);
+                    byDomain.get(sc.domain)!.push(sc);
+                  } else { undomain.push(sc); }
+                }
+                return (
+                  <div style={{ padding: "0 8px" }}>
+                    {domainList.map(domain => {
+                      const ds = byDomain.get(domain.id) ?? [];
+                      if (ds.length === 0) return null;
+                      return (
+                        <div key={domain.id} style={{ marginBottom: 4 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, padding: "5px 6px 3px 8px", borderLeft: `3px solid ${domain.color ?? "var(--border-light)"}`, color: domain.color ?? "var(--text-2)" }}>{domain.name}</div>
+                          {ds.map(sc => renderSchemaItem(sc, null))}
+                        </div>
+                      );
+                    })}
+                    {undomain.map(sc => renderSchemaItem(sc, null))}
+                  </div>
+                );
+              })()}
             </>
           );
         })()}
@@ -847,7 +970,7 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
 // Desktop/Tablet sidebar shell
 function Sidebar({ onSearch }: { onSearch?: () => void }) {
   return (
-    <div style={{ width: 220, background: "var(--bg-1)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, overflow: "hidden" }}>
+    <div style={{ width: "100%", height: "100%", background: "var(--bg-1)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {onSearch ? <SidebarContent onSearch={onSearch} /> : <SidebarContent />}
     </div>
   );
@@ -988,6 +1111,22 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const s = localStorage.getItem("schema-studio-sidebar-width");
+    return s ? Math.max(160, Math.min(480, Number(s))) : 220;
+  });
+  const resizing = useRef(false);
+  const resizeStartX = useRef(0);
+  const resizeStartW = useRef(0);
+
+  function startSidebarResize(e: React.MouseEvent) {
+    e.preventDefault();
+    resizing.current = true;
+    resizeStartX.current = e.clientX;
+    resizeStartW.current = sidebarWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -996,8 +1135,26 @@ export default function App() {
         setShowSearch(v => !v);
       }
     }
+    function onMove(e: MouseEvent) {
+      if (!resizing.current) return;
+      const newW = Math.max(160, Math.min(480, resizeStartW.current + e.clientX - resizeStartX.current));
+      setSidebarWidth(newW);
+      localStorage.setItem("schema-studio-sidebar-width", String(newW));
+    }
+    function onUp() {
+      if (!resizing.current) return;
+      resizing.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
   }, []);
 
   // Close mobile menu when resizing to desktop
@@ -1073,9 +1230,17 @@ export default function App() {
         {/* Sidebar: desktop always, tablet when open, mobile = hidden (in drawer) */}
         {!isMobile && (
           <div className="sidebar-panel"
-            style={{ width: (isDesktop || sidebarOpen) ? 220 : 0, opacity: (isDesktop || sidebarOpen) ? 1 : 0 }}>
+            style={{ width: (isDesktop || sidebarOpen) ? sidebarWidth : 0, opacity: (isDesktop || sidebarOpen) ? 1 : 0 }}>
             {(isDesktop || sidebarOpen) && <Sidebar onSearch={() => setShowSearch(true)} />}
           </div>
+        )}
+        {/* Drag handle */}
+        {!isMobile && (isDesktop || sidebarOpen) && (
+          <div onMouseDown={startSidebarResize}
+            style={{ width: 4, flexShrink: 0, cursor: "col-resize", background: "var(--border)", zIndex: 10, transition: "background 0.15s" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--accent)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--border)"; }}
+          />
         )}
 
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
