@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import * as store from "../db/fileStore.js";
 import { z } from "zod";
 import type { AppUser } from "@schema-studio/core";
@@ -33,7 +34,7 @@ export async function getUserById(id: string): Promise<AppUser | null> {
 
 export async function createUser(input: CreateUserInput): Promise<AppUser> {
   const users = await readUsers();
-  const id = `u${Date.now()}`;
+  const id = `u_${randomUUID()}`;
   const user: AppUser = {
     id, name: input.name, email: input.email,
     role: input.role as RoleId,
