@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { api, type LlmSettings, type MinioSettings } from "../api.js";
+import { api, type LlmSettings, type MinioSettings, type AppUser, type RoleDef } from "../api.js";
 import { useStore } from "../store.js";
 
 // ── shared ────────────────────────────────────────────────────────────────────
@@ -333,11 +333,309 @@ function StorageTab() {
   );
 }
 
+// ── Users & Roles tab ─────────────────────────────────────────────────────────
+
+const ROLE_ORDER: AppUser["role"][] = ["admin", "suite_owner", "maintainer", "viewer"];
+
+function RoleBadge({ role, roles }: { role: AppUser["role"]; roles: Record<string, RoleDef> }) {
+  const def = roles[role];
+  if (!def) return <span>{role}</span>;
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 8,
+      color: def.color, background: `${def.color}18`, border: `1px solid ${def.color}40` }}>
+      {def.label}
+    </span>
+  );
+}
+
+function UserModal({
+  user,
+  roles,
+  suites,
+  onClose,
+  onSave,
+}: {
+  user?: AppUser;
+  roles: Record<string, RoleDef>;
+  suites: { id: number; name: string }[];
+  onClose: () => void;
+  onSave: (data: { name: string; email: string; role: AppUser["role"]; suiteIds: number[] }) => void;
+}) {
+  const isEdit = !!user;
+  const [form, setForm] = useState({
+    name: user?.name ?? "",
+    email: user?.email ?? "",
+    role: user?.role ?? ("maintainer" as AppUser["role"]),
+    suiteIds: user?.suiteIds ?? [] as number[],
+  });
+
+  function toggleSuite(id: number) {
+    setForm(f => ({
+      ...f,
+      suiteIds: f.suiteIds.includes(id)
+        ? f.suiteIds.filter(s => s !== id)
+        : [...f.suiteIds, id],
+    }));
+  }
+
+  const inputStyle = {
+    padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)",
+    background: "var(--bg-3)", color: "var(--text-1)", fontSize: 13, outline: "none",
+    width: "100%", boxSizing: "border-box" as const,
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: 420, padding: 24, display: "flex", flexDirection: "column", gap: 14 }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-1)" }}>
+          {isEdit ? "編輯使用者" : "新增使用者"}
+        </div>
+
+        <div>
+          <label style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 4, display: "block", textTransform: "uppercase", letterSpacing: "0.5px" }}>姓名</label>
+          <input style={inputStyle} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="姓名" />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 4, display: "block", textTransform: "uppercase", letterSpacing: "0.5px" }}>電子郵件</label>
+          <input style={inputStyle} value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="user@example.com" type="email" />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 4, display: "block", textTransform: "uppercase", letterSpacing: "0.5px" }}>角色</label>
+          <select style={inputStyle} value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as AppUser["role"], suiteIds: [] }))}>
+            {ROLE_ORDER.map(r => (
+              <option key={r} value={r}>{roles[r]?.label ?? r}</option>
+            ))}
+          </select>
+        </div>
+
+        {form.role === "suite_owner" && suites.length > 0 && (
+          <div>
+            <label style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 6, display: "block", textTransform: "uppercase", letterSpacing: "0.5px" }}>負責 Suite</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 160, overflowY: "auto" }}>
+              {suites.map(s => {
+                const selected = form.suiteIds.includes(s.id);
+                return (
+                  <div key={s.id} onClick={() => toggleSuite(s.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, cursor: "pointer",
+                      background: selected ? "rgba(123,140,255,0.1)" : "var(--bg-3)",
+                      border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}` }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                      background: selected ? "var(--accent)" : "var(--bg-4)",
+                      border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+                      display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {selected && <span style={{ color: "#fff", fontSize: 10, lineHeight: 1 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize: 12, color: "var(--text-1)" }}>{s.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+          <button className="btn btn-ghost" onClick={onClose}>取消</button>
+          <button className="btn btn-primary"
+            onClick={() => {
+              if (!form.name.trim() || !form.email.trim()) return;
+              onSave(form);
+            }}>
+            {isEdit ? "儲存" : "新增"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UsersTab() {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const [showModal, setShowModal] = useState(false);
+  const [editUser, setEditUser] = useState<AppUser | null>(null);
+
+  const { data: users, isLoading: loadingUsers } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => api.users.list(),
+  });
+
+  const { data: roles } = useQuery({
+    queryKey: ["users-roles"],
+    queryFn: () => api.users.roles(),
+  });
+
+  const { data: suites } = useQuery({
+    queryKey: ["suites"],
+    queryFn: () => api.suites.list(),
+  });
+
+  const createMut = useMutation({
+    mutationFn: (b: { name: string; email: string; role: AppUser["role"]; suiteIds: number[] }) =>
+      api.users.create(b),
+    onSuccess: (u) => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      setShowModal(false);
+      showToast(`✓ 已新增使用者：${u.name}`);
+    },
+    onError: (e) => showToast(`新增失敗: ${String(e)}`),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<{ name: string; email: string; role: AppUser["role"]; suiteIds: number[] }> }) =>
+      api.users.update(id, data),
+    onSuccess: (u) => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      setEditUser(null);
+      showToast(`✓ 已更新：${u.name}`);
+    },
+    onError: (e) => showToast(`更新失敗: ${String(e)}`),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.users.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      showToast("已刪除使用者");
+    },
+    onError: (e) => showToast(`刪除失敗: ${String(e)}`),
+  });
+
+  const rolesMap = roles ?? {} as Record<string, RoleDef>;
+  const suitesArr = suites ?? [];
+
+  const PERM_LABELS: Record<string, string> = {
+    approveNaming: "核准詞彙",
+    rejectNaming: "拒絕詞彙",
+    assignReviewers: "指派審核人",
+    createNaming: "新增詞彙",
+    editNaming: "編輯詞彙",
+    deleteNaming: "刪除詞彙",
+    manageUsers: "管理使用者",
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Role definitions table */}
+      <div>
+        <SectionTitle>角色定義</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
+          {ROLE_ORDER.map(roleId => {
+            const def = rolesMap[roleId];
+            if (!def) return null;
+            return (
+              <div key={roleId} style={{ background: "var(--bg-3)", borderRadius: 8, border: "1px solid var(--border)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <RoleBadge role={roleId} roles={rolesMap} />
+                  <span style={{ fontSize: 11, color: "var(--text-3)", flex: 1 }}>{def.description}</span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {Object.entries(def.permissions).map(([perm, allowed]) => (
+                    <span key={perm} style={{ fontSize: 10, padding: "1px 7px", borderRadius: 8, fontWeight: 500,
+                      background: allowed ? "rgba(74,222,128,0.1)" : "var(--bg-4)",
+                      color: allowed ? "#4ade80" : "var(--text-3)",
+                      border: `1px solid ${allowed ? "#4ade8030" : "var(--border)"}` }}>
+                      {allowed ? "✓" : "–"} {PERM_LABELS[perm] ?? perm}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* User list */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <SectionTitle>使用者清單</SectionTitle>
+          <button className="btn btn-primary" onClick={() => setShowModal(true)} style={{ fontSize: 12, padding: "5px 14px" }}>
+            ＋ 新增使用者
+          </button>
+        </div>
+
+        {loadingUsers ? (
+          <div style={{ padding: 24, color: "var(--text-3)", textAlign: "center", fontSize: 12 }}>載入中…</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--bg-3)", borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)" }}>
+            <thead>
+              <tr style={{ background: "var(--bg-4)" }}>
+                {["姓名", "電子郵件", "角色", "Suite", "建立時間", ""].map((h, i) => (
+                  <th key={i} style={{ textAlign: "left", padding: "7px 12px", fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(users ?? []).map((u, i) => (
+                <tr key={u.id}
+                  style={{ borderBottom: i < (users ?? []).length - 1 ? "1px solid var(--border)" : "none" }}
+                  onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "var(--bg-4)"}
+                  onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}>
+                  <td style={{ padding: "8px 12px", fontSize: 12, color: "var(--text-1)", fontWeight: 600 }}>{u.name}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-2)", fontFamily: "var(--font-mono)" }}>{u.email}</td>
+                  <td style={{ padding: "8px 12px" }}>
+                    <RoleBadge role={u.role} roles={rolesMap} />
+                  </td>
+                  <td style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-3)" }}>
+                    {u.suiteIds.length === 0 ? "—" : u.suiteIds.map(sid => {
+                      const s = suitesArr.find(x => x.id === sid);
+                      return s?.name ?? String(sid);
+                    }).join(", ")}
+                  </td>
+                  <td style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-3)", whiteSpace: "nowrap" }}>
+                    {new Date(u.createdAt).toLocaleDateString("zh-TW")}
+                  </td>
+                  <td style={{ padding: "8px 12px" }}>
+                    <div style={{ display: "flex", gap: 5 }}>
+                      <button onClick={() => setEditUser(u)}
+                        style={{ padding: "2px 8px", borderRadius: 4, border: "none", fontSize: 11, cursor: "pointer", background: "var(--bg-4)", color: "var(--text-2)" }}>
+                        編輯
+                      </button>
+                      <button onClick={() => {
+                        if (confirm(`刪除使用者「${u.name}」？`)) deleteMut.mutate(u.id);
+                      }}
+                        style={{ padding: "2px 8px", borderRadius: 4, border: "none", fontSize: 11, cursor: "pointer", background: "var(--bg-4)", color: "var(--text-2)" }}
+                        onMouseEnter={ev => { const b = ev.target as HTMLButtonElement; b.style.background = "var(--error-dim)"; b.style.color = "var(--error)"; }}
+                        onMouseLeave={ev => { const b = ev.target as HTMLButtonElement; b.style.background = "var(--bg-4)"; b.style.color = "var(--text-2)"; }}>
+                        刪除
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {showModal && (
+        <UserModal
+          roles={rolesMap}
+          suites={suitesArr}
+          onClose={() => setShowModal(false)}
+          onSave={(data) => createMut.mutate(data)}
+        />
+      )}
+      {editUser && (
+        <UserModal
+          user={editUser}
+          roles={rolesMap}
+          suites={suitesArr}
+          onClose={() => setEditUser(null)}
+          onSave={(data) => updateMut.mutate({ id: editUser.id, data })}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Settings panel (drawer) ───────────────────────────────────────────────────
 
 const TABS = [
   { id: "llm" as const,     label: "LLM 設定",   icon: "✦" },
   { id: "storage" as const, label: "MinIO 儲存",  icon: "⬢" },
+  { id: "users" as const,   label: "使用者 & 角色", icon: "●" },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -390,7 +688,7 @@ export default function SettingsPanel({ onClose }: Props) {
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px 32px" }}>
-          {tab === "llm" ? <LlmTab /> : <StorageTab />}
+          {tab === "llm" ? <LlmTab /> : tab === "storage" ? <StorageTab /> : <UsersTab />}
         </div>
       </div>
     </>

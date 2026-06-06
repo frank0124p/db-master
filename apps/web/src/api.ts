@@ -25,11 +25,35 @@ export interface Table { id: number; name: string; comment: string | null; tags?
 
 export interface SchemaDetail extends Schema { tables: Table[]; }
 
+export interface ReviewerStatus {
+  userId: string;
+  name: string;
+  signedAt: string | null;
+}
+
 export interface NamingEntry {
   id: number; concept: string; stdName: string; aliases: string[];
   domain: string; tags: string[]; aiDescription: string | null; description: string | null;
   layers: string[];
   updatedAt: string;
+  status: "pending" | "approved" | "rejected";
+  reviewers: ReviewerStatus[];
+}
+
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  role: "admin" | "suite_owner" | "maintainer" | "viewer";
+  suiteIds: number[];
+  createdAt: string;
+}
+
+export interface RoleDef {
+  label: string;
+  description: string;
+  color: string;
+  permissions: Record<string, boolean>;
 }
 
 export type MatchStatus = "exact" | "alias" | "fuzzy" | "unknown";
@@ -376,7 +400,14 @@ const realApi = {
       req<DomainDef[]>("/settings/domains/reorder", { method: "PATCH", body: JSON.stringify({ ids }) }),
   },
   naming: {
-    list: (domain?: string) => req<NamingEntry[]>(`/naming-dictionary${domain ? `?domain=${domain}` : ""}`),
+    list: (domain?: string, status?: "pending" | "approved" | "rejected") => {
+      const params = new URLSearchParams();
+      if (domain) params.set("domain", domain);
+      if (status) params.set("status", status);
+      const qs = params.toString();
+      return req<NamingEntry[]>(`/naming-dictionary${qs ? `?${qs}` : ""}`);
+    },
+    listPending: () => req<NamingEntry[]>("/naming-dictionary?status=pending"),
     create: (b: { concept: string; std_name: string; aliases: string[]; domain?: string; description?: string }) =>
       req<NamingEntry>("/naming-dictionary", { method: "POST", body: JSON.stringify(b) }),
     update: (id: number, b: Partial<{ concept: string; std_name: string; aliases: string[]; domain: string; tags: string[]; ai_description: string; description: string; layers: string[] }>) =>
@@ -388,6 +419,12 @@ const realApi = {
       }),
     suggestAI: (id: number) =>
       req<NamingEntry>(`/naming-dictionary/${id}/suggest`, { method: "POST" }),
+    approve: (id: number) =>
+      req<NamingEntry>(`/naming-dictionary/${id}/approve`, { method: "POST" }),
+    reject: (id: number) =>
+      req<NamingEntry>(`/naming-dictionary/${id}/reject`, { method: "POST" }),
+    assignReviewers: (id: number, reviewers: { userId: string; name: string }[]) =>
+      req<NamingEntry>(`/naming-dictionary/${id}/reviewers`, { method: "POST", body: JSON.stringify({ reviewers }) }),
   },
   llm: {
     generate: (prompt: string, domain = "semiconductor") =>
@@ -409,6 +446,15 @@ const realApi = {
     push: (schemaId: number, opts?: { tableIds?: number[]; wideTableIds?: number[] }) =>
       req<PushRecord>(`/datahub/push/${schemaId}`, { method: "POST", body: JSON.stringify(opts ?? {}) }),
     getPushLog: () => req<PushRecord[]>("/datahub/push-log"),
+  },
+  users: {
+    list: () => req<AppUser[]>("/users"),
+    roles: () => req<Record<string, RoleDef>>("/users/roles"),
+    create: (b: { name: string; email: string; role: AppUser["role"]; suiteIds?: number[] }) =>
+      req<AppUser>("/users", { method: "POST", body: JSON.stringify(b) }),
+    update: (id: string, b: Partial<{ name: string; email: string; role: AppUser["role"]; suiteIds: number[] }>) =>
+      req<AppUser>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+    delete: (id: string) => req<void>(`/users/${id}`, { method: "DELETE" }),
   },
   suites: {
     list: (): Promise<ProductSuite[]> => req("/suites"),

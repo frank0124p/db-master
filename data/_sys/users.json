@@ -1,0 +1,34 @@
+[
+  {
+    "id": "u_admin",
+    "name": "系統管理員",
+    "email": "admin@example.com",
+    "role": "admin",
+    "suiteIds": [],
+    "createdAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "u_plm_owner",
+    "name": "PLM 負責人",
+    "email": "plm-owner@example.com",
+    "role": "suite_owner",
+    "suiteIds": [1],
+    "createdAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "u_mes_owner",
+    "name": "MES 負責人",
+    "email": "mes-owner@example.com",
+    "role": "suite_owner",
+    "suiteIds": [2],
+    "createdAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "u_maintainer",
+    "name": "字典維護者",
+    "email": "maintainer@example.com",
+    "role": "maintainer",
+    "suiteIds": [],
+    "createdAt": "2026-01-01T00:00:00.000Z"
+  }
+]

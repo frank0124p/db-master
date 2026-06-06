@@ -3,29 +3,72 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { api, type PreviewColumn, type PreviewSource, type WideTablePreview, type JoinType } from "../api.js";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type WideTableType = "unified" | "r2u";
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function WideTablePage() {
   const { selectedSchemaId } = useStore();
   const [view, setView] = useState<"list" | "builder" | "detail">("list");
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [layerTab, setLayerTab] = useState<WideTableType>("r2u");
 
   if (!selectedSchemaId) {
     return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>← 從左側選擇一個 Schema</div>;
   }
 
-  if (view === "builder") return <WideTableTypeSelector schemaId={selectedSchemaId} onDone={() => setView("list")} />;
+  if (view === "builder") return <WideTableBuilder schemaId={selectedSchemaId} wideTableType={layerTab} onDone={() => setView("list")} />;
   if (view === "detail" && detailId) return <WideTableDetailView schemaId={selectedSchemaId} id={detailId} onBack={() => setView("list")} />;
-  return <WideTableList schemaId={selectedSchemaId} onNew={() => setView("builder")} onOpen={id => { setDetailId(id); setView("detail"); }} />;
+  return (
+    <WideTableList
+      schemaId={selectedSchemaId}
+      layerTab={layerTab}
+      onTabChange={setLayerTab}
+      onNew={() => setView("builder")}
+      onOpen={id => { setDetailId(id); setView("detail"); }}
+    />
+  );
 }
 
 // ── List ──────────────────────────────────────────────────────────────────────
 
-function WideTableList({ schemaId, onNew, onOpen }: { schemaId: number; onNew: () => void; onOpen: (id: number) => void }) {
+const LAYER_TABS: { type: WideTableType; label: string; desc: string; color: string; bg: string; border: string }[] = [
+  {
+    type: "r2u",
+    label: "R2U",
+    desc: "原始 → 整合，多表 FK JOIN",
+    color: "#a78bfa",
+    bg: "rgba(167,139,250,0.12)",
+    border: "rgba(167,139,250,0.4)",
+  },
+  {
+    type: "unified",
+    label: "Unified",
+    desc: "整合層統一視圖",
+    color: "#34d399",
+    bg: "rgba(52,211,153,0.12)",
+    border: "rgba(52,211,153,0.4)",
+  },
+];
+
+function WideTableList({
+  schemaId, layerTab, onTabChange, onNew, onOpen,
+}: {
+  schemaId: number;
+  layerTab: WideTableType;
+  onTabChange: (t: WideTableType) => void;
+  onNew: () => void;
+  onOpen: (id: number) => void;
+}) {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const { data: schema } = useQuery({ queryKey: ["schema", schemaId], queryFn: () => api.schemas.get(schemaId) });
   const { data: wideTables } = useQuery({ queryKey: ["wideTables", schemaId], queryFn: () => api.wideTables.list(schemaId) });
+
+  const tabCfg = LAYER_TABS.find(t => t.type === layerTab)!;
+  const visible = wideTables?.filter(wt => wt.wideTableType === layerTab) ?? [];
 
   async function del(id: number, name: string) {
     await api.wideTables.delete(schemaId, id);
@@ -42,37 +85,72 @@ function WideTableList({ schemaId, onNew, onOpen }: { schemaId: number; onNew: (
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)" }}>
+      {/* Toolbar */}
+      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)", flexShrink: 0 }}>
         <span style={{ fontSize: 14, fontWeight: 600 }}>Wide Tables — {schema?.name}</span>
         <span style={{ fontSize: 12, color: "var(--text-3)" }}>{wideTables?.length ?? 0} 個合併寬表</span>
-        <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={onNew}>＋ 新建寬表</button>
+        <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
       </div>
+
+      {/* Layer tabs */}
+      <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "var(--bg-2)", flexShrink: 0 }}>
+        {LAYER_TABS.map(tab => {
+          const count = wideTables?.filter(w => w.wideTableType === tab.type).length ?? 0;
+          const active = layerTab === tab.type;
+          return (
+            <button
+              key={tab.type}
+              onClick={() => onTabChange(tab.type)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "10px 20px", border: "none", cursor: "pointer",
+                background: active ? "var(--bg-1)" : "transparent",
+                borderBottom: `2px solid ${active ? tab.color : "transparent"}`,
+                transition: "all 0.15s",
+              }}>
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
+                background: active ? tab.bg : "var(--bg-4)",
+                color: active ? tab.color : "var(--text-3)",
+                border: `1px solid ${active ? tab.border : "var(--border)"}`,
+              }}>
+                {tab.label}
+              </span>
+              <span style={{ fontSize: 12, color: active ? "var(--text-1)" : "var(--text-3)", fontWeight: active ? 600 : 400 }}>
+                {tab.desc}
+              </span>
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8,
+                background: active ? tab.bg : "var(--bg-4)",
+                color: active ? tab.color : "var(--text-3)",
+              }}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Cards */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        {wideTables?.length === 0 && (
+        {visible.length === 0 && (
           <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-3)" }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>⊞</div>
-            <div style={{ fontSize: 13, marginBottom: 6 }}>尚無寬表定義</div>
-            <div style={{ fontSize: 12 }}>選擇 Unified 或 R2U 類型，依需求整合 Table 並產生 VIEW</div>
+            <div style={{ fontSize: 32, marginBottom: 12, color: tabCfg.color }}>⊞</div>
+            <div style={{ fontSize: 13, marginBottom: 6 }}>尚無 {tabCfg.label} 寬表</div>
+            <div style={{ fontSize: 12, marginBottom: 16 }}>{tabCfg.desc} — 點擊右上角新建</div>
+            <button className="btn btn-primary" onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-          {wideTables?.map(wt => (
+          {visible.map(wt => (
             <div key={wt.id} onClick={() => onOpen(wt.id)}
-              style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, cursor: "pointer", transition: "border-color 0.15s" }}
-              onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = "var(--accent)"}
+              style={{ background: "var(--bg-2)", border: `1px solid var(--border)`, borderRadius: 8, padding: 16, cursor: "pointer", transition: "border-color 0.15s" }}
+              onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = tabCfg.color}
               onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--accent)", fontWeight: 600 }}>{wt.name}</div>
-                    <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, fontWeight: 700,
-                      background: wt.wideTableType === "unified" ? "rgba(52,211,153,0.15)" : "rgba(167,139,250,0.15)",
-                      color: wt.wideTableType === "unified" ? "#34d399" : "#a78bfa",
-                      border: `1px solid ${wt.wideTableType === "unified" ? "rgba(52,211,153,0.4)" : "rgba(167,139,250,0.4)"}` }}>
-                      {wt.wideTableType === "unified" ? "UNIFIED" : "R2U"}
-                    </span>
-                  </div>
-                  {wt.description && <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8 }}>{wt.description}</div>}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--accent)", fontWeight: 600, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wt.name}</div>
+                  {wt.description && <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, lineHeight: 1.4 }}>{wt.description}</div>}
                   <div style={{ fontSize: 11, color: "var(--text-3)" }}>{new Date(wt.createdAt).toLocaleString("zh-TW")}</div>
                 </div>
                 <div style={{ display: "flex", gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
@@ -453,60 +531,6 @@ function SchemaSection({ schema, isPrimary, expanded, onToggleExpand, checked, o
       {expanded && !detail && (
         <div style={{ paddingLeft: 20, padding: "6px 20px", fontSize: 11, color: "var(--text-3)" }}>載入中...</div>
       )}
-    </div>
-  );
-}
-
-// ── Type Selector (pre-builder) ───────────────────────────────────────────────
-
-type WideTableType = "unified" | "r2u";
-
-function WideTableTypeSelector({ schemaId, onDone }: { schemaId: number; onDone: () => void }) {
-  const [selected, setSelected] = useState<WideTableType | null>(null);
-  if (selected) return <WideTableBuilder schemaId={schemaId} wideTableType={selected} onDone={onDone} />;
-
-  const options: { type: WideTableType; icon: string; title: string; subtitle: string; desc: string; color: string; bg: string }[] = [
-    {
-      type: "unified", icon: "⊡", title: "Unified Layer", subtitle: "單表或多表",
-      desc: "將一張 Table 的特定欄位組合成統一視圖，也可加入多表 JOIN。適合整合單一主體的寬表定義。",
-      color: "#34d399", bg: "rgba(52,211,153,0.08)",
-    },
-    {
-      type: "r2u", icon: "⊞", title: "R2U（原始→整合）", subtitle: "需要 2 張以上",
-      desc: "將多張原始表透過 FK 關係整合成寬表，系統自動分析 JOIN 路徑。適合跨表整合場景。",
-      color: "#a78bfa", bg: "rgba(167,139,250,0.08)",
-    },
-  ];
-
-  return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)", flexShrink: 0 }}>
-        <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={onDone}>← 取消</button>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>新建寬表 — 選擇類型</span>
-      </div>
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 600, width: "100%" }}>
-          <div style={{ fontSize: 13, color: "var(--text-2)", textAlign: "center", marginBottom: 8 }}>請選擇要建立的寬表類型</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            {options.map(opt => (
-              <button key={opt.type} onClick={() => setSelected(opt.type)}
-                style={{ padding: "24px 20px", borderRadius: 12, border: `2px solid var(--border)`,
-                  background: opt.bg, cursor: "pointer", textAlign: "left", transition: "all 0.15s",
-                  display: "flex", flexDirection: "column", gap: 8 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = opt.color; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; }}>
-                <div style={{ fontSize: 28, lineHeight: 1 }}>{opt.icon}</div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: opt.color, marginBottom: 2 }}>{opt.title}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8 }}>{opt.subtitle}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.6 }}>{opt.desc}</div>
-                </div>
-                <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: opt.color }}>選擇 →</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

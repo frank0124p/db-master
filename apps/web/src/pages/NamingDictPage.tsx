@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore } from "../store.js";
-import { api, type NamingEntry } from "../api.js";
+import { api, type NamingEntry, type AppUser, type ReviewerStatus } from "../api.js";
 import { useLayerSettings, layerColor } from "../hooks/useLayerSettings.js";
 
 const TAG_COLORS: Record<string, { bg: string; color: string }> = {
@@ -293,10 +293,256 @@ function EntryModal({ entry, onClose }: { entry?: NamingEntry; onClose: () => vo
   );
 }
 
+function ReviewerChip({ r }: { r: ReviewerStatus }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 8, fontSize: 10, fontWeight: 500,
+      background: r.signedAt ? "rgba(74,222,128,0.12)" : "var(--bg-4)",
+      color: r.signedAt ? "#4ade80" : "var(--text-3)",
+      border: `1px solid ${r.signedAt ? "#4ade8040" : "var(--border)"}` }}>
+      {r.signedAt ? "✓" : "○"} {r.name}
+    </span>
+  );
+}
+
+function AssignReviewersModal({
+  entry,
+  users,
+  onClose,
+  onSave,
+}: {
+  entry: NamingEntry;
+  users: AppUser[];
+  onClose: () => void;
+  onSave: (reviewers: { userId: string; name: string }[]) => void;
+}) {
+  const canApproveRoles: AppUser["role"][] = ["admin", "suite_owner"];
+  const eligibleUsers = users.filter(u => canApproveRoles.includes(u.role));
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set((entry.reviewers ?? []).map(r => r.userId))
+  );
+
+  function toggle(userId: string) {
+    const next = new Set(selected);
+    if (next.has(userId)) {
+      next.delete(userId);
+    } else {
+      next.add(userId);
+    }
+    setSelected(next);
+  }
+
+  function handleSave() {
+    const reviewers = eligibleUsers
+      .filter(u => selected.has(u.id))
+      .map(u => ({ userId: u.id, name: u.name }));
+    onSave(reviewers);
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 350, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-light)", borderRadius: 10, width: 380, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>
+          指派審核人 — <span style={{ fontFamily: "var(--font-mono)", color: "var(--warning)", fontSize: 13 }}>{entry.stdName}</span>
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text-3)" }}>選擇具有審核權限的使用者（admin / suite_owner）</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
+          {eligibleUsers.length === 0 && (
+            <div style={{ fontSize: 12, color: "var(--text-3)", padding: "12px 0", textAlign: "center" }}>沒有可指派的審核人</div>
+          )}
+          {eligibleUsers.map(u => {
+            const isSelected = selected.has(u.id);
+            return (
+              <div key={u.id} onClick={() => toggle(u.id)}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 6, cursor: "pointer",
+                  background: isSelected ? "rgba(123,140,255,0.1)" : "var(--bg-3)",
+                  border: `1px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+                  transition: "all 0.12s" }}>
+                <div style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                  background: isSelected ? "var(--accent)" : "var(--bg-4)",
+                  border: `1px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+                  display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {isSelected && <span style={{ color: "#fff", fontSize: 10, lineHeight: 1 }}>✓</span>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)" }}>{u.name}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-3)" }}>{u.email}</div>
+                </div>
+                <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 6, fontWeight: 600,
+                  background: u.role === "admin" ? "rgba(251,113,133,0.12)" : "rgba(245,158,11,0.12)",
+                  color: u.role === "admin" ? "#fb7185" : "#f59e0b" }}>
+                  {u.role === "admin" ? "Admin" : "Suite Owner"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button className="btn btn-ghost" onClick={onClose}>取消</button>
+          <button className="btn btn-primary" onClick={handleSave}>確認指派</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PendingTab() {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const [assigningId, setAssigningId] = useState<number | null>(null);
+
+  const { data: pending, isLoading } = useQuery({
+    queryKey: ["naming", "pending"],
+    queryFn: () => api.naming.listPending(),
+    refetchInterval: 15_000,
+  });
+
+  const { data: users } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => api.users.list(),
+  });
+
+  const approveMut = useMutation({
+    mutationFn: (id: number) => api.naming.approve(id),
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: ["naming"] });
+      showToast(`✓ 已核准：${updated.stdName} — 正式加入字典`);
+    },
+    onError: () => showToast("操作失敗，請稍後再試"),
+  });
+
+  const rejectMut = useMutation({
+    mutationFn: (id: number) => api.naming.reject(id),
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: ["naming"] });
+      showToast(`已拒絕：${updated.stdName}`);
+    },
+    onError: () => showToast("操作失敗，請稍後再試"),
+  });
+
+  const assignMut = useMutation({
+    mutationFn: ({ id, reviewers }: { id: number; reviewers: { userId: string; name: string }[] }) =>
+      api.naming.assignReviewers(id, reviewers),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["naming", "pending"] });
+      setAssigningId(null);
+      showToast("✓ 已更新審核人");
+    },
+    onError: () => showToast("指派失敗，請稍後再試"),
+  });
+
+  if (isLoading) return <div style={{ padding: 40, color: "var(--text-3)", textAlign: "center", fontSize: 12 }}>載入中…</div>;
+
+  if (!pending?.length) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 60, color: "var(--text-3)" }}>
+        <span style={{ fontSize: 28 }}>✓</span>
+        <span style={{ fontSize: 13 }}>目前沒有待審核的詞彙</span>
+      </div>
+    );
+  }
+
+  const assigningEntry = assigningId !== null ? pending.find(e => e.id === assigningId) : undefined;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ fontSize: 11, color: "var(--text-3)", padding: "4px 0" }}>
+        共 {pending.length} 筆待審核 — 核准後才會正式加入字典
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--bg-2)", borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)" }}>
+        <thead>
+          <tr style={{ background: "var(--bg-3)" }}>
+            {["概念", "標準英文名", "別名", "領域", "審核人", "提交時間", "操作"].map((h, i) => (
+              <th key={i} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid var(--border)" }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {pending.map((e, i) => {
+            const busy = approveMut.isPending || rejectMut.isPending;
+            const reviewers = e.reviewers ?? [];
+            return (
+              <tr key={e.id}
+                style={{ borderBottom: i < pending.length - 1 ? "1px solid var(--border)" : "none" }}
+                onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "var(--bg-3)"}
+                onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}>
+                <td style={{ padding: "9px 12px", fontSize: 12, color: "var(--text-1)" }}>{e.concept}</td>
+                <td style={{ padding: "9px 12px" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--warning)" }}>{e.stdName}</span>
+                </td>
+                <td style={{ padding: "9px 12px" }}>
+                  <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                    {e.aliases.length === 0
+                      ? <span style={{ fontSize: 10, color: "var(--text-3)" }}>—</span>
+                      : e.aliases.map(a => (
+                          <span key={a} style={{ fontFamily: "var(--font-mono)", fontSize: 10, padding: "1px 5px", borderRadius: 3, background: "var(--bg-4)", color: "var(--text-3)", border: "1px solid var(--border)" }}>{a}</span>
+                        ))
+                    }
+                  </div>
+                </td>
+                <td style={{ padding: "9px 12px" }}>
+                  <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: e.domain === "semiconductor" ? "rgba(123,140,255,0.12)" : "var(--bg-4)", color: e.domain === "semiconductor" ? "var(--accent)" : "var(--text-3)" }}>
+                    {e.domain === "semiconductor" ? "半導體" : "通用"}
+                  </span>
+                </td>
+                <td style={{ padding: "9px 12px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                      {reviewers.length === 0
+                        ? <span style={{ fontSize: 10, color: "var(--text-3)" }}>未指派</span>
+                        : reviewers.map(r => <ReviewerChip key={r.userId} r={r} />)
+                      }
+                    </div>
+                    <button onClick={() => setAssigningId(e.id)}
+                      style={{ alignSelf: "flex-start", padding: "2px 8px", borderRadius: 4, fontSize: 10, cursor: "pointer",
+                        background: "var(--bg-4)", color: "var(--accent)", border: "1px solid var(--border)" }}>
+                      指派審核人
+                    </button>
+                  </div>
+                </td>
+                <td style={{ padding: "9px 12px", fontSize: 11, color: "var(--text-3)", whiteSpace: "nowrap" }}>
+                  {new Date(e.updatedAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                </td>
+                <td style={{ padding: "9px 12px" }}>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button
+                      onClick={() => approveMut.mutate(e.id)}
+                      disabled={busy}
+                      style={{ padding: "3px 10px", borderRadius: 3, border: "1px solid var(--success)", fontSize: 11, cursor: busy ? "not-allowed" : "pointer", background: "var(--success-dim)", color: "var(--success)", opacity: busy ? 0.6 : 1 }}>
+                      ✓ 核准
+                    </button>
+                    <button
+                      onClick={() => rejectMut.mutate(e.id)}
+                      disabled={busy}
+                      style={{ padding: "3px 10px", borderRadius: 3, border: "1px solid var(--error)", fontSize: 11, cursor: busy ? "not-allowed" : "pointer", background: "var(--error-dim)", color: "var(--error)", opacity: busy ? 0.6 : 1 }}>
+                      ✕ 拒絕
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {assigningEntry && (
+        <AssignReviewersModal
+          entry={assigningEntry}
+          users={users ?? []}
+          onClose={() => setAssigningId(null)}
+          onSave={(reviewers) => assignMut.mutate({ id: assigningEntry.id, reviewers })}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function NamingDictPage() {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const { dictLayers: configLayers } = useLayerSettings();
+  const [tab, setTab] = useState<"approved" | "pending">("approved");
   const [filter, setFilter] = useState("all");
   const [layerFilter, setLayerFilter] = useState<"" | DictLayer>("");
   const [showModal, setShowModal] = useState(false);
@@ -304,6 +550,12 @@ export default function NamingDictPage() {
   const [defEntry, setDefEntry] = useState<NamingEntry | null>(null);
 
   const { data: entries } = useQuery({ queryKey: ["naming"], queryFn: () => api.naming.list() });
+  const { data: pendingCount } = useQuery({
+    queryKey: ["naming", "pending"],
+    queryFn: () => api.naming.listPending(),
+    select: (d) => d.length,
+    refetchInterval: 30_000,
+  });
 
   const filtered = entries?.filter(e =>
     (filter === "all" || e.domain === filter) &&
@@ -323,109 +575,135 @@ export default function NamingDictPage() {
     { key: "general", label: "通用" },
   ];
 
-  // Collect all tags in use across entries for filter
-  const usedTags = [...new Set(entries?.flatMap(e => e.tags) ?? [])];
-
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: 20, overflowY: "auto", gap: 14 }}>
       {/* Title bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 16, fontWeight: 600 }}>命名字典</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ display: "flex", gap: 4 }}>
-            {domainChips.map(c => (
-              <button key={c.key} onClick={() => setFilter(c.key)}
-                style={{ padding: "4px 10px", borderRadius: 12, fontSize: 11, cursor: "pointer", background: filter === c.key ? "var(--accent-dim)" : "var(--bg-3)", color: filter === c.key ? "var(--accent)" : "var(--text-2)", border: `1px solid ${filter === c.key ? "var(--accent)" : "var(--border)"}`, transition: "all 0.15s" }}>
-                {c.label}
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>命名字典</div>
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: 2, background: "var(--bg-3)", padding: 3, borderRadius: 8, border: "1px solid var(--border)" }}>
+            {([
+              { key: "approved", label: "正式字典" },
+              { key: "pending", label: "待審核", badge: pendingCount },
+            ] as { key: "approved" | "pending"; label: string; badge?: number }[]).map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", transition: "all 0.15s",
+                  background: tab === t.key ? "var(--bg-1)" : "transparent",
+                  color: tab === t.key ? "var(--text-1)" : "var(--text-3)",
+                  border: tab === t.key ? "1px solid var(--border-light)" : "1px solid transparent",
+                  fontWeight: tab === t.key ? 600 : 400 }}>
+                {t.label}
+                {!!t.badge && (
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 8, background: "var(--warning)", color: "#000", lineHeight: 1.4 }}>{t.badge}</span>
+                )}
               </button>
             ))}
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>＋ 新增詞彙</button>
         </div>
+        {tab === "approved" && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 4 }}>
+              {domainChips.map(c => (
+                <button key={c.key} onClick={() => setFilter(c.key)}
+                  style={{ padding: "4px 10px", borderRadius: 12, fontSize: 11, cursor: "pointer", background: filter === c.key ? "var(--accent-dim)" : "var(--bg-3)", color: filter === c.key ? "var(--accent)" : "var(--text-2)", border: `1px solid ${filter === c.key ? "var(--accent)" : "var(--border)"}`, transition: "all 0.15s" }}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}>＋ 新增詞彙</button>
+          </div>
+        )}
       </div>
 
-      {/* Layer filter bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", marginRight: 2 }}>分層</span>
-        <button onClick={() => setLayerFilter("")}
-          style={{ padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
-            background: layerFilter === "" ? "var(--accent-dim)" : "var(--bg-3)",
-            color: layerFilter === "" ? "var(--accent)" : "var(--text-3)",
-            border: `1px solid ${layerFilter === "" ? "var(--accent)" : "var(--border)"}` }}>
-          全部
-        </button>
-        {configLayers.map(l => {
-          const active = layerFilter === l.id;
-          return (
-            <button key={l.id} onClick={() => setLayerFilter(active ? "" : l.id)}
+      {tab === "pending" ? (
+        <PendingTab />
+      ) : (
+        <>
+          {/* Layer filter bar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", marginRight: 2 }}>分層</span>
+            <button onClick={() => setLayerFilter("")}
               style={{ padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
-                background: active ? l.bg : "var(--bg-3)",
-                color: active ? l.color : "var(--text-3)",
-                border: `1px solid ${active ? l.color : "var(--border)"}` }}>
-              {l.label}
+                background: layerFilter === "" ? "var(--accent-dim)" : "var(--bg-3)",
+                color: layerFilter === "" ? "var(--accent)" : "var(--text-3)",
+                border: `1px solid ${layerFilter === "" ? "var(--accent)" : "var(--border)"}` }}>
+              全部
             </button>
-          );
-        })}
-      </div>
+            {configLayers.map(l => {
+              const active = layerFilter === l.id;
+              return (
+                <button key={l.id} onClick={() => setLayerFilter(active ? "" : l.id)}
+                  style={{ padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                    background: active ? l.bg : "var(--bg-3)",
+                    color: active ? l.color : "var(--text-3)",
+                    border: `1px solid ${active ? l.color : "var(--border)"}` }}>
+                  {l.label}
+                </button>
+              );
+            })}
+          </div>
 
-      {/* Table */}
-      <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--bg-2)", borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)" }}>
-        <thead>
-          <tr style={{ background: "var(--bg-3)" }}>
-            {["概念", "標準英文名", "分層", "領域", "最後更新", ""].map((h, i) => (
-              <th key={i} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid var(--border)" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {filtered?.map((e, i) => (
-            <tr key={e.id}
-              style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--border)" : "none" }}
-              onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "var(--bg-3)"}
-              onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}>
-              <td style={{ padding: "9px 12px", fontSize: 12, color: "var(--text-1)" }}>{e.concept}</td>
-              <td style={{ padding: "9px 12px" }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--success)" }}>{e.stdName}</span>
-              </td>
-              <td style={{ padding: "9px 12px" }}>
-                <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                  {(e.layers ?? []).length === 0
-                    ? <span style={{ fontSize: 10, color: "var(--text-3)" }}>—</span>
-                    : (e.layers ?? []).map(l => {
-                        const cfg = configLayers.find(x => x.id === l) ?? { label: l, ...layerColor(0) };
-                        return (
-                          <span key={l} style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 6,
-                            background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}33` }}>
-                            {cfg.label}
-                          </span>
-                        );
-                      })
-                  }
-                </div>
-              </td>
-              <td style={{ padding: "9px 12px" }}>
-                <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: e.domain === "semiconductor" ? "rgba(123,140,255,0.12)" : "var(--bg-4)", color: e.domain === "semiconductor" ? "var(--accent)" : "var(--text-3)" }}>
-                  {e.domain === "semiconductor" ? "半導體" : "通用"}
-                </span>
-              </td>
-              <td style={{ padding: "9px 12px", fontSize: 11, color: "var(--text-3)", whiteSpace: "nowrap" }}>
-                {new Date(e.updatedAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-              </td>
-              <td style={{ padding: "9px 12px" }}>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button onClick={() => setDefEntry(e)} style={{ padding: "3px 8px", borderRadius: 3, border: "none", fontSize: 11, cursor: "pointer", background: "var(--bg-4)", color: "var(--accent)" }}>詳細定義</button>
-                  <button onClick={() => setEditEntry(e)} style={{ padding: "3px 8px", borderRadius: 3, border: "none", fontSize: 11, cursor: "pointer", background: "var(--bg-4)", color: "var(--text-2)" }}>編輯</button>
-                  <button onClick={() => del(e)} style={{ padding: "3px 8px", borderRadius: 3, border: "none", fontSize: 11, cursor: "pointer", background: "var(--bg-4)", color: "var(--text-2)" }}
-                    onMouseEnter={ev => { (ev.target as HTMLButtonElement).style.background = "var(--error-dim)"; (ev.target as HTMLButtonElement).style.color = "var(--error)"; }}
-                    onMouseLeave={ev => { (ev.target as HTMLButtonElement).style.background = "var(--bg-4)"; (ev.target as HTMLButtonElement).style.color = "var(--text-2)"; }}>
-                    刪除
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          {/* Table */}
+          <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--bg-2)", borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)" }}>
+            <thead>
+              <tr style={{ background: "var(--bg-3)" }}>
+                {["概念", "標準英文名", "分層", "領域", "最後更新", ""].map((h, i) => (
+                  <th key={i} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered?.map((e, i) => (
+                <tr key={e.id}
+                  style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--border)" : "none" }}
+                  onMouseEnter={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "var(--bg-3)"}
+                  onMouseLeave={ev => (ev.currentTarget as HTMLTableRowElement).style.background = "transparent"}>
+                  <td style={{ padding: "9px 12px", fontSize: 12, color: "var(--text-1)" }}>{e.concept}</td>
+                  <td style={{ padding: "9px 12px" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--success)" }}>{e.stdName}</span>
+                  </td>
+                  <td style={{ padding: "9px 12px" }}>
+                    <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                      {(e.layers ?? []).length === 0
+                        ? <span style={{ fontSize: 10, color: "var(--text-3)" }}>—</span>
+                        : (e.layers ?? []).map(l => {
+                            const cfg = configLayers.find(x => x.id === l) ?? { label: l, ...layerColor(0) };
+                            return (
+                              <span key={l} style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 6,
+                                background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}33` }}>
+                                {cfg.label}
+                              </span>
+                            );
+                          })
+                      }
+                    </div>
+                  </td>
+                  <td style={{ padding: "9px 12px" }}>
+                    <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: e.domain === "semiconductor" ? "rgba(123,140,255,0.12)" : "var(--bg-4)", color: e.domain === "semiconductor" ? "var(--accent)" : "var(--text-3)" }}>
+                      {e.domain === "semiconductor" ? "半導體" : "通用"}
+                    </span>
+                  </td>
+                  <td style={{ padding: "9px 12px", fontSize: 11, color: "var(--text-3)", whiteSpace: "nowrap" }}>
+                    {new Date(e.updatedAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </td>
+                  <td style={{ padding: "9px 12px" }}>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => setDefEntry(e)} style={{ padding: "3px 8px", borderRadius: 3, border: "none", fontSize: 11, cursor: "pointer", background: "var(--bg-4)", color: "var(--accent)" }}>詳細定義</button>
+                      <button onClick={() => setEditEntry(e)} style={{ padding: "3px 8px", borderRadius: 3, border: "none", fontSize: 11, cursor: "pointer", background: "var(--bg-4)", color: "var(--text-2)" }}>編輯</button>
+                      <button onClick={() => del(e)} style={{ padding: "3px 8px", borderRadius: 3, border: "none", fontSize: 11, cursor: "pointer", background: "var(--bg-4)", color: "var(--text-2)" }}
+                        onMouseEnter={ev => { (ev.target as HTMLButtonElement).style.background = "var(--error-dim)"; (ev.target as HTMLButtonElement).style.color = "var(--error)"; }}
+                        onMouseLeave={ev => { (ev.target as HTMLButtonElement).style.background = "var(--bg-4)"; (ev.target as HTMLButtonElement).style.color = "var(--text-2)"; }}>
+                        刪除
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
 
       {showModal && <EntryModal onClose={() => setShowModal(false)} />}
       {editEntry && <EntryModal entry={editEntry} onClose={() => setEditEntry(null)} />}
