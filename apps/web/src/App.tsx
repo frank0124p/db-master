@@ -729,14 +729,37 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
   }
 
   const suiteMap = new Map((suites ?? []).map(s => [s.id, s]));
+  const activeSuiteObj = activeSuiteId !== null ? suiteMap.get(activeSuiteId) : null;
 
   return (
     <>
-      <div style={{ padding: "12px 14px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+      {/* Suite context strip — always visible */}
+      <button onClick={() => setSuitePicked(false)} title="切換 Suite"
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 8,
+          padding: "7px 14px", border: "none", borderBottom: "1px solid var(--border)",
+          background: activeSuiteObj
+            ? `${activeSuiteObj.color ?? "var(--accent)"}15`
+            : "var(--bg-3)",
+          cursor: "pointer", flexShrink: 0, textAlign: "left",
+          borderLeft: activeSuiteObj ? `3px solid ${activeSuiteObj.color ?? "var(--accent)"}` : "3px solid var(--border)",
+        }}>
+        {activeSuiteObj
+          ? <>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: activeSuiteObj.color ?? "var(--accent)", flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-1)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeSuiteObj.name}</span>
+            </>
+          : <>
+              <span style={{ fontSize: 11, color: "var(--text-3)" }}>⊞</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", flex: 1 }}>ALL Suites</span>
+            </>
+        }
+        <span style={{ fontSize: 9, color: "var(--text-3)", flexShrink: 0 }}>⇄</span>
+      </button>
+
+      <div style={{ padding: "8px 14px 6px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.8px" }}>{t("sidebar.schemas")}</span>
         <div style={{ display: "flex", gap: 4 }}>
-          <button onClick={() => setSuitePicked(false)} title="切換 Suite"
-            style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>⇄</button>
           <button onClick={() => setShowFolderEditor(true)} title="管理領域資料夾"
             style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>⊟</button>
           <button onClick={() => setShowSuiteModal(true)} title="管理 Suite"
@@ -1213,27 +1236,43 @@ export default function App() {
           </nav>
         )}
 
-        {/* Suite indicator */}
-        {!isMobile && suitePicked && activeSuite && (
-          <button
-            onClick={() => setSuitePicked(false)}
-            title="切換 Product Suite"
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "3px 10px 3px 7px", borderRadius: 20,
-              border: `1px solid ${activeSuite.color ?? "var(--accent)"}44`,
-              background: `${activeSuite.color ?? "var(--accent)"}18`,
-              color: "var(--text-1)", cursor: "pointer",
-              fontSize: 11, fontWeight: 600, flexShrink: 0,
-              transition: "opacity 0.15s",
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.75"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: activeSuite.color ?? "var(--accent)", flexShrink: 0 }} />
-            <span>{activeSuite.name}</span>
-            <span style={{ fontSize: 9, color: "var(--text-3)", marginLeft: 2 }}>⇄</span>
-          </button>
-        )}
+        {/* Suite indicator — always visible when suitePicked */}
+        {!isMobile && suitePicked && (() => {
+          const dotColor = activeSuite?.color ?? "var(--accent)";
+          const label = activeSuite?.name ?? "ALL";
+          const isAll = !activeSuite;
+          return (
+            <button
+              onClick={() => setSuitePicked(false)}
+              title="切換 Product Suite"
+              style={{
+                display: "flex", alignItems: "center", gap: 7,
+                padding: "0 12px 0 8px", height: 30, borderRadius: 8,
+                border: isAll
+                  ? "1px solid var(--border-light)"
+                  : `1.5px solid ${dotColor}55`,
+                background: isAll
+                  ? "var(--bg-3)"
+                  : `${dotColor}22`,
+                color: "var(--text-1)", cursor: "pointer", flexShrink: 0,
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.7"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}>
+              {/* Label */}
+              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 500, letterSpacing: "0.4px", textTransform: "uppercase" }}>Suite</span>
+              <span style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
+              {isAll
+                ? <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", letterSpacing: "0.5px" }}>ALL</span>
+                : <>
+                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: dotColor, flexShrink: 0, boxShadow: `0 0 0 2px ${dotColor}33` }} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                  </>
+              }
+              <span style={{ fontSize: 9, color: "var(--text-3)", marginLeft: 1 }}>⇄</span>
+            </button>
+          );
+        })()}
 
         <div style={{ marginLeft: isMobile ? "auto" : !isTablet ? "auto" : undefined, display: "flex", gap: 6, alignItems: "center" }}>
           {/* Tablet: sidebar toggle */}
