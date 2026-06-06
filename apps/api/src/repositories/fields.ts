@@ -15,8 +15,7 @@ export async function createField(tableId: number, input: {
   if (!tbl) throw new NotFoundError("Table", tableId);
 
   const id = await store.nextId("fields");
-  const position = input.position ??
-    (tbl.fields.length > 0 ? Math.max(...tbl.fields.map(f => f.position)) + 1 : 0);
+  const position = input.position ?? tbl.fields.length;
 
   const field = {
     id, tableId, name: input.name, dataType: input.data_type,

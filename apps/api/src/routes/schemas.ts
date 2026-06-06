@@ -141,34 +141,47 @@ router.get("/:id/export", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+const SafeNameSchema = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_\- ]+$/, "Only alphanumeric, underscore, hyphen, or space allowed");
+
+const ImportBodySchema = z.object({
+  schema: z.object({
+    name: SafeNameSchema,
+    description: z.string().max(500).nullable().optional(),
+    domain: z.string().max(64).optional(),
+    layerType: z.string().max(64).nullable().optional(),
+    tags: z.array(z.string().max(64)).optional(),
+    environment: z.string().max(32).nullable().optional(),
+    targetDb: z.string().max(64).nullable().optional(),
+    tables: z.array(z.object({
+      name: SafeNameSchema,
+      comment: z.string().max(500).nullable().optional(),
+      sampleData: z.array(z.record(z.unknown())).optional(),
+      fields: z.array(z.object({
+        name: SafeNameSchema,
+        dataType: z.string().max(128).optional(),
+        nullable: z.boolean().optional(),
+        defaultValue: z.string().max(256).nullable().optional(),
+        isPrimaryKey: z.boolean().optional(),
+        isUnique: z.boolean().optional(),
+        comment: z.string().max(500).nullable().optional(),
+        position: z.number().int().min(0).optional(),
+      })).optional(),
+    })).optional(),
+  }),
+});
+
 // POST /api/v1/schemas/import — import schema from JSON export
 router.post("/import", async (req, res, next) => {
   try {
-    const body = req.body as {
-      schema?: {
-        name?: string; description?: string | null; domain?: string;
-        layerType?: string | null; tags?: string[]; environment?: string | null; targetDb?: string | null;
-        tables?: {
-          name?: string; comment?: string | null;
-          sampleData?: Record<string, unknown>[];
-          fields?: {
-            name?: string; dataType?: string; nullable?: boolean;
-            defaultValue?: string | null; isPrimaryKey?: boolean;
-            isUnique?: boolean; comment?: string | null; position?: number;
-          }[];
-        }[];
-      };
-    };
-
-    if (!body.schema?.name) {
-      res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "schema.name is required" } });
+    const parsed = ImportBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", detail: parsed.error.format() } });
       return;
     }
-
-    const src = body.schema;
+    const src = parsed.data.schema;
 
     // Handle name conflicts by appending "-copy"
-    let name = src.name!;
+    let name = src.name;
     const existing = await repo.getSchemaByName(name);
     if (existing) name = `${name}-copy`;
 

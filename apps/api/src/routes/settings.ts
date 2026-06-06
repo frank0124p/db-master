@@ -14,9 +14,7 @@ const router: RouterType = Router();
 router.get("/llm", async (_req: Request, res: Response, next) => {
   try {
     const settings = await getLlmSettings();
-    const masked = settings.apiKey
-      ? `${"*".repeat(Math.max(0, settings.apiKey.length - 4))}${settings.apiKey.slice(-4)}`
-      : "";
+    const masked = settings.apiKey ? "••••••••" : "";
     res.json({ settings: { ...settings, apiKey: masked } });
   } catch (e) { next(e); }
 });
@@ -34,9 +32,7 @@ router.patch("/llm", async (req: Request, res: Response, next) => {
     if (model !== undefined) patch.model = model;
     const updated = await updateLlmSettings(patch);
     resetLlmConfig();
-    const masked = updated.apiKey
-      ? `${"*".repeat(Math.max(0, updated.apiKey.length - 4))}${updated.apiKey.slice(-4)}`
-      : "";
+    const masked = updated.apiKey ? "••••••••" : "";
     res.json({ settings: { ...updated, apiKey: masked } });
   } catch (e) { next(e); }
 });
@@ -64,9 +60,7 @@ const MinioBody = z.object({
 router.get("/storage", async (_req: Request, res: Response, next) => {
   try {
     const minio = await getMinioSettings();
-    const masked = minio.secretKey
-      ? `${"*".repeat(Math.max(0, minio.secretKey.length - 4))}${minio.secretKey.slice(-4)}`
-      : "";
+    const masked = minio.secretKey ? "••••••••" : "";
     res.json({ minio: { ...minio, secretKey: masked }, ready: isMinioReady() });
   } catch (e) { next(e); }
 });
@@ -86,9 +80,7 @@ router.patch("/storage", async (req: Request, res: Response, next) => {
         .then(({ pushed, errors }) => console.warn(`[minio] auto-sync complete: pushed=${pushed} errors=${errors}`))
         .catch((e: unknown) => console.error("[minio] auto-sync failed:", e));
     }
-    const masked = updated.secretKey
-      ? `${"*".repeat(Math.max(0, updated.secretKey.length - 4))}${updated.secretKey.slice(-4)}`
-      : "";
+    const masked = updated.secretKey ? "••••••••" : "";
     res.json({ minio: { ...updated, secretKey: masked }, ready: isMinioReady() });
   } catch (e) { next(e); }
 });

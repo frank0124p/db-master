@@ -35,7 +35,15 @@ const app = express();
 const PORT = Number(process.env["PORT"] ?? 3005);
 const isDev = process.env["NODE_ENV"] !== "production";
 
-app.use(cors());
+const allowedOrigins = process.env["ALLOWED_ORIGINS"]
+  ? process.env["ALLOWED_ORIGINS"].split(",").map(o => o.trim())
+  : ["http://localhost:5173", "http://localhost:3005"];
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) cb(null, true);
+    else cb(new Error(`CORS: origin not allowed — ${origin}`));
+  },
+}));
 app.use(express.json());
 
 // Health
@@ -73,7 +81,19 @@ app.use("/api/v1/suites", suitesRouter);
 app.use("/api/v1/search", searchRouter);
 app.use("/api/v1/users", usersRouter);
 
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+  process.exit(1);
+});
+
 async function start() {
+  // Verify DATA_DIR exists and is writable before accepting traffic
+  const { promises: fsPromises } = await import("fs");
+  await fsPromises.mkdir(DATA_DIR, { recursive: true });
+  await fsPromises.access(DATA_DIR, fsPromises.constants?.W_OK ?? 2).catch(() => {
+    throw new Error(`DATA_DIR is not writable: ${DATA_DIR}`);
+  });
+
   await runMigration();
   await loadSkills();
   await loadDdlFiles();

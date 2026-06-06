@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode, type CSSProperties } from "react";
+import { useState, useEffect, useRef, Component, type ReactNode, type CSSProperties } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore, type Page, type Theme } from "./store.js";
 import { useT } from "./i18n.js";
@@ -25,6 +25,29 @@ const NAV_KEYS: { id: Page; key: string; icon: string }[] = [
   { id: "rules",    key: "nav.rules",    icon: "◈" },
   { id: "datahub",  key: "nav.datahub",  icon: "⬆" },
 ];
+
+// ── Error Boundary ────────────────────────────────────────────────────────────
+
+interface EBState { hasError: boolean; message: string }
+class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
+  override state: EBState = { hasError: false, message: "" };
+  static getDerivedStateFromError(e: unknown): EBState {
+    return { hasError: true, message: e instanceof Error ? e.message : String(e) };
+  }
+  override render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <div style={{ padding: 40, color: "var(--error)", fontFamily: "var(--font-mono)", fontSize: 13 }}>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Something went wrong</div>
+        <div style={{ opacity: 0.7 }}>{this.state.message}</div>
+        <button onClick={() => this.setState({ hasError: false, message: "" })}
+          style={{ marginTop: 16, padding: "6px 14px", borderRadius: 6, border: "1px solid var(--error)", background: "transparent", color: "var(--error)", cursor: "pointer" }}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+}
 
 // ── shared helpers ────────────────────────────────────────────────────────────
 
@@ -122,7 +145,7 @@ function GlobalSearchModal({ onClose }: { onClose: () => void }) {
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try { setResults(await api.search(q.trim())); setSelected(0); }
-      catch { /* ignore */ }
+      catch (e) { console.error("[search]", e); }
       finally { setLoading(false); }
     }, 250);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
@@ -1104,7 +1127,9 @@ function SuiteSplash() {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const { page, setPage, suitePicked } = useStore();
+  const { page, setPage, suitePicked, activeSuiteId, setSuitePicked } = useStore();
+  const { data: suites } = useQuery({ queryKey: ["suites"], queryFn: api.suites.list });
+  const activeSuite = (suites ?? []).find(s => s.id === activeSuiteId) ?? null;
   const t = useT();
   const { isMobile, isTablet, isDesktop } = useBreakpoint();
   const [showSettings, setShowSettings] = useState(false);
@@ -1188,6 +1213,28 @@ export default function App() {
           </nav>
         )}
 
+        {/* Suite indicator */}
+        {!isMobile && suitePicked && activeSuite && (
+          <button
+            onClick={() => setSuitePicked(false)}
+            title="切換 Product Suite"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "3px 10px 3px 7px", borderRadius: 20,
+              border: `1px solid ${activeSuite.color ?? "var(--accent)"}44`,
+              background: `${activeSuite.color ?? "var(--accent)"}18`,
+              color: "var(--text-1)", cursor: "pointer",
+              fontSize: 11, fontWeight: 600, flexShrink: 0,
+              transition: "opacity 0.15s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.75"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: activeSuite.color ?? "var(--accent)", flexShrink: 0 }} />
+            <span>{activeSuite.name}</span>
+            <span style={{ fontSize: 9, color: "var(--text-3)", marginLeft: 2 }}>⇄</span>
+          </button>
+        )}
+
         <div style={{ marginLeft: isMobile ? "auto" : !isTablet ? "auto" : undefined, display: "flex", gap: 6, alignItems: "center" }}>
           {/* Tablet: sidebar toggle */}
           {isTablet && (
@@ -1244,20 +1291,22 @@ export default function App() {
         )}
 
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          {!suitePicked ? (
-            <SuiteSplash />
-          ) : (
-            <>
-              {page === "editor"   && <SchemaEditorPage />}
-              {page === "dict"     && <NamingDictPage />}
-              {page === "versions" && <VersionHistoryPage />}
-              {page === "analysis" && <AnalysisPage />}
-              {page === "er"       && <ErDiagramPage />}
-              {page === "wide"     && <WideTablePage />}
-              {page === "rules"    && <RulesPage />}
-              {page === "datahub"  && <DataHubPage />}
-            </>
-          )}
+          <ErrorBoundary>
+            {!suitePicked ? (
+              <SuiteSplash />
+            ) : (
+              <>
+                {page === "editor"   && <SchemaEditorPage />}
+                {page === "dict"     && <NamingDictPage />}
+                {page === "versions" && <VersionHistoryPage />}
+                {page === "analysis" && <AnalysisPage />}
+                {page === "er"       && <ErDiagramPage />}
+                {page === "wide"     && <WideTablePage />}
+                {page === "rules"    && <RulesPage />}
+                {page === "datahub"  && <DataHubPage />}
+              </>
+            )}
+          </ErrorBoundary>
         </div>
       </div>
 

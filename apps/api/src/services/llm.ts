@@ -35,15 +35,17 @@ async function getConfig(): Promise<ResolvedConfig> {
   try {
     const { getLlmSettings } = await import("../repositories/settings.js");
     const s = await getLlmSettings();
+    const rawProvider = s.provider ?? process.env["LLM_PROVIDER"] ?? "anthropic";
     _configCache = {
-      provider: (s.provider ?? process.env["LLM_PROVIDER"] ?? "anthropic") as "anthropic" | "openai",
+      provider: rawProvider === "openai" ? "openai" : "anthropic",
       apiKey: s.apiKey ?? process.env["LLM_API_KEY"] ?? process.env["ANTHROPIC_API_KEY"] ?? "",
       baseUrl: s.baseUrl ?? process.env["LLM_BASE_URL"] ?? "",
       modelOverride: s.model ?? process.env["LLM_MODEL"],
     };
   } catch {
+    const rawProvider = process.env["LLM_PROVIDER"] ?? "anthropic";
     _configCache = {
-      provider: (process.env["LLM_PROVIDER"] ?? "anthropic") as "anthropic" | "openai",
+      provider: rawProvider === "openai" ? "openai" : "anthropic",
       apiKey: process.env["LLM_API_KEY"] ?? process.env["ANTHROPIC_API_KEY"] ?? "",
       baseUrl: process.env["LLM_BASE_URL"] ?? "",
       modelOverride: process.env["LLM_MODEL"],
@@ -452,13 +454,13 @@ ${ALLOWED_TAGS.join("、")}
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("LLM returned no valid JSON");
 
-  const parsed = JSON.parse(jsonMatch[0]) as { description?: string; tags?: string[] };
-  const validTags = (parsed.tags ?? []).filter((t) => ALLOWED_TAGS.includes(t));
-
-  return {
-    aiDescription: parsed.description ?? "",
-    tags: validTags,
-  };
+  try {
+    const parsed = JSON.parse(jsonMatch[0]) as { description?: string; tags?: string[] };
+    const validTags = (parsed.tags ?? []).filter((t) => ALLOWED_TAGS.includes(t));
+    return { aiDescription: parsed.description ?? "", tags: validTags };
+  } catch {
+    throw new Error("LLM response JSON parse failed");
+  }
 }
 
 export async function translateText(input: {
@@ -496,12 +498,16 @@ ${input.text}
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) return { translated: input.text, detectedLang: "unknown" };
-  const parsed = JSON.parse(jsonMatch[0]) as { translated?: string; detectedLang?: string; snakeCaseSuggestion?: string };
-  return {
-    translated: parsed.translated ?? input.text,
-    detectedLang: parsed.detectedLang ?? "unknown",
-    snakeCaseSuggestion: parsed.snakeCaseSuggestion || undefined,
-  };
+  try {
+    const parsed = JSON.parse(jsonMatch[0]) as { translated?: string; detectedLang?: string; snakeCaseSuggestion?: string };
+    return {
+      translated: parsed.translated ?? input.text,
+      detectedLang: parsed.detectedLang ?? "unknown",
+      snakeCaseSuggestion: parsed.snakeCaseSuggestion || undefined,
+    };
+  } catch {
+    return { translated: input.text, detectedLang: "unknown" };
+  }
 }
 
 export async function suggestFieldComment(input: {
@@ -534,6 +540,10 @@ export async function suggestFieldComment(input: {
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) return { comment: "" };
-  const parsed = JSON.parse(jsonMatch[0]) as { comment?: string };
-  return { comment: parsed.comment ?? "" };
+  try {
+    const parsed = JSON.parse(jsonMatch[0]) as { comment?: string };
+    return { comment: parsed.comment ?? "" };
+  } catch {
+    return { comment: "" };
+  }
 }

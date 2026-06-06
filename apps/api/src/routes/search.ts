@@ -7,11 +7,10 @@ const router: ExpressRouter = Router();
 // GET /api/v1/search?q=<query>
 router.get("/", async (req, res, next) => {
   try {
-    const q = (req.query["q"] as string | undefined)?.trim().toLowerCase() ?? "";
-    if (!q) {
-      res.json({ tables: [], fields: [] });
-      return;
-    }
+    const raw = (req.query["q"] as string | undefined)?.trim() ?? "";
+    if (!raw) { res.json({ tables: [], fields: [], naming: [] }); return; }
+    if (raw.length > 200) { res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "query too long (max 200 chars)" } }); return; }
+    const q = raw.toLowerCase();
 
     const allSchemas = await listSchemas();
 

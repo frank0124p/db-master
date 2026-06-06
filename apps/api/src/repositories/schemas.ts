@@ -124,7 +124,12 @@ export async function loadTables(schemaId: number): Promise<SchemaWithTables["ta
 
 // ── CRUD ───────────────────────────────────────────────────────────────────────
 
-export async function listSchemas() {
+export async function listSchemas(): Promise<{
+  id: number; name: string; description: string | null; domain: string;
+  suiteId: number | null; layerType: string | null; selectedRuleIds: string[] | null;
+  tags: string[]; environment: string | null; targetDb: string | null;
+  createdAt: Date; updatedAt: Date;
+}[]> {
   const slugs = await store.listDirSlugs(store.dataPath("schemas"));
   const schemas = [];
   for (const slug of slugs) {
@@ -142,7 +147,7 @@ export async function listSchemas() {
   return schemas.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 }
 
-export async function getSchemaByName(name: string): Promise<{ id: number } | null> {
+export async function getSchemaByName(name: string): Promise<{ id: number } | null> { // eslint-disable-line
   const slugs = await store.listDirSlugs(store.dataPath("schemas"));
   const lower = name.toLowerCase();
   for (const slug of slugs) {
@@ -203,7 +208,7 @@ export async function updateSchema(id: number, input: Partial<{ name: string; de
   return getSchemaById(id);
 }
 
-export async function deleteSchema(id: number) {
+export async function deleteSchema(id: number): Promise<void> {
   const slug = await getSchemaSlug(id);
   const meta = await store.readJson<SchemaMeta>(metaFile(slug));
   if (!meta) throw new NotFoundError("Schema", id);
@@ -225,7 +230,10 @@ export async function deleteSchema(id: number) {
     .filter(([, sid]) => sid === id)
     .map(([wtid]) => Number(wtid));
 
-  // Batch update index
+  // Delete directory first (recoverable if index update fails — stale index entries
+  // just fail silently on next read), then update index.
+  await store.deleteDir(schemaDir(slug));
+
   for (const tid of tableIds) {
     delete idx.tableSchema[String(tid)];
     delete idx.tableIdToName[String(tid)];
@@ -237,6 +245,4 @@ export async function deleteSchema(id: number) {
   }
   delete idx.schemaIdToSlug[String(id)];
   await store.writeIndex(idx);
-
-  await store.deleteDir(schemaDir(slug));
 }

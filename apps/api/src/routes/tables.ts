@@ -39,14 +39,14 @@ router.patch("/:tableId", async (req, res, next) => {
     if (layer_type !== undefined) input.layerType = layer_type;
     if (status !== undefined) input.status = status;
     if (sample_data !== undefined) input.sampleData = sample_data;
-    await repo.updateTable(Number((req.params as Record<string, string>)["tableId"]), input);
+    await repo.updateTable(Number(req.params["tableId"]), input);
     res.status(204).end();
   } catch (e) { next(e); }
 });
 
 router.delete("/:tableId", async (req, res, next) => {
   try {
-    await repo.deleteTable(Number((req.params as Record<string, string>)["tableId"]));
+    await repo.deleteTable(Number(req.params["tableId"]));
     res.status(204).end();
   } catch (e) { next(e); }
 });

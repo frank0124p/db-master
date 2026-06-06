@@ -11,9 +11,7 @@ router.get("/settings", async (_req: Request, res: Response, next) => {
   try {
     const s = await getDataHubSettings();
     // Mask token: show only last 4 chars
-    const masked = s.token
-      ? `${"*".repeat(Math.max(0, s.token.length - 4))}${s.token.slice(-4)}`
-      : "";
+    const masked = s.token ? "••••••••" : "";
     res.json({ settings: { ...s, token: masked } });
   } catch (e) { next(e); }
 });
@@ -28,9 +26,7 @@ router.patch("/settings", async (req: Request, res: Response, next) => {
       env: z.enum(["PROD", "DEV", "STAGING", "TEST"]).optional(),
     }).parse(req.body);
     const updated = await updateDataHubSettings(patch);
-    const masked = updated.token
-      ? `${"*".repeat(Math.max(0, updated.token.length - 4))}${updated.token.slice(-4)}`
-      : "";
+    const masked = updated.token ? "••••••••" : "";
     res.json({ settings: { ...updated, token: masked } });
   } catch (e) { next(e); }
 });

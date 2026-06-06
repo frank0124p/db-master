@@ -120,15 +120,30 @@ const defaultCounters: Counters = {
   versions: 0, wideTables: 0, wideSources: 0, wideColumns: 0, suites: 0,
 };
 
+// In-memory counter state — loaded once, incremented atomically in process memory.
+// Eliminates the read-modify-write race condition under concurrent requests within
+// the same Node.js process. Persisted to disk after each increment.
+let _counters: Counters | null = null;
+let _countersDirty = false;
+
+async function loadCounters(): Promise<Counters> {
+  if (_counters) return _counters;
+  _counters = (await readJson<Counters>(sysPath("counters.json"))) ?? { ...defaultCounters };
+  return _counters;
+}
+
 export async function nextId(key: keyof Counters): Promise<number> {
-  const file = sysPath("counters.json");
-  const counters = (await readJson<Counters>(file)) ?? { ...defaultCounters };
+  const counters = await loadCounters();
   counters[key]++;
-  await writeJson(file, counters);
+  _countersDirty = true;
+  await writeJson(sysPath("counters.json"), counters);
+  _countersDirty = false;
   return counters[key];
 }
 
-// ── Index (reverse lookups + slug maps) ───────────────────────────────────────
+// ── Index (reverse lookups + slug maps) ──────────────────────────────────────
+// In-memory cache for the index to prevent read-modify-write races. All index
+// mutations go through the helpers below which keep cache and disk in sync.
 
 export interface Index {
   tableSchema: Record<string, number>;       // tableId → schemaId
@@ -146,12 +161,17 @@ const defaultIndex: Index = {
   wideTableIdToName: {},
 };
 
+let _indexCache: Index | null = null;
+
 export async function getIndex(): Promise<Index> {
+  if (_indexCache) return _indexCache;
   const raw = await readJson<Partial<Index>>(sysPath("index.json"));
-  return { ...defaultIndex, ...(raw ?? {}) };
+  _indexCache = { ...defaultIndex, ...(raw ?? {}) };
+  return _indexCache;
 }
 
 export async function writeIndex(idx: Index): Promise<void> {
+  _indexCache = idx;
   await writeJson(sysPath("index.json"), idx);
 }
 
