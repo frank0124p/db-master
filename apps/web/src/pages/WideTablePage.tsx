@@ -68,6 +68,15 @@ function WideTableList({
   const { showToast } = useStore();
   const { data: schema } = useQuery({ queryKey: ["schema", schemaId], queryFn: () => api.schemas.get(schemaId) });
   const { data: wideTables } = useQuery({ queryKey: ["wideTables", schemaId], queryFn: () => api.wideTables.list(schemaId) });
+  const [hoveredWtId, setHoveredWtId] = useState<number | null>(null);
+
+  const { data: hoveredWt } = useQuery({
+    queryKey: ["wideTable", schemaId, hoveredWtId],
+    queryFn: () => api.wideTables.get(schemaId, hoveredWtId!),
+    enabled: hoveredWtId !== null,
+  });
+
+  const highlightedTableIds = new Set(hoveredWt?.sources.map(s => s.tableId) ?? []);
 
   const tabCfg = LAYER_TABS.find(t => t.type === layerTab)!;
   const visible = wideTables?.filter(wt => wt.wideTableType === layerTab) ?? [];
@@ -86,100 +95,142 @@ function WideTableList({
   }
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      {/* Toolbar */}
-      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)", flexShrink: 0 }}>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>Wide Tables — {schema?.name}</span>
-        <span style={{ fontSize: 12, color: "var(--text-3)" }}>{wideTables?.length ?? 0} 個合併寬表</span>
-        <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
-      </div>
-
-      {/* Layer tabs */}
-      <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "var(--bg-2)", flexShrink: 0 }}>
-        {LAYER_TABS.map(tab => {
-          const count = wideTables?.filter(w => w.wideTableType === tab.type).length ?? 0;
-          const active = layerTab === tab.type;
-          return (
-            <button
-              key={tab.type}
-              onClick={() => onTabChange(tab.type)}
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "10px 20px", border: "none", cursor: "pointer",
-                background: active ? "var(--bg-1)" : "transparent",
-                borderBottom: `2px solid ${active ? tab.color : "transparent"}`,
+    <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      {/* Left panel — 資料結構 */}
+      <div style={{ width: 200, flexShrink: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-1)" }}>
+        <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", flex: 1 }}>資料結構</span>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: "var(--bg-4)", color: "var(--text-3)" }}>
+            {schema?.tables.length ?? 0}
+          </span>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
+          {schema?.tables.map(t => {
+            const highlighted = highlightedTableIds.has(t.id);
+            return (
+              <div key={t.id} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 12px",
+                borderLeft: `2px solid ${highlighted ? tabCfg.color : "transparent"}`,
+                background: highlighted ? `${tabCfg.bg}` : "transparent",
                 transition: "all 0.15s",
               }}>
-              <span style={{
-                fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
-                background: active ? tab.bg : "var(--bg-4)",
-                color: active ? tab.color : "var(--text-3)",
-                border: `1px solid ${active ? tab.border : "var(--border)"}`,
-              }}>
-                {tab.label}
-              </span>
-              <span style={{ fontSize: 12, color: active ? "var(--text-1)" : "var(--text-3)", fontWeight: active ? 600 : 400 }}>
-                {tab.shortDesc}
-              </span>
-              <span style={{
-                fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8,
-                background: active ? tab.bg : "var(--bg-4)",
-                color: active ? tab.color : "var(--text-3)",
-              }}>
-                {count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Description banner */}
-      <div style={{
-        padding: "10px 20px", borderBottom: "1px solid var(--border)",
-        background: tabCfg.bg, display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
-      }}>
-        <span style={{ fontSize: 14, color: tabCfg.color, flexShrink: 0 }}>
-          {tabCfg.type === "r2u" ? "⊕" : "⊞"}
-        </span>
-        <div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: tabCfg.color, marginRight: 8 }}>
-            {tabCfg.label}
-          </span>
-          <span style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
-            {tabCfg.fullDesc}
-          </span>
+                <span style={{
+                  fontFamily: "var(--font-mono)", fontSize: 11,
+                  color: highlighted ? tabCfg.color : "var(--text-2)",
+                  flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  fontWeight: highlighted ? 600 : 400,
+                  opacity: hoveredWtId !== null && !highlighted ? 0.45 : 1,
+                  transition: "all 0.15s",
+                }}>{t.name}</span>
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 6, flexShrink: 0,
+                  background: highlighted ? tabCfg.bg : "var(--bg-4)",
+                  color: highlighted ? tabCfg.color : "var(--text-3)",
+                  border: `1px solid ${highlighted ? tabCfg.border : "var(--border)"}`,
+                }}>{t.fields.length}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Cards */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-        {visible.length === 0 && (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-3)" }}>
-            <div style={{ fontSize: 32, marginBottom: 12, color: tabCfg.color }}>⊞</div>
-            <div style={{ fontSize: 13, marginBottom: 6 }}>尚無 {tabCfg.label} 寬表</div>
-            <div style={{ fontSize: 12, marginBottom: 16, maxWidth: 400, margin: "0 auto 16px", lineHeight: 1.6 }}>{tabCfg.shortDesc} — 點擊右上角新建</div>
-            <button className="btn btn-primary" onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
+      {/* Right panel — existing content */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {/* Toolbar */}
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)", flexShrink: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>Wide Tables — {schema?.name}</span>
+          <span style={{ fontSize: 12, color: "var(--text-3)" }}>{wideTables?.length ?? 0} 個合併寬表</span>
+          <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
+        </div>
+
+        {/* Layer tabs */}
+        <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "var(--bg-2)", flexShrink: 0 }}>
+          {LAYER_TABS.map(tab => {
+            const count = wideTables?.filter(w => w.wideTableType === tab.type).length ?? 0;
+            const active = layerTab === tab.type;
+            return (
+              <button
+                key={tab.type}
+                onClick={() => onTabChange(tab.type)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "10px 20px", border: "none", cursor: "pointer",
+                  background: active ? "var(--bg-1)" : "transparent",
+                  borderBottom: `2px solid ${active ? tab.color : "transparent"}`,
+                  transition: "all 0.15s",
+                }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
+                  background: active ? tab.bg : "var(--bg-4)",
+                  color: active ? tab.color : "var(--text-3)",
+                  border: `1px solid ${active ? tab.border : "var(--border)"}`,
+                }}>
+                  {tab.label}
+                </span>
+                <span style={{ fontSize: 12, color: active ? "var(--text-1)" : "var(--text-3)", fontWeight: active ? 600 : 400 }}>
+                  {tab.shortDesc}
+                </span>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8,
+                  background: active ? tab.bg : "var(--bg-4)",
+                  color: active ? tab.color : "var(--text-3)",
+                }}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Description banner */}
+        <div style={{
+          padding: "10px 20px", borderBottom: "1px solid var(--border)",
+          background: tabCfg.bg, display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 14, color: tabCfg.color, flexShrink: 0 }}>
+            {tabCfg.type === "r2u" ? "⊕" : "⊞"}
+          </span>
+          <div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: tabCfg.color, marginRight: 8 }}>
+              {tabCfg.label}
+            </span>
+            <span style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+              {tabCfg.fullDesc}
+            </span>
           </div>
-        )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-          {visible.map(wt => (
-            <div key={wt.id} onClick={() => onOpen(wt.id)}
-              style={{ background: "var(--bg-2)", border: `1px solid var(--border)`, borderRadius: 8, padding: 16, cursor: "pointer", transition: "border-color 0.15s" }}
-              onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = tabCfg.color}
-              onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--accent)", fontWeight: 600, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wt.name}</div>
-                  {wt.description && <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, lineHeight: 1.4 }}>{wt.description}</div>}
-                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>{new Date(wt.createdAt).toLocaleString("zh-TW")}</div>
-                </div>
-                <div style={{ display: "flex", gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => downloadDdl(wt.id, wt.name)}>↓ DDL</button>
-                  <button className="btn btn-danger" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => del(wt.id, wt.name)}>刪除</button>
+        </div>
+
+        {/* Cards */}
+        <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          {visible.length === 0 && (
+            <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-3)" }}>
+              <div style={{ fontSize: 32, marginBottom: 12, color: tabCfg.color }}>⊞</div>
+              <div style={{ fontSize: 13, marginBottom: 6 }}>尚無 {tabCfg.label} 寬表</div>
+              <div style={{ fontSize: 12, marginBottom: 16, maxWidth: 400, margin: "0 auto 16px", lineHeight: 1.6 }}>{tabCfg.shortDesc} — 點擊右上角新建</div>
+              <button className="btn btn-primary" onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+            {visible.map(wt => (
+              <div key={wt.id} onClick={() => onOpen(wt.id)}
+                style={{ background: "var(--bg-2)", border: `1px solid var(--border)`, borderRadius: 8, padding: 16, cursor: "pointer", transition: "border-color 0.15s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = tabCfg.color; setHoveredWtId(wt.id); }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"; setHoveredWtId(null); }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--accent)", fontWeight: 600, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wt.name}</div>
+                    {wt.description && <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, lineHeight: 1.4 }}>{wt.description}</div>}
+                    <div style={{ fontSize: 11, color: "var(--text-3)" }}>{new Date(wt.createdAt).toLocaleString("zh-TW")}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => downloadDdl(wt.id, wt.name)}>↓ DDL</button>
+                    <button className="btn btn-danger" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => del(wt.id, wt.name)}>刪除</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -378,6 +429,7 @@ function JoinDiagramModal({ sources, columns, name, onClose }: {
 function WideTableDetailView({ schemaId, id, onBack }: { schemaId: number; id: number; onBack: () => void }) {
   const { showToast } = useStore();
   const [showDiagram, setShowDiagram] = useState(false);
+  const [focusTableId, setFocusTableId] = useState<number | null>(null);
   const { data: wt } = useQuery({ queryKey: ["wideTable", schemaId, id], queryFn: () => api.wideTables.get(schemaId, id) });
   if (!wt) return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: "var(--text-3)" }}>載入中...</span></div>;
 
@@ -397,10 +449,13 @@ function WideTableDetailView({ schemaId, id, onBack }: { schemaId: number; id: n
   }
 
   const sql = buildViewSqlClient(wt.name, sources, columns);
+  const accentColor = wt.wideTableType === "r2u" ? "#a78bfa" : "#34d399";
+  const sortedSources = [...wt.sources].sort((a, b) => a.position - b.position);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)" }}>
+      {/* Toolbar */}
+      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)", flexShrink: 0 }}>
         <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={onBack}>← 返回</button>
         <span style={{ fontSize: 14, fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--accent)" }}>{wt.name}</span>
         {wt.description && <span style={{ fontSize: 12, color: "var(--text-3)" }}>{wt.description}</span>}
@@ -410,10 +465,76 @@ function WideTableDetailView({ schemaId, id, onBack }: { schemaId: number; id: n
           <button className="btn btn-primary" onClick={downloadDdl}>↓ 下載 DDL</button>
         </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-        <JoinGraph sources={sources} />
-        <ColumnTable columns={columns} readOnly />
-        <SqlPreview sql={sql} />
+
+      {/* Two-panel body */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+
+        {/* Left panel — 來源資料結構 */}
+        <div style={{ width: 220, flexShrink: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-1)" }}>
+          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>來源資料結構</span>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
+            {sortedSources.map(src => {
+              const active = focusTableId === src.tableId;
+              const srcCols = wt.columns.filter(c => {
+                const srcRec = wt.sources.find(s => s.id === c.sourceId);
+                return srcRec?.tableId === src.tableId;
+              });
+              const includedCount = srcCols.filter(c => c.included).length;
+              return (
+                <div key={src.id}
+                  onClick={() => setFocusTableId(active ? null : src.tableId)}
+                  style={{
+                    cursor: "pointer",
+                    borderLeft: `2px solid ${active ? accentColor : "transparent"}`,
+                    background: active ? `rgba(${wt.wideTableType === "r2u" ? "167,139,250" : "52,211,153"},0.1)` : "transparent",
+                    marginBottom: 2, transition: "all 0.15s",
+                  }}
+                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = "var(--bg-3)"; }}
+                  onMouseLeave={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+                >
+                  {/* Source table header row */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px 4px" }}>
+                    <span style={{
+                      fontFamily: "var(--font-mono)", fontSize: 11,
+                      color: active ? accentColor : "var(--text-1)",
+                      fontWeight: active ? 700 : 500,
+                      flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>{src.tableName}</span>
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 6, flexShrink: 0,
+                      background: active ? `rgba(${wt.wideTableType === "r2u" ? "167,139,250" : "52,211,153"},0.2)` : "var(--bg-4)",
+                      color: active ? accentColor : "var(--text-3)",
+                    }}>{includedCount}</span>
+                  </div>
+                  {/* Cross-schema label */}
+                  {src.schemaId !== wt.schemaId && (
+                    <div style={{ padding: "0 10px 3px", fontSize: 9, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+                      schema:{src.schemaId}
+                    </div>
+                  )}
+                  {/* Fields from this source */}
+                  {srcCols.filter(c => c.included).map(c => (
+                    <div key={c.id} style={{ display: "flex", alignItems: "center", padding: "2px 10px 2px 18px", gap: 4 }}>
+                      <span style={{ fontSize: 9, color: "var(--text-3)", flexShrink: 0 }}>·</span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: active ? "var(--text-2)" : "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {c.fieldName}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right panel — existing content */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+          <JoinGraph sources={sources} />
+          <ColumnTable columns={columns} readOnly {...(focusTableId !== null ? { focusTableId } : {})} />
+          <SqlPreview sql={sql} />
+        </div>
       </div>
 
       {showDiagram && (
@@ -985,8 +1106,8 @@ function JoinGraph({ sources, editable, onUpdate }: {
   );
 }
 
-function ColumnTable({ columns, readOnly, onToggle, onRename }: {
-  columns: PreviewColumn[]; readOnly?: boolean;
+function ColumnTable({ columns, readOnly, focusTableId, onToggle, onRename }: {
+  columns: PreviewColumn[]; readOnly?: boolean; focusTableId?: number;
   onToggle?: (srcPos: number, fieldId: number) => void;
   onRename?: (srcPos: number, fieldId: number, val: string) => void;
 }) {
@@ -1016,8 +1137,10 @@ function ColumnTable({ columns, readOnly, onToggle, onRename }: {
               <div style={{ display: "grid", gridTemplateColumns: "28px 160px 110px 1fr 70px", padding: "5px 12px", background: "var(--bg-3)", fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 600, gap: 8, borderBottom: "1px solid var(--border)" }}>
                 <div /><div>來源欄位</div><div>類型</div><div>輸出名稱</div><div>衝突</div>
               </div>
-              {cols.map(col => (
-                <div key={col.fieldId} style={{ display: "grid", gridTemplateColumns: "28px 160px 110px 1fr 70px", padding: "6px 12px", alignItems: "center", gap: 8, borderTop: "1px solid var(--border)", background: col.hasConflict ? "rgba(251,191,36,0.04)" : "transparent", opacity: col.included ? 1 : 0.4, transition: "opacity 0.15s" }}>
+              {cols.map(col => {
+                const isFocused = focusTableId !== undefined && col.tableId === focusTableId;
+                return (
+                <div key={col.fieldId} style={{ display: "grid", gridTemplateColumns: "28px 160px 110px 1fr 70px", padding: "6px 12px", alignItems: "center", gap: 8, borderTop: "1px solid var(--border)", background: isFocused ? "rgba(167,139,250,0.15)" : col.hasConflict ? "rgba(251,191,36,0.04)" : "transparent", opacity: col.included ? 1 : 0.4, transition: "background 0.15s, opacity 0.15s" }}>
                   <div>
                     {!readOnly && (
                       <div onClick={() => onToggle?.(col.sourcePosition, col.fieldId)}
@@ -1041,7 +1164,8 @@ function ColumnTable({ columns, readOnly, onToggle, onRename }: {
                   </div>
                   <div>{col.hasConflict && <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 3, background: "rgba(251,191,36,0.2)", color: "var(--warning)" }}>已加前綴</span>}</div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
