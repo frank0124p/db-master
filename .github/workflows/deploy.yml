@@ -27,6 +27,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Build packages
+        run: npm run build -w packages/core -w packages/ddl-parser
+
+      - name: Test
+        run: npm test
+
       - name: Build web (mock mode)
         run: npm run build -w apps/web
         env:
