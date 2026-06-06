@@ -1220,10 +1220,45 @@ export default function App() {
         display: "flex", alignItems: "center", padding: isMobile ? "0 12px" : "0 16px",
         gap: isMobile ? 8 : 16, flexShrink: 0, zIndex: 100,
       }}>
-        {/* Logo */}
-        <div style={{ fontWeight: 700, fontSize: isMobile ? 13 : 14, color: "var(--accent)", letterSpacing: "0.5px", flexShrink: 0 }}>
-          ⬡{!isMobile && " Schema Studio"}
-          {isMobile && <span style={{ marginLeft: 4 }}>Schema Studio</span>}
+        {/* Logo + Suite indicator — grouped together on the left */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: isMobile ? 13 : 14, color: "var(--accent)", letterSpacing: "0.5px" }}>
+            ⬡{!isMobile && " Schema Studio"}
+            {isMobile && <span style={{ marginLeft: 4 }}>Schema Studio</span>}
+          </div>
+
+          {/* Separator */}
+          {suitePicked && <span style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />}
+
+          {/* Suite badge — always shown when suitePicked */}
+          {suitePicked && (() => {
+            const dotColor = activeSuite?.color ?? "var(--accent)";
+            const label = activeSuite?.name ?? "ALL";
+            const isAll = !activeSuite;
+            return (
+              <button
+                onClick={() => setSuitePicked(false)}
+                title="切換 Product Suite"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "0 9px 0 7px", height: 26, borderRadius: 6,
+                  border: isAll ? "1px solid var(--border)" : `1.5px solid ${dotColor}66`,
+                  background: isAll ? "var(--bg-3)" : `${dotColor}20`,
+                  cursor: "pointer", flexShrink: 0, transition: "opacity 0.15s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.7"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}>
+                {isAll
+                  ? <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", letterSpacing: "0.3px" }}>ALL</span>
+                  : <>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-1)", maxWidth: isMobile ? 80 : 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                    </>
+                }
+                <span style={{ fontSize: 9, color: "var(--text-3)", marginLeft: 2 }}>⇄</span>
+              </button>
+            );
+          })()}
         </div>
 
         {/* Desktop: full nav | Tablet: scrollable nav | Mobile: nothing (in drawer) */}
@@ -1235,44 +1270,6 @@ export default function App() {
             ))}
           </nav>
         )}
-
-        {/* Suite indicator — always visible when suitePicked */}
-        {!isMobile && suitePicked && (() => {
-          const dotColor = activeSuite?.color ?? "var(--accent)";
-          const label = activeSuite?.name ?? "ALL";
-          const isAll = !activeSuite;
-          return (
-            <button
-              onClick={() => setSuitePicked(false)}
-              title="切換 Product Suite"
-              style={{
-                display: "flex", alignItems: "center", gap: 7,
-                padding: "0 12px 0 8px", height: 30, borderRadius: 8,
-                border: isAll
-                  ? "1px solid var(--border-light)"
-                  : `1.5px solid ${dotColor}55`,
-                background: isAll
-                  ? "var(--bg-3)"
-                  : `${dotColor}22`,
-                color: "var(--text-1)", cursor: "pointer", flexShrink: 0,
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.7"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}>
-              {/* Label */}
-              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 500, letterSpacing: "0.4px", textTransform: "uppercase" }}>Suite</span>
-              <span style={{ width: 1, height: 14, background: "var(--border)", flexShrink: 0 }} />
-              {isAll
-                ? <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", letterSpacing: "0.5px" }}>ALL</span>
-                : <>
-                    <span style={{ width: 9, height: 9, borderRadius: "50%", background: dotColor, flexShrink: 0, boxShadow: `0 0 0 2px ${dotColor}33` }} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-                  </>
-              }
-              <span style={{ fontSize: 9, color: "var(--text-3)", marginLeft: 1 }}>⇄</span>
-            </button>
-          );
-        })()}
 
         <div style={{ marginLeft: isMobile ? "auto" : !isTablet ? "auto" : undefined, display: "flex", gap: 6, alignItems: "center" }}>
           {/* Tablet: sidebar toggle */}
