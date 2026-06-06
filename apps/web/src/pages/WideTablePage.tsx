@@ -34,19 +34,21 @@ export default function WideTablePage() {
 
 // ── List ──────────────────────────────────────────────────────────────────────
 
-const LAYER_TABS: { type: WideTableType; label: string; desc: string; color: string; bg: string; border: string }[] = [
+const LAYER_TABS: { type: WideTableType; label: string; shortDesc: string; fullDesc: string; color: string; bg: string; border: string }[] = [
   {
     type: "r2u",
     label: "R2U",
-    desc: "原始 → 整合，多表 FK JOIN",
+    shortDesc: "Raw → Unified",
+    fullDesc: "將多張原始資料表（Raw Layer）透過 FK JOIN 整合為單一寬表，供 ETL 流程或分析層使用。每張 R2U 寬表代表一條資料整合路徑。",
     color: "#a78bfa",
     bg: "rgba(167,139,250,0.12)",
     border: "rgba(167,139,250,0.4)",
   },
   {
     type: "unified",
-    label: "Unified",
-    desc: "整合層統一視圖",
+    label: "Unified Layer",
+    shortDesc: "統一整合視圖",
+    fullDesc: "跨多條 R2U 路徑或多個 Domain 的統一語義層，定義最終對外提供的標準資料結構。Unified 寬表是分析師與下游系統的主要消費介面。",
     color: "#34d399",
     bg: "rgba(52,211,153,0.12)",
     border: "rgba(52,211,153,0.4)",
@@ -117,7 +119,7 @@ function WideTableList({
                 {tab.label}
               </span>
               <span style={{ fontSize: 12, color: active ? "var(--text-1)" : "var(--text-3)", fontWeight: active ? 600 : 400 }}>
-                {tab.desc}
+                {tab.shortDesc}
               </span>
               <span style={{
                 fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8,
@@ -131,13 +133,31 @@ function WideTableList({
         })}
       </div>
 
+      {/* Description banner */}
+      <div style={{
+        padding: "10px 20px", borderBottom: "1px solid var(--border)",
+        background: tabCfg.bg, display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 14, color: tabCfg.color, flexShrink: 0 }}>
+          {tabCfg.type === "r2u" ? "⊕" : "⊞"}
+        </span>
+        <div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: tabCfg.color, marginRight: 8 }}>
+            {tabCfg.label}
+          </span>
+          <span style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+            {tabCfg.fullDesc}
+          </span>
+        </div>
+      </div>
+
       {/* Cards */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         {visible.length === 0 && (
           <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-3)" }}>
             <div style={{ fontSize: 32, marginBottom: 12, color: tabCfg.color }}>⊞</div>
             <div style={{ fontSize: 13, marginBottom: 6 }}>尚無 {tabCfg.label} 寬表</div>
-            <div style={{ fontSize: 12, marginBottom: 16 }}>{tabCfg.desc} — 點擊右上角新建</div>
+            <div style={{ fontSize: 12, marginBottom: 16, maxWidth: 400, margin: "0 auto 16px", lineHeight: 1.6 }}>{tabCfg.shortDesc} — 點擊右上角新建</div>
             <button className="btn btn-primary" onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
           </div>
         )}
