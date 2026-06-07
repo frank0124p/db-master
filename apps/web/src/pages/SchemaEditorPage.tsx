@@ -1108,8 +1108,16 @@ function FieldEditorPanel({ schema, table }: { schema: SchemaDetail; table: Tabl
                           <div key={i} style={{ display: "flex", gap: 10, padding: "8px 14px", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
                             <span style={{ color, fontWeight: 700, flexShrink: 0 }}>{icon}</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", marginBottom: 2 }}>
-                                {v.tableName}{v.fieldName ? `.${v.fieldName}` : ""}
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, flexWrap: "wrap" }}>
+                                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)" }}>
+                                  {v.tableName}{v.fieldName ? `.${v.fieldName}` : ""}
+                                </span>
+                                {v.ruleId && (
+                                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, padding: "0px 5px", borderRadius: 3,
+                                    background: `${color}1a`, color, border: `1px solid ${color}44` }}>
+                                    {v.ruleId}
+                                  </span>
+                                )}
                               </div>
                               <div style={{ color: "var(--text-2)", lineHeight: 1.4 }}>{v.message}</div>
                             </div>
@@ -1292,9 +1300,17 @@ function ViolationRow({ v }: { v: ViolationSummary }) {
   return (
     <div style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
       <span style={{ color, fontWeight: 700, minWidth: 16, flexShrink: 0 }}>{icon}</span>
-      <div>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-3)", marginRight: 8 }}>{v.tableName}{v.fieldName ? `.${v.fieldName}` : ""}</span>
-        <span style={{ color: "var(--text-2)" }}>{v.message}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-3)" }}>{v.tableName}{v.fieldName ? `.${v.fieldName}` : ""}</span>
+          {v.ruleId && (
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4,
+              background: `${color}1a`, color, border: `1px solid ${color}44` }}>
+              {v.ruleId}
+            </span>
+          )}
+        </div>
+        <span style={{ color: "var(--text-2)", fontSize: 12 }}>{v.message}</span>
       </div>
     </div>
   );

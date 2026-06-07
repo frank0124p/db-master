@@ -1,6 +1,6 @@
 import React, { useState, Fragment } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { api, type RuleDetail, type RuleLayer, type SkillInfo, type RuleSnapshot, type LayerDef, type SkillRuleDef } from "../api.js";
+import { api, ApiError, type RuleDetail, type RuleLayer, type SkillInfo, type RuleSnapshot, type LayerDef, type SkillRuleDef } from "../api.js";
 import { useStore } from "../store.js";
 
 // ── shared helpers ────────────────────────────────────────────────────────────
@@ -392,6 +392,18 @@ function emptyRuleDef(): RuleDefFormState {
 }
 
 // ── Create Rule Modal ─────────────────────────────────────────────────────────
+function ValidationErrorBox({ errors }: { errors: string[] }) {
+  if (errors.length === 0) return null;
+  return (
+    <div style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.35)", borderRadius: 6, padding: "8px 12px" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#f87171", marginBottom: 4 }}>規則驗證失敗</div>
+      {errors.map((e, i) => (
+        <div key={i} style={{ fontSize: 11, color: "var(--text-2)", fontFamily: "var(--font-mono)", lineHeight: 1.6 }}>• {e}</div>
+      ))}
+    </div>
+  );
+}
+
 function CreateRuleModal({ skills, onClose }: { skills: SkillInfo[]; onClose: () => void }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
@@ -399,11 +411,11 @@ function CreateRuleModal({ skills, onClose }: { skills: SkillInfo[]; onClose: ()
   const [skillName, setSkillName] = useState(userSkills[0]?.name ?? "");
   const [rule, setRule] = useState<RuleDefFormState>(emptyRuleDef());
   const [saving, setSaving] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   async function create() {
     if (!skillName) { showToast("請先選擇目標 Skill"); return; }
-    if (!rule.id.trim()) { showToast("請填寫規則 ID"); return; }
-    if (!rule.description.trim()) { showToast("請填寫規則說明"); return; }
+    setValidationErrors([]);
     setSaving(true);
     try {
       const rulePayload: SkillRuleDef = {
@@ -424,7 +436,13 @@ function CreateRuleModal({ skills, onClose }: { skills: SkillInfo[]; onClose: ()
       ]);
       showToast(`✓ 規則「${rule.id.trim()}」已新增至 ${skillName}`);
       onClose();
-    } catch (e) { showToast(`新增失敗: ${String(e)}`); }
+    } catch (e) {
+      if (e instanceof ApiError && e.errors?.length) {
+        setValidationErrors(e.errors);
+      } else {
+        showToast(`新增失敗: ${String(e)}`);
+      }
+    }
     finally { setSaving(false); }
   }
 
@@ -452,9 +470,11 @@ function CreateRuleModal({ skills, onClose }: { skills: SkillInfo[]; onClose: ()
 
         <RuleDefForm value={rule} onChange={setRule} disableId={false} />
 
+        <ValidationErrorBox errors={validationErrors} />
+
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
           <button className="btn btn-ghost" onClick={onClose} disabled={saving}>取消</button>
-          <button className="btn btn-primary" onClick={() => void create()} disabled={saving || !rule.id.trim() || !rule.description.trim() || userSkills.length === 0}>
+          <button className="btn btn-primary" onClick={() => void create()} disabled={saving || userSkills.length === 0}>
             {saving ? "新增中…" : "✓ 新增規則"}
           </button>
         </div>
@@ -479,9 +499,10 @@ function EditRuleModal({ rule: r, onClose }: { rule: RuleDetail; onClose: () => 
     forbiddenFieldPattern: undefined,
   });
   const [saving, setSaving] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   async function save() {
-    if (!rule.description.trim()) { showToast("請填寫規則說明"); return; }
+    setValidationErrors([]);
     setSaving(true);
     try {
       const payload: Omit<SkillRuleDef, "id"> = {
@@ -501,7 +522,13 @@ function EditRuleModal({ rule: r, onClose }: { rule: RuleDetail; onClose: () => 
       ]);
       showToast(`✓ 規則「${r.id}」已更新`);
       onClose();
-    } catch (e) { showToast(`更新失敗: ${String(e)}`); }
+    } catch (e) {
+      if (e instanceof ApiError && e.errors?.length) {
+        setValidationErrors(e.errors);
+      } else {
+        showToast(`更新失敗: ${String(e)}`);
+      }
+    }
     finally { setSaving(false); }
   }
 
@@ -514,9 +541,11 @@ function EditRuleModal({ rule: r, onClose }: { rule: RuleDetail; onClose: () => 
 
         <RuleDefForm value={rule} onChange={setRule} disableId={true} />
 
+        <ValidationErrorBox errors={validationErrors} />
+
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
           <button className="btn btn-ghost" onClick={onClose} disabled={saving}>取消</button>
-          <button className="btn btn-primary" onClick={() => void save()} disabled={saving || !rule.description.trim()}>
+          <button className="btn btn-primary" onClick={() => void save()} disabled={saving}>
             {saving ? "儲存中…" : "✓ 儲存"}
           </button>
         </div>

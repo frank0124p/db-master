@@ -10,6 +10,7 @@ import {
   deleteSnapshot,
 } from "../repositories/ruleSnapshots.js";
 import { getAllSkills, loadSkills, getUserSkillFilePath } from "../services/skills.js";
+import { validateSkillRule } from "@schema-studio/core";
 
 // ── Skill rule serialization helpers ──────────────────────────────────────────
 
@@ -172,6 +173,12 @@ router.post("/skill-rule", async (req: Request, res: Response) => {
   }
   const { skillName, rule } = parsed.data;
 
+  const validation = validateSkillRule(rule);
+  if (!validation.valid) {
+    res.status(422).json({ error: { code: "RULE_INVALID", message: "Rule failed validation", errors: validation.errors } });
+    return;
+  }
+
   const filePath = getUserSkillFilePath(skillName);
   if (!filePath) {
     res.status(404).json({ error: { code: "NOT_FOUND", message: `User skill "${skillName}" not found` } });
@@ -208,6 +215,13 @@ router.put("/skill-rule/:ruleId", async (req: Request, res: Response) => {
     return;
   }
   const updates = parsed.data;
+
+  // Validate the merged rule (pass ruleId as id since it can't change)
+  const validation = validateSkillRule({ id: ruleId, ...updates });
+  if (!validation.valid) {
+    res.status(422).json({ error: { code: "RULE_INVALID", message: "Rule failed validation", errors: validation.errors } });
+    return;
+  }
 
   // Find which user skill owns this ruleId
   const skill = getAllSkills().find(s => s.source === "user" && s.rules.some(r => r.id === ruleId));

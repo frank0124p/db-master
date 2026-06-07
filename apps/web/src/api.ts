@@ -283,13 +283,19 @@ export interface PushRecord {
   status: "ok" | "partial" | "failed";
 }
 
+export class ApiError extends Error {
+  constructor(message: string, public readonly code?: string, public readonly errors?: string[]) {
+    super(message);
+  }
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/v1${path}`, {
     headers: { "Content-Type": "application/json" }, ...init,
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new Error(body.error?.message ?? `HTTP ${res.status}`);
+    const body = await res.json().catch(() => ({})) as { error?: { message?: string; code?: string; errors?: string[] } };
+    throw new ApiError(body.error?.message ?? `HTTP ${res.status}`, body.error?.code, body.error?.errors);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
