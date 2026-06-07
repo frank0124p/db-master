@@ -20,7 +20,7 @@
 | 12 | Schema Analysis | 2 | 1d | 09, 10, 11 | ✅ |
 | 13 | DDL Export | 3 | 0.5d | 05 | ✅ |
 | 14 | Naming Diff UI | 3 | 1d | 11, 07 | ✅ |
-| 15 | E2E Tests | 3 | 1d | 14 | ⬜ |
+| 15 | E2E Tests | 3 | 1d | 14 | ✅ |
 
 ## 規則
 

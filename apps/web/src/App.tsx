@@ -437,7 +437,7 @@ function SchemaTreeItem({ schema, suiteColor, isSelected, onSelect, expanded, on
             opacity: hover ? 1 : 0.6 }}>
           {expanded ? "▾" : "▸"}
         </div>
-        <div onClick={onSelect}
+        <div onClick={onSelect} data-testid="schema-item" data-schema-name={schema.name}
           style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6,
             padding: "6px 8px 6px 2px", cursor: "pointer" }}>
           <div style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
@@ -807,7 +807,7 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
             style={{ padding: "2px 7px", borderRadius: 4, border: "1px solid var(--accent)", background: "var(--accent-dim)", color: "var(--accent)", cursor: "pointer", fontSize: 10, fontWeight: 700, letterSpacing: "0.3px" }}>✦ AI</button>
           <button onClick={() => void reloadDdl()} disabled={reloading}
             style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, opacity: reloading ? 0.5 : 1 }}>↺</button>
-          <button onClick={() => setShowModal(true)}
+          <button onClick={() => setShowModal(true)} title={t("sidebar.new_schema")}
             style={{ width: 22, height: 22, borderRadius: 4, border: "none", background: "transparent", color: "var(--text-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>＋</button>
         </div>
       </div>
