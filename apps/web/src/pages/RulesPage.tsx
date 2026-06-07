@@ -140,6 +140,120 @@ function RuleConfigEditor({ r, onClose }: { r: RuleDetail; onClose: () => void }
   );
 }
 
+// ── Snapshot diff ─────────────────────────────────────────────────────────────
+
+type OverrideEntry = { severity?: string; enabled?: boolean; config?: Record<string, unknown> };
+
+interface SnapDiffItem {
+  ruleId: string;
+  kind: "added" | "removed" | "changed";
+  before: OverrideEntry;
+  after: OverrideEntry;
+}
+
+function asOverrides(raw: Record<string, unknown>): Record<string, OverrideEntry> {
+  return raw as Record<string, OverrideEntry>;
+}
+
+function diffSnapshots(before: Record<string, OverrideEntry>, after: Record<string, OverrideEntry>): SnapDiffItem[] {
+  const allIds = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const items: SnapDiffItem[] = [];
+  for (const id of allIds) {
+    const b = before[id];
+    const a = after[id];
+    if (!b && a) {
+      items.push({ ruleId: id, kind: "added", before: {}, after: a });
+    } else if (b && !a) {
+      items.push({ ruleId: id, kind: "removed", before: b, after: {} });
+    } else if (b && a) {
+      const sevChanged = b.severity !== a.severity;
+      const enChanged  = (b.enabled ?? true) !== (a.enabled ?? true);
+      const cfgChanged = JSON.stringify(b.config) !== JSON.stringify(a.config);
+      if (sevChanged || enChanged || cfgChanged) {
+        items.push({ ruleId: id, kind: "changed", before: b, after: a });
+      }
+    }
+  }
+  return items.sort((x, y) => x.ruleId.localeCompare(y.ruleId));
+}
+
+function SnapshotDiff({ snap, prevSnap, rules }: {
+  snap: RuleSnapshot;
+  prevSnap: RuleSnapshot | null;
+  rules: RuleDetail[];
+}) {
+  const before = asOverrides(prevSnap?.overrides ?? {});
+  const after  = asOverrides(snap.overrides ?? {});
+  const diffs = diffSnapshots(before, after);
+  const ruleMap = new Map(rules.map(r => [r.id, r]));
+
+  if (diffs.length === 0) {
+    return (
+      <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--text-3)", background: "var(--bg-1)", borderTop: "1px solid var(--border)" }}>
+        {prevSnap ? "與前一快照無差異" : "首個快照 — 無對比基準"}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", background: "var(--bg-1)" }}>
+      <div style={{ padding: "8px 14px 6px", fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span>與前一快照差異</span>
+        {prevSnap && <span style={{ fontWeight: 400, color: "var(--text-3)" }}>← {prevSnap.name}</span>}
+        <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-3)" }}>{diffs.length} 項變更</span>
+      </div>
+      <div style={{ padding: "0 14px 10px", display: "flex", flexDirection: "column", gap: 4 }}>
+        {diffs.map(d => {
+          const rule = ruleMap.get(d.ruleId);
+          const kindColor = d.kind === "added" ? "#4ade80" : d.kind === "removed" ? "#f87171" : "#fbbf24";
+          const kindBg = d.kind === "added" ? "rgba(74,222,128,0.1)" : d.kind === "removed" ? "rgba(248,113,113,0.1)" : "rgba(251,191,36,0.08)";
+          const kindLabel = d.kind === "added" ? "新增覆蓋" : d.kind === "removed" ? "移除覆蓋" : "修改";
+          return (
+            <div key={d.ruleId} style={{ display: "grid", gridTemplateColumns: "70px 1fr auto", alignItems: "start", gap: 8, padding: "6px 10px", borderRadius: 5, background: kindBg, border: `1px solid ${kindColor}33` }}>
+              {/* Kind badge */}
+              <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 5, background: `${kindColor}22`, color: kindColor, border: `1px solid ${kindColor}44`, textAlign: "center", lineHeight: "16px" }}>
+                {kindLabel}
+              </span>
+              {/* Rule info */}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600, color: "var(--text-1)", marginBottom: rule?.description ? 2 : 0 }}>{d.ruleId}</div>
+                {rule?.description && <div style={{ fontSize: 10, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rule.description}</div>}
+              </div>
+              {/* Change detail */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-end", fontSize: 11, flexShrink: 0 }}>
+                {/* enabled change */}
+                {(d.before.enabled ?? true) !== (d.after.enabled ?? true) && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ color: "#f87171", textDecoration: "line-through" }}>{(d.before.enabled ?? true) ? "啟用" : "停用"}</span>
+                    <span style={{ color: "var(--text-3)" }}>→</span>
+                    <span style={{ color: "#4ade80", fontWeight: 600 }}>{(d.after.enabled ?? true) ? "啟用" : "停用"}</span>
+                  </div>
+                )}
+                {/* severity change */}
+                {d.before.severity !== d.after.severity && (d.before.severity || d.after.severity) && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    {d.before.severity
+                      ? <SevBadge v={d.before.severity} />
+                      : <span style={{ fontSize: 10, color: "var(--text-3)" }}>預設</span>}
+                    <span style={{ color: "var(--text-3)" }}>→</span>
+                    {d.after.severity
+                      ? <SevBadge v={d.after.severity} />
+                      : <span style={{ fontSize: 10, color: "var(--text-3)" }}>預設</span>}
+                  </div>
+                )}
+                {/* config change */}
+                {d.kind !== "removed" && d.kind !== "added" && JSON.stringify(d.before.config) !== JSON.stringify(d.after.config) && (
+                  <div style={{ fontSize: 10, color: "var(--text-3)" }}>config 已更新</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Rules tab ─────────────────────────────────────────────────────────────────
 function RulesTab({ rules }: { rules: RuleDetail[] }) {
   const qc = useQueryClient();
@@ -155,6 +269,7 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
   const [savingSnapshotName, setSavingSnapshotName] = useState(false);
   const [snapshotNameInput, setSnapshotNameInput] = useState("");
   const [showNameInput, setShowNameInput] = useState(false);
+  const [expandedSnapId, setExpandedSnapId] = useState<string | null>(null);
 
   const { data: snapshotsData, refetch: refetchSnapshots } = useQuery({
     queryKey: ["rule-snapshots"],
@@ -498,30 +613,56 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {snapshots.map(snap => (
-                <div key={snap.id} style={{ display: "flex", alignItems: "center", gap: 10,
-                  padding: "8px 12px", borderRadius: 6, background: "var(--bg-2)", border: "1px solid var(--border)" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", flex: 1, minWidth: 0,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {snap.name}
-                  </span>
-                  <span style={{ fontSize: 11, color: "var(--text-3)", flexShrink: 0 }}>
-                    {new Date(snap.createdAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                  <button onClick={() => restoreMut.mutate(snap.id)} disabled={restoreMut.isPending}
-                    style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "1px solid var(--border)",
-                      background: "var(--accent-dim)", color: "var(--accent)", cursor: "pointer", flexShrink: 0 }}>
-                    還原
-                  </button>
-                  <button onClick={() => deleteMut.mutate(snap.id)} disabled={deleteMut.isPending}
-                    style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)",
-                      background: "transparent", color: "var(--text-3)", cursor: "pointer", flexShrink: 0 }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--error,#f87171)"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}>
-                    刪除
-                  </button>
-                </div>
-              ))}
+              {snapshots.map((snap, idx) => {
+                const prevSnap = snapshots[idx + 1] ?? null;
+                const isExpanded = expandedSnapId === snap.id;
+                const overrideCount = Object.keys(snap.overrides ?? {}).length;
+                const diffItems = diffSnapshots(asOverrides(prevSnap?.overrides ?? {}), asOverrides(snap.overrides ?? {}));
+                return (
+                  <div key={snap.id} style={{ borderRadius: 6, border: `1px solid ${isExpanded ? "var(--accent)" : "var(--border)"}`, overflow: "hidden", background: "var(--bg-2)", transition: "border-color 0.15s" }}>
+                    {/* Header row */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px" }}>
+                      <button onClick={() => setExpandedSnapId(isExpanded ? null : snap.id)}
+                        style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 9, flexShrink: 0, transition: "transform 0.15s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
+                        ▼
+                      </button>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {snap.name}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+                            {new Date(snap.createdAt).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          <span style={{ fontSize: 10, color: "var(--text-3)" }}>{overrideCount} 個覆蓋</span>
+                          {diffItems.length > 0 && (
+                            <span style={{ fontSize: 10, fontWeight: 600, color: "#fbbf24" }}>△ {diffItems.length} 項變更</span>
+                          )}
+                          {diffItems.length === 0 && idx < snapshots.length - 1 && (
+                            <span style={{ fontSize: 10, color: "var(--text-3)" }}>= 與前版相同</span>
+                          )}
+                        </div>
+                      </div>
+                      <button onClick={() => restoreMut.mutate(snap.id)} disabled={restoreMut.isPending}
+                        style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "1px solid var(--border)",
+                          background: "var(--accent-dim)", color: "var(--accent)", cursor: "pointer", flexShrink: 0 }}>
+                        還原
+                      </button>
+                      <button onClick={() => deleteMut.mutate(snap.id)} disabled={deleteMut.isPending}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)",
+                          background: "transparent", color: "var(--text-3)", cursor: "pointer", flexShrink: 0 }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--error,#f87171)"; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}>
+                        刪除
+                      </button>
+                    </div>
+                    {/* Expanded diff */}
+                    {isExpanded && (
+                      <SnapshotDiff snap={snap} prevSnap={prevSnap} rules={rules} />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
