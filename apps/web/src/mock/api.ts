@@ -345,6 +345,9 @@ export const mockApi = {
       const rule = rules.find(r => r.id === ruleId) ?? rules[0]!;
       return { rule };
     },
+    createSkillRule: async () => ({ ok: true }),
+    updateSkillRule: async () => ({ ok: true }),
+    deleteSkillRule: async () => ({ ok: true }),
     snapshots: {
       list: async (): Promise<{ snapshots: RuleSnapshot[] }> => {
         await delay(60);

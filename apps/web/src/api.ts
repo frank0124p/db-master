@@ -188,6 +188,18 @@ export interface ImportResult { dryRun: false; check: ImportCheckResult; import:
 
 // ── Rules ─────────────────────────────────────────────────────────────────────
 
+export interface SkillRuleDef {
+  id: string;
+  group: "naming" | "semantic" | "structure";
+  severity: "error" | "warning" | "info";
+  description: string;
+  tablePattern?: string;
+  requiredFields?: string[];
+  forbiddenFields?: string[];
+  fieldPattern?: string;
+  forbiddenFieldPattern?: string;
+}
+
 export interface RuleDetail {
   id: string; group: "naming" | "semantic" | "structure";
   description: string; defaultSeverity: "error" | "warning" | "info";
@@ -365,6 +377,12 @@ const realApi = {
     list: () => req<{ rules: RuleDetail[] }>("/rules"),
     update: (ruleId: string, patch: Partial<{ severity: "error" | "warning" | "info"; enabled: boolean; config: Record<string, unknown> }>) =>
       req<{ rule: RuleDetail }>(`/rules/${ruleId}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    createSkillRule: (b: { skillName: string; rule: SkillRuleDef }) =>
+      req<{ ok: boolean }>("/rules/skill-rule", { method: "POST", body: JSON.stringify(b) }),
+    updateSkillRule: (ruleId: string, rule: Omit<SkillRuleDef, "id">) =>
+      req<{ ok: boolean }>(`/rules/skill-rule/${encodeURIComponent(ruleId)}`, { method: "PUT", body: JSON.stringify(rule) }),
+    deleteSkillRule: (ruleId: string) =>
+      req<{ ok: boolean }>(`/rules/skill-rule/${encodeURIComponent(ruleId)}`, { method: "DELETE" }),
     snapshots: {
       list: () => req<{ snapshots: RuleSnapshot[] }>("/rules/snapshots"),
       save: (name: string) => req<{ snapshot: RuleSnapshot }>("/rules/snapshots", { method: "POST", body: JSON.stringify({ name }) }),

@@ -1,6 +1,6 @@
 import React, { useState, Fragment } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { api, type RuleDetail, type RuleLayer, type SkillInfo, type RuleSnapshot, type LayerDef } from "../api.js";
+import { api, type RuleDetail, type RuleLayer, type SkillInfo, type RuleSnapshot, type LayerDef, type SkillRuleDef } from "../api.js";
 import { useStore } from "../store.js";
 
 // ── shared helpers ────────────────────────────────────────────────────────────
@@ -254,8 +254,279 @@ function SnapshotDiff({ snap, prevSnap, rules }: {
   );
 }
 
+// ── Rule definition form (shared by create and edit modals) ──────────────────
+
+interface RuleDefFormState {
+  id: string;
+  group: "naming" | "semantic" | "structure";
+  severity: "error" | "warning" | "info";
+  description: string;
+  tablePattern: string | undefined;
+  requiredFields: string[];
+  forbiddenFields: string[];
+  fieldPattern: string | undefined;
+  forbiddenFieldPattern: string | undefined;
+}
+
+function RuleDefForm({
+  value,
+  onChange,
+  disableId,
+}: {
+  value: RuleDefFormState;
+  onChange: (v: RuleDefFormState) => void;
+  disableId?: boolean;
+}) {
+  const [reqInput, setReqInput] = useState("");
+  const [forbInput, setForbInput] = useState("");
+
+  function addTag(field: "requiredFields" | "forbiddenFields", raw: string) {
+    const t = raw.trim();
+    if (!t || value[field].includes(t)) return;
+    onChange({ ...value, [field]: [...value[field], t] });
+  }
+  function removeTag(field: "requiredFields" | "forbiddenFields", t: string) {
+    onChange({ ...value, [field]: value[field].filter(x => x !== t) });
+  }
+
+  const labelStyle: React.CSSProperties = { fontSize: 10, color: "var(--text-3)", display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" };
+  const inputStyle: React.CSSProperties = { fontSize: 12, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-1)", outline: "none", width: "100%", boxSizing: "border-box" };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* ID */}
+      <div>
+        <label style={labelStyle}>規則 ID</label>
+        <input
+          style={{ ...inputStyle, opacity: disableId ? 0.5 : 1, cursor: disableId ? "not-allowed" : "text" }}
+          placeholder="例：custom.my_rule"
+          value={value.id}
+          disabled={disableId}
+          onChange={e => onChange({ ...value, id: e.target.value })}
+        />
+      </div>
+      {/* Group + Severity row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div>
+          <label style={labelStyle}>分組</label>
+          <select style={inputStyle} value={value.group} onChange={e => onChange({ ...value, group: e.target.value as SkillRuleDef["group"] })}>
+            <option value="naming">naming（命名）</option>
+            <option value="semantic">semantic（語意）</option>
+            <option value="structure">structure（結構）</option>
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>嚴重度</label>
+          <select style={inputStyle} value={value.severity} onChange={e => onChange({ ...value, severity: e.target.value as SkillRuleDef["severity"] })}>
+            <option value="error">error</option>
+            <option value="warning">warning</option>
+            <option value="info">info</option>
+          </select>
+        </div>
+      </div>
+      {/* Description */}
+      <div>
+        <label style={labelStyle}>說明</label>
+        <input style={inputStyle} placeholder="規則說明文字" value={value.description} onChange={e => onChange({ ...value, description: e.target.value })} />
+      </div>
+      {/* Table Pattern */}
+      <div>
+        <label style={labelStyle}>tablePattern（選填，只對符合的表名套用）</label>
+        <input style={inputStyle} placeholder="lot|wafer|operation" value={value.tablePattern ?? ""} onChange={e => onChange({ ...value, tablePattern: e.target.value || undefined })} />
+      </div>
+      {/* Required Fields */}
+      <div>
+        <label style={labelStyle}>requiredFields（必要欄位）</label>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 5 }}>
+          {value.requiredFields.map(t => (
+            <span key={t} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, padding: "2px 7px", borderRadius: 5, background: "var(--bg-4)", color: "var(--text-2)", border: "1px solid var(--border)" }}>
+              {t}
+              <span onClick={() => removeTag("requiredFields", t)} style={{ cursor: "pointer", opacity: 0.7 }}>✕</span>
+            </span>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input style={{ ...inputStyle, flex: 1 }} placeholder="欄位名稱，Enter 加入" value={reqInput}
+            onChange={e => setReqInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag("requiredFields", reqInput); setReqInput(""); } }} />
+          <button onClick={() => { addTag("requiredFields", reqInput); setReqInput(""); }}
+            style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-2)", cursor: "pointer", flexShrink: 0 }}>＋</button>
+        </div>
+      </div>
+      {/* Forbidden Fields */}
+      <div>
+        <label style={labelStyle}>forbiddenFields（禁用欄位）</label>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 5 }}>
+          {value.forbiddenFields.map(t => (
+            <span key={t} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, padding: "2px 7px", borderRadius: 5, background: "var(--bg-4)", color: "var(--text-2)", border: "1px solid var(--border)" }}>
+              {t}
+              <span onClick={() => removeTag("forbiddenFields", t)} style={{ cursor: "pointer", opacity: 0.7 }}>✕</span>
+            </span>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input style={{ ...inputStyle, flex: 1 }} placeholder="欄位名稱，Enter 加入" value={forbInput}
+            onChange={e => setForbInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag("forbiddenFields", forbInput); setForbInput(""); } }} />
+          <button onClick={() => { addTag("forbiddenFields", forbInput); setForbInput(""); }}
+            style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-2)", cursor: "pointer", flexShrink: 0 }}>＋</button>
+        </div>
+      </div>
+      {/* fieldPattern + forbiddenFieldPattern */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div>
+          <label style={labelStyle}>fieldPattern（欄位名稱符合此 regex 則標記）</label>
+          <input style={inputStyle} placeholder="^tmp_" value={value.fieldPattern ?? ""} onChange={e => onChange({ ...value, fieldPattern: e.target.value || undefined })} />
+        </div>
+        <div>
+          <label style={labelStyle}>forbiddenFieldPattern（欄位名稱禁止符合此 regex）</label>
+          <input style={inputStyle} placeholder="^old_" value={value.forbiddenFieldPattern ?? ""} onChange={e => onChange({ ...value, forbiddenFieldPattern: e.target.value || undefined })} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function emptyRuleDef(): RuleDefFormState {
+  return { id: "", group: "naming", severity: "warning", description: "", tablePattern: undefined, requiredFields: [], forbiddenFields: [], fieldPattern: undefined, forbiddenFieldPattern: undefined };
+}
+
+// ── Create Rule Modal ─────────────────────────────────────────────────────────
+function CreateRuleModal({ skills, onClose }: { skills: SkillInfo[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const userSkills = skills.filter(s => s.source === "user");
+  const [skillName, setSkillName] = useState(userSkills[0]?.name ?? "");
+  const [rule, setRule] = useState<RuleDefFormState>(emptyRuleDef());
+  const [saving, setSaving] = useState(false);
+
+  async function create() {
+    if (!skillName) { showToast("請先選擇目標 Skill"); return; }
+    if (!rule.id.trim()) { showToast("請填寫規則 ID"); return; }
+    if (!rule.description.trim()) { showToast("請填寫規則說明"); return; }
+    setSaving(true);
+    try {
+      const rulePayload: SkillRuleDef = {
+        id: rule.id.trim(),
+        group: rule.group,
+        severity: rule.severity,
+        description: rule.description.trim(),
+        ...(rule.tablePattern !== undefined ? { tablePattern: rule.tablePattern } : {}),
+        ...(rule.fieldPattern !== undefined ? { fieldPattern: rule.fieldPattern } : {}),
+        ...(rule.forbiddenFieldPattern !== undefined ? { forbiddenFieldPattern: rule.forbiddenFieldPattern } : {}),
+        ...(rule.requiredFields.length > 0 ? { requiredFields: rule.requiredFields } : {}),
+        ...(rule.forbiddenFields.length > 0 ? { forbiddenFields: rule.forbiddenFields } : {}),
+      };
+      await api.rules.createSkillRule({ skillName, rule: rulePayload });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["rules"] }),
+        qc.invalidateQueries({ queryKey: ["skills"] }),
+      ]);
+      showToast(`✓ 規則「${rule.id.trim()}」已新增至 ${skillName}`);
+      onClose();
+    } catch (e) { showToast(`新增失敗: ${String(e)}`); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+      onClick={onClose}>
+      <div style={{ background: "var(--bg-1)", border: "1px solid var(--border-light)", borderRadius: 12, width: "min(580px,96vw)", maxHeight: "90vh", overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 16px 48px rgba(0,0,0,0.5)" }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>＋ 新增 Skill 規則</div>
+
+        {/* Skill selector */}
+        <div>
+          <label style={{ fontSize: 10, color: "var(--text-3)", display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>加入哪個 Skill</label>
+          {userSkills.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#f87171", padding: "8px 10px", borderRadius: 5, background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)" }}>
+              尚無自訂 Skill，請先在 Skills 頁籤建立一個。
+            </div>
+          ) : (
+            <select style={{ fontSize: 12, padding: "5px 8px", borderRadius: 4, border: "1px solid var(--border)", background: "var(--bg-3)", color: "var(--text-1)", outline: "none", width: "100%" }}
+              value={skillName} onChange={e => setSkillName(e.target.value)}>
+              {userSkills.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+            </select>
+          )}
+        </div>
+
+        <RuleDefForm value={rule} onChange={setRule} disableId={false} />
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>取消</button>
+          <button className="btn btn-primary" onClick={() => void create()} disabled={saving || !rule.id.trim() || !rule.description.trim() || userSkills.length === 0}>
+            {saving ? "新增中…" : "✓ 新增規則"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit Rule Modal ───────────────────────────────────────────────────────────
+function EditRuleModal({ rule: r, onClose }: { rule: RuleDetail; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const [rule, setRule] = useState<RuleDefFormState>({
+    id: r.id,
+    group: r.group,
+    severity: r.defaultSeverity,
+    description: r.description,
+    tablePattern: undefined,
+    requiredFields: [],
+    forbiddenFields: [],
+    fieldPattern: undefined,
+    forbiddenFieldPattern: undefined,
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!rule.description.trim()) { showToast("請填寫規則說明"); return; }
+    setSaving(true);
+    try {
+      const payload: Omit<SkillRuleDef, "id"> = {
+        group: rule.group,
+        severity: rule.severity,
+        description: rule.description.trim(),
+        ...(rule.tablePattern !== undefined ? { tablePattern: rule.tablePattern } : {}),
+        ...(rule.fieldPattern !== undefined ? { fieldPattern: rule.fieldPattern } : {}),
+        ...(rule.forbiddenFieldPattern !== undefined ? { forbiddenFieldPattern: rule.forbiddenFieldPattern } : {}),
+        ...(rule.requiredFields.length > 0 ? { requiredFields: rule.requiredFields } : {}),
+        ...(rule.forbiddenFields.length > 0 ? { forbiddenFields: rule.forbiddenFields } : {}),
+      };
+      await api.rules.updateSkillRule(r.id, payload);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["rules"] }),
+        qc.invalidateQueries({ queryKey: ["skills"] }),
+      ]);
+      showToast(`✓ 規則「${r.id}」已更新`);
+      onClose();
+    } catch (e) { showToast(`更新失敗: ${String(e)}`); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+      onClick={onClose}>
+      <div style={{ background: "var(--bg-1)", border: "1px solid var(--border-light)", borderRadius: 12, width: "min(580px,96vw)", maxHeight: "90vh", overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 16px 48px rgba(0,0,0,0.5)" }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>✎ 編輯規則定義</div>
+
+        <RuleDefForm value={rule} onChange={setRule} disableId={true} />
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>取消</button>
+          <button className="btn btn-primary" onClick={() => void save()} disabled={saving || !rule.description.trim()}>
+            {saving ? "儲存中…" : "✓ 儲存"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Rules tab ─────────────────────────────────────────────────────────────────
-function RulesTab({ rules }: { rules: RuleDetail[] }) {
+function RulesTab({ rules, skills }: { rules: RuleDetail[]; skills: SkillInfo[] }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const [busy, setBusy] = useState<string | null>(null);
@@ -263,6 +534,8 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
   const [srcFilter, setSrcFilter] = useState<"all" | "built-in" | "skill">("all");
   const [layerFilter, setLayerFilter] = useState<"all" | RuleLayer>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingRule, setEditingRule] = useState<RuleDetail | null>(null);
 
   // ── Snapshot state ────────────────────────────────────────────────────────
   const [snapshotPanelOpen, setSnapshotPanelOpen] = useState(false);
@@ -355,8 +628,31 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
     finally { setBusy(null); }
   }
 
+  async function deleteSkillRule(r: RuleDetail) {
+    if (!window.confirm(`確定刪除規則「${r.id}」？此操作無法復原。`)) return;
+    setBusy(r.id);
+    try {
+      await api.rules.deleteSkillRule(r.id);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["rules"] }),
+        qc.invalidateQueries({ queryKey: ["skills"] }),
+      ]);
+      showToast(`已刪除規則 ${r.id}`);
+      if (expandedId === r.id) setExpandedId(null);
+    } catch (e) { showToast(`刪除失敗: ${String(e)}`); }
+    finally { setBusy(null); }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+      {/* ── Modals ── */}
+      {showCreateModal && (
+        <CreateRuleModal skills={skills} onClose={() => setShowCreateModal(false)} />
+      )}
+      {editingRule && (
+        <EditRuleModal rule={editingRule} onClose={() => setEditingRule(null)} />
+      )}
+
       {/* ── Toolbar ── */}
       <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg-2)",
         display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
@@ -377,6 +673,16 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
         </span>}
 
         <div style={{ flex: 1 }} />
+
+        {/* Add rule button */}
+        <button onClick={() => setShowCreateModal(true)}
+          style={{ fontSize: 11, padding: "4px 12px", borderRadius: 5,
+            border: "1px solid rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.1)",
+            color: "#fbbf24", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(251,191,36,0.2)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(251,191,36,0.1)"; }}>
+          ＋ 新增規則
+        </button>
 
         {/* Source filter */}
         <div style={{ display: "flex", borderRadius: 6, border: "1px solid var(--border)", overflow: "hidden" }}>
@@ -543,6 +849,27 @@ function RulesTab({ rules }: { rules: RuleDetail[] }) {
                     <tr style={{ borderBottom: "1px solid var(--border)" }}>
                       <td colSpan={6} style={{ padding: 0, background: "var(--bg-1)" }}>
                         <RuleConfigEditor r={r} onClose={() => setExpandedId(null)} />
+                        {r.source === "skill" && (
+                          <div style={{ padding: "10px 16px 12px 48px", borderTop: "1px dashed var(--border)", display: "flex", gap: 8, alignItems: "center" }}
+                            onClick={e => e.stopPropagation()}>
+                            <span style={{ fontSize: 10, color: "var(--text-3)", marginRight: 4 }}>Skill 規則操作：</span>
+                            <button
+                              onClick={() => setEditingRule(r)}
+                              style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5, border: "1px solid rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.08)", color: "#fbbf24", cursor: "pointer" }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(251,191,36,0.18)"; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(251,191,36,0.08)"; }}>
+                              ✎ 編輯定義
+                            </button>
+                            <button
+                              onClick={() => void deleteSkillRule(r)}
+                              disabled={busy === r.id}
+                              style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5, border: "1px solid var(--border)", background: "transparent", color: "var(--text-3)", cursor: busy === r.id ? "not-allowed" : "pointer" }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--error,#f87171)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(248,113,113,0.5)"; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; }}>
+                              刪除規則
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -1183,7 +1510,7 @@ export default function RulesPage() {
         {tab === "rules" ? (
           rulesLoading
             ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>載入中…</div>
-            : <RulesTab rules={rules} />
+            : <RulesTab rules={rules} skills={skills} />
         ) : tab === "skills" ? (
           skillsLoading
             ? <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>載入中…</div>
