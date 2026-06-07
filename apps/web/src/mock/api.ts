@@ -483,7 +483,9 @@ export const mockApi = {
   },
   skills: {
     list: async () => ({ skills: [] }),
+    create: async (_b: { name: string; domain?: string; tags?: string[]; description?: string }) => ({ ok: true, filePath: "" }),
     update: async (_name: string, _content: string) => ({ ok: true }),
+    delete: async (_name: string) => ({ ok: true }),
   },
   settings: {
     getLlm: async () => ({ settings: { provider: "anthropic" as const, apiKey: "", baseUrl: "", model: "" } }),

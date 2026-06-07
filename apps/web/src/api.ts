@@ -374,8 +374,12 @@ const realApi = {
   },
   skills: {
     list: () => req<{ skills: SkillInfo[] }>("/skills"),
+    create: (b: { name: string; domain?: string; tags?: string[]; description?: string }) =>
+      req<{ ok: boolean; filePath: string }>("/skills", { method: "POST", body: JSON.stringify(b) }),
     update: (name: string, content: string) =>
       req<{ ok: boolean }>(`/skills/${encodeURIComponent(name)}`, { method: "PUT", body: JSON.stringify({ content }) }),
+    delete: (name: string) =>
+      req<{ ok: boolean }>(`/skills/${encodeURIComponent(name)}`, { method: "DELETE" }),
   },
   settings: {
     getLlm: () => req<{ settings: LlmSettings }>("/settings/llm"),

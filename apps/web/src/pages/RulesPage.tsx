@@ -756,6 +756,23 @@ function SkillCard({ skill }: { skill: SkillInfo }) {
               {open ? "收合 ▲" : "說明 ▼"}
             </button>
           )}
+          {isUser && !editing && (
+            <button onClick={async () => {
+              if (!window.confirm(`確定刪除 Skill「${skill.name}」？`)) return;
+              try {
+                await api.skills.delete(skill.name);
+                await Promise.all([qc.invalidateQueries({ queryKey: ["skills"] }), qc.invalidateQueries({ queryKey: ["rules"] })]);
+                showToast(`已刪除 ${skill.name}`);
+              } catch (e) { showToast(`刪除失敗: ${String(e)}`); }
+            }}
+              style={{ fontSize: 11, padding: "3px 8px", borderRadius: 5,
+                border: "1px solid var(--border)", background: "transparent",
+                color: "var(--text-3)", cursor: "pointer" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "var(--error,#f87171)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}>
+              刪除
+            </button>
+          )}
         </div>
       </div>
 
@@ -822,11 +839,100 @@ function SkillCard({ skill }: { skill: SkillInfo }) {
   );
 }
 
+// ── Create Skill Modal ────────────────────────────────────────────────────────
+function CreateSkillModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const { showToast } = useStore();
+  const [name, setName] = useState("");
+  const [domain, setDomain] = useState("general");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function addTag() {
+    const t = tagInput.trim().toLowerCase().replace(/\s+/g, "-");
+    if (t && !tags.includes(t)) setTags(prev => [...prev, t]);
+    setTagInput("");
+  }
+
+  async function create() {
+    if (!name.trim()) { showToast("請填寫 Skill 名稱"); return; }
+    setSaving(true);
+    try {
+      await api.skills.create({ name: name.trim(), domain: domain.trim() || "general", tags, description: description.trim() });
+      showToast(`✓ Skill「${name.trim()}」已建立`);
+      onCreated();
+      onClose();
+    } catch (e) { showToast(`建立失敗: ${String(e)}`); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+      onClick={onClose}>
+      <div style={{ background: "var(--bg-1)", border: "1px solid var(--border-light)", borderRadius: 12, width: "min(500px,94vw)", padding: 24, display: "flex", flexDirection: "column", gap: 14, boxShadow: "0 16px 48px rgba(0,0,0,0.5)" }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>✦ 建立新 Skill</div>
+
+        {/* Name */}
+        <div>
+          <label style={{ fontSize: 11, color: "var(--text-3)", display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>Skill 名稱</label>
+          <input className="form-input" placeholder="例：Custom Naming Rules" value={name} onChange={e => setName(e.target.value)} />
+        </div>
+
+        {/* Domain */}
+        <div>
+          <label style={{ fontSize: 11, color: "var(--text-3)", display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>Domain</label>
+          <input className="form-input" placeholder="general / semiconductor / ..." value={domain} onChange={e => setDomain(e.target.value)} />
+        </div>
+
+        {/* Tags */}
+        <div>
+          <label style={{ fontSize: 11, color: "var(--text-3)", display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>Tags</label>
+          <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+            {tags.map(t => (
+              <span key={t} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, padding: "2px 8px", borderRadius: 6, background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent)" }}>
+                {t}
+                <span onClick={() => setTags(prev => prev.filter(x => x !== t))} style={{ cursor: "pointer", opacity: 0.7, fontSize: 11 }}>✕</span>
+              </span>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input className="form-input" placeholder="輸入 tag 後按 Enter 或＋" style={{ flex: 1 }}
+              value={tagInput} onChange={e => setTagInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} />
+            <button className="btn btn-ghost" onClick={addTag} style={{ fontSize: 11, padding: "4px 10px", flexShrink: 0 }}>＋</button>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div>
+          <label style={{ fontSize: 11, color: "var(--text-3)", display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>說明（可選）</label>
+          <textarea className="form-input" placeholder="這個 Skill 的用途..." value={description} onChange={e => setDescription(e.target.value)}
+            style={{ resize: "vertical", minHeight: 60, fontFamily: "inherit", lineHeight: 1.5 }} />
+        </div>
+
+        <div style={{ fontSize: 11, color: "var(--text-3)", background: "var(--bg-3)", borderRadius: 6, padding: "8px 10px" }}>
+          建立後，在展開的 Skill 卡片中編輯 Markdown 內容即可新增自訂規則。
+        </div>
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>取消</button>
+          <button className="btn btn-primary" onClick={() => void create()} disabled={saving || !name.trim()}>
+            {saving ? "建立中…" : "✓ 建立 Skill"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SkillsTab({ skills }: { skills: SkillInfo[] }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const [reloading, setReloading] = useState(false);
   const [srcFilter, setSrcFilter] = useState<"all" | "built-in" | "user">("all");
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const builtIn = skills.filter(s => s.source === "built-in");
   const user    = skills.filter(s => s.source === "user");
@@ -878,6 +984,15 @@ function SkillsTab({ skills }: { skills: SkillInfo[] }) {
           ))}
         </div>
 
+        <button onClick={() => setShowCreateModal(true)}
+          style={{ fontSize: 11, padding: "5px 14px", borderRadius: 6,
+            border: "1px solid rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.1)",
+            color: "#fbbf24", cursor: "pointer", fontWeight: 700 }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(251,191,36,0.2)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(251,191,36,0.1)"; }}>
+          ＋ 新建 Skill
+        </button>
+
         <button onClick={() => void reload()} disabled={reloading}
           style={{ fontSize: 11, padding: "5px 12px", borderRadius: 6,
             border: "1px solid var(--border)", background: "var(--bg-3)",
@@ -888,6 +1003,14 @@ function SkillsTab({ skills }: { skills: SkillInfo[] }) {
           {reloading ? "載入中…" : "↺ 重新載入"}
         </button>
       </div>
+      {showCreateModal && (
+        <CreateSkillModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={async () => {
+            await Promise.all([qc.invalidateQueries({ queryKey: ["skills"] }), qc.invalidateQueries({ queryKey: ["rules"] })]);
+          }}
+        />
+      )}
 
       {/* ── Hint ── */}
       <div style={{ padding: "8px 20px", fontSize: 11, color: "var(--text-3)",
