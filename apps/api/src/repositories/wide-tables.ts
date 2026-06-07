@@ -7,6 +7,7 @@ import { wideTableFile, wideTablesDir, loadTables, getSchemaSlug, toSlug } from 
 export type WideTableSummary = {
   id: number; schemaId: number; name: string; description: string | null;
   wideTableType: "unified" | "r2u";
+  sourceTableIds: number[];
   createdAt: Date; updatedAt: Date;
 };
 
@@ -64,6 +65,7 @@ export type CreateWideTableInput = z.infer<typeof CreateWideTableInput>;
 function toSummary(f: WideTableFile): WideTableSummary {
   return { id: f.id, schemaId: f.schemaId, name: f.name, description: f.description,
     wideTableType: f.wideTableType ?? "r2u",
+    sourceTableIds: (f.sources ?? []).map(s => s.tableId),
     createdAt: new Date(f.createdAt), updatedAt: new Date(f.updatedAt) };
 }
 

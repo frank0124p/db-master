@@ -121,6 +121,7 @@ export type JoinType = "BASE" | "INNER" | "LEFT";
 export interface WideTableSummary {
   id: number; schemaId: number; name: string; description: string | null;
   wideTableType: "unified" | "r2u";
+  sourceTableIds: number[];
   createdAt: string; updatedAt: string;
 }
 

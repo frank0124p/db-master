@@ -406,13 +406,26 @@ function SchemaTreeItem({ schema, suiteColor, isSelected, onSelect, expanded, on
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { setPage, setSelectedSchemaId } = useStore();
   const { data: detail } = useQuery({
     queryKey: ["schemas", schema.id],
     queryFn: () => api.schemas.get(schema.id),
     enabled: expanded,
     staleTime: 30_000,
   });
+  const { data: wideTables } = useQuery({
+    queryKey: ["wideTables", schema.id],
+    queryFn: () => api.wideTables.list(schema.id),
+    enabled: expanded,
+    staleTime: 30_000,
+  });
   const [hover, setHover] = useState(false);
+
+  function goToWide() {
+    setSelectedSchemaId(schema.id);
+    setPage("wide");
+  }
+
   return (
     <div>
       <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
@@ -455,6 +468,32 @@ function SchemaTreeItem({ schema, suiteColor, isSelected, onSelect, expanded, on
               ))
             : <div style={{ fontSize: 10, color: "var(--text-3)", padding: "4px 8px" }}>載入中…</div>
           }
+          {/* Wide tables section */}
+          {wideTables && wideTables.length > 0 && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 8px 2px", marginTop: 2, borderTop: "1px solid var(--border)" }}>
+                <span style={{ fontSize: 9, color: "#a78bfa", opacity: 0.8 }}>⊞</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", flex: 1 }}>寬表</span>
+                <span style={{ fontSize: 9, color: "var(--text-3)" }}>{wideTables.length}</span>
+              </div>
+              {wideTables.map(wt => (
+                <div key={wt.id} onClick={goToWide}
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 8px",
+                    borderRadius: 3, cursor: "pointer", fontSize: 10 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--bg-2)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
+                  <span style={{ fontSize: 9, flexShrink: 0, color: wt.wideTableType === "r2u" ? "#a78bfa" : "#34d399" }}>⊕</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>{wt.name}</span>
+                  <span style={{ fontSize: 8, flexShrink: 0, padding: "0 4px", borderRadius: 3,
+                    background: wt.wideTableType === "r2u" ? "rgba(167,139,250,0.15)" : "rgba(52,211,153,0.15)",
+                    color: wt.wideTableType === "r2u" ? "#a78bfa" : "#34d399" }}>
+                    {wt.wideTableType === "r2u" ? "R2U" : "UNI"}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>

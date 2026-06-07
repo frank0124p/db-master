@@ -68,22 +68,28 @@ function WideTableList({
   const { showToast } = useStore();
   const { data: schema } = useQuery({ queryKey: ["schema", schemaId], queryFn: () => api.schemas.get(schemaId) });
   const { data: wideTables } = useQuery({ queryKey: ["wideTables", schemaId], queryFn: () => api.wideTables.list(schemaId) });
-  const [hoveredWtId, setHoveredWtId] = useState<number | null>(null);
 
-  const { data: hoveredWt } = useQuery({
-    queryKey: ["wideTable", schemaId, hoveredWtId],
-    queryFn: () => api.wideTables.get(schemaId, hoveredWtId!),
-    enabled: hoveredWtId !== null,
-  });
-
-  const highlightedTableIds = new Set(hoveredWt?.sources.map(s => s.tableId) ?? []);
+  // Persistent selection state — click left panel table to filter cards; click card to highlight tables
+  const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
+  const [selectedWtId, setSelectedWtId] = useState<number | null>(null);
 
   const tabCfg = LAYER_TABS.find(t => t.type === layerTab)!;
-  const visible = wideTables?.filter(wt => wt.wideTableType === layerTab) ?? [];
+
+  // Tables highlighted in left panel = sources of selected WT
+  const selectedWt = selectedWtId !== null ? (wideTables ?? []).find(w => w.id === selectedWtId) : null;
+  const highlightedTableIds = new Set(selectedWt?.sourceTableIds ?? []);
+
+  // Cards filtered by selected table (from left panel click)
+  const visible = (wideTables ?? []).filter(wt => {
+    if (wt.wideTableType !== layerTab) return false;
+    if (selectedTableId !== null) return wt.sourceTableIds.includes(selectedTableId);
+    return true;
+  });
 
   async function del(id: number, name: string) {
     await api.wideTables.delete(schemaId, id);
     await qc.invalidateQueries({ queryKey: ["wideTables", schemaId] });
+    if (selectedWtId === id) setSelectedWtId(null);
     showToast(`已刪除「${name}」`);
   }
 
@@ -100,42 +106,63 @@ function WideTableList({
       <div style={{ width: 200, flexShrink: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-1)" }}>
         <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", flex: 1 }}>資料結構</span>
+          {selectedTableId !== null && (
+            <button onClick={() => setSelectedTableId(null)}
+              style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, border: "none", cursor: "pointer", background: "var(--bg-4)", color: "var(--text-3)" }}>✕</button>
+          )}
           <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: "var(--bg-4)", color: "var(--text-3)" }}>
             {schema?.tables.length ?? 0}
           </span>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
           {schema?.tables.map(t => {
+            // highlighted = this table is used by the selected WT card
             const highlighted = highlightedTableIds.has(t.id);
+            // filtered = this table is the active left-panel filter
+            const isFilter = selectedTableId === t.id;
+            // count how many visible WTs use this table
+            const wtCount = (wideTables ?? []).filter(w => w.wideTableType === layerTab && w.sourceTableIds.includes(t.id)).length;
             return (
-              <div key={t.id} style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "6px 12px",
-                borderLeft: `2px solid ${highlighted ? tabCfg.color : "transparent"}`,
-                background: highlighted ? `${tabCfg.bg}` : "transparent",
-                transition: "all 0.15s",
-              }}>
+              <div key={t.id}
+                onClick={() => setSelectedTableId(isFilter ? null : t.id)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "5px 12px",
+                  cursor: "pointer",
+                  borderLeft: `2px solid ${isFilter ? tabCfg.color : highlighted ? `${tabCfg.color}88` : "transparent"}`,
+                  background: isFilter ? tabCfg.bg : highlighted ? `${tabCfg.bg}88` : "transparent",
+                  transition: "all 0.15s",
+                  opacity: selectedTableId !== null && !isFilter ? 0.5 : 1,
+                }}
+                onMouseEnter={e => { if (!isFilter) (e.currentTarget as HTMLDivElement).style.background = "var(--bg-3)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isFilter ? tabCfg.bg : highlighted ? `${tabCfg.bg}88` : "transparent"; }}>
                 <span style={{
                   fontFamily: "var(--font-mono)", fontSize: 11,
-                  color: highlighted ? tabCfg.color : "var(--text-2)",
+                  color: isFilter ? tabCfg.color : highlighted ? tabCfg.color : "var(--text-2)",
                   flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  fontWeight: highlighted ? 600 : 400,
-                  opacity: hoveredWtId !== null && !highlighted ? 0.45 : 1,
+                  fontWeight: isFilter || highlighted ? 600 : 400,
                   transition: "all 0.15s",
                 }}>{t.name}</span>
-                <span style={{
-                  fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 6, flexShrink: 0,
-                  background: highlighted ? tabCfg.bg : "var(--bg-4)",
-                  color: highlighted ? tabCfg.color : "var(--text-3)",
-                  border: `1px solid ${highlighted ? tabCfg.border : "var(--border)"}`,
-                }}>{t.fields.length}</span>
+                {wtCount > 0 && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 6, flexShrink: 0,
+                    background: isFilter ? tabCfg.bg : "var(--bg-4)",
+                    color: isFilter ? tabCfg.color : "var(--text-3)",
+                    border: `1px solid ${isFilter ? tabCfg.border : "var(--border)"}`,
+                  }}>{wtCount}</span>
+                )}
               </div>
             );
           })}
         </div>
+        {selectedTableId !== null && (
+          <div style={{ padding: "6px 12px", borderTop: "1px solid var(--border)", fontSize: 10, color: tabCfg.color, background: tabCfg.bg, flexShrink: 0 }}>
+            篩選中：{schema?.tables.find(t => t.id === selectedTableId)?.name}
+          </div>
+        )}
       </div>
 
-      {/* Right panel — existing content */}
+      {/* Right panel */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Toolbar */}
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)", flexShrink: 0 }}>
@@ -152,7 +179,7 @@ function WideTableList({
             return (
               <button
                 key={tab.type}
-                onClick={() => onTabChange(tab.type)}
+                onClick={() => { onTabChange(tab.type); setSelectedTableId(null); setSelectedWtId(null); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
                   padding: "10px 20px", border: "none", cursor: "pointer",
@@ -206,30 +233,63 @@ function WideTableList({
           {visible.length === 0 && (
             <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-3)" }}>
               <div style={{ fontSize: 32, marginBottom: 12, color: tabCfg.color }}>⊞</div>
-              <div style={{ fontSize: 13, marginBottom: 6 }}>尚無 {tabCfg.label} 寬表</div>
-              <div style={{ fontSize: 12, marginBottom: 16, maxWidth: 400, margin: "0 auto 16px", lineHeight: 1.6 }}>{tabCfg.shortDesc} — 點擊右上角新建</div>
-              <button className="btn btn-primary" onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
+              {selectedTableId !== null
+                ? <div style={{ fontSize: 13, marginBottom: 6 }}>沒有使用此 Table 的 {tabCfg.label} 寬表</div>
+                : <div style={{ fontSize: 13, marginBottom: 6 }}>尚無 {tabCfg.label} 寬表</div>}
+              {selectedTableId === null && (
+                <>
+                  <div style={{ fontSize: 12, marginBottom: 16, maxWidth: 400, margin: "0 auto 16px", lineHeight: 1.6 }}>{tabCfg.shortDesc} — 點擊右上角新建</div>
+                  <button className="btn btn-primary" onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
+                </>
+              )}
             </div>
           )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-            {visible.map(wt => (
-              <div key={wt.id} onClick={() => onOpen(wt.id)}
-                style={{ background: "var(--bg-2)", border: `1px solid var(--border)`, borderRadius: 8, padding: 16, cursor: "pointer", transition: "border-color 0.15s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = tabCfg.color; setHoveredWtId(wt.id); }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"; setHoveredWtId(null); }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--accent)", fontWeight: 600, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wt.name}</div>
-                    {wt.description && <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, lineHeight: 1.4 }}>{wt.description}</div>}
-                    <div style={{ fontSize: 11, color: "var(--text-3)" }}>{new Date(wt.createdAt).toLocaleString("zh-TW")}</div>
+            {visible.map(wt => {
+              const isSelected = selectedWtId === wt.id;
+              return (
+                <div key={wt.id}
+                  onClick={() => {
+                    if (isSelected) { onOpen(wt.id); }
+                    else { setSelectedWtId(wt.id); }
+                  }}
+                  style={{
+                    background: isSelected ? tabCfg.bg : "var(--bg-2)",
+                    border: `1px solid ${isSelected ? tabCfg.color : "var(--border)"}`,
+                    borderRadius: 8, padding: 16, cursor: "pointer", transition: "border-color 0.15s",
+                  }}
+                  onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.borderColor = `${tabCfg.color}88`; }}
+                  onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)"; }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: isSelected ? tabCfg.color : "var(--accent)", fontWeight: 600, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wt.name}</div>
+                      {wt.description && <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, lineHeight: 1.4 }}>{wt.description}</div>}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                        {wt.sourceTableIds.map(tid => {
+                          const tbl = schema?.tables.find(t => t.id === tid);
+                          if (!tbl) return null;
+                          return (
+                            <span key={tid} style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-3)", background: "var(--bg-3)", borderRadius: 3, padding: "1px 5px", border: "1px solid var(--border)" }}>
+                              {tbl.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0, alignItems: "flex-end" }} onClick={e => e.stopPropagation()}>
+                      {isSelected && <button className="btn btn-primary" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => onOpen(wt.id)}>開啟 →</button>}
+                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => downloadDdl(wt.id, wt.name)}>↓ DDL</button>
+                      <button className="btn btn-danger" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => del(wt.id, wt.name)}>刪除</button>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => downloadDdl(wt.id, wt.name)}>↓ DDL</button>
-                    <button className="btn btn-danger" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => del(wt.id, wt.name)}>刪除</button>
-                  </div>
+                  {isSelected && (
+                    <div style={{ marginTop: 8, fontSize: 10, color: tabCfg.color, fontWeight: 600 }}>
+                      ← 左側已標記來源 Table · 再次點擊或按「開啟」進入詳細
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
