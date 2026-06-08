@@ -9,6 +9,7 @@ import { errorMiddleware } from "./middleware/error.js";
 import { loadSkills } from "./services/skills.js";
 import { loadDdlFiles } from "./services/ddl-loader.js";
 import { runMigration } from "./db/migrate.js";
+import { seedDemoDataIfNeeded } from "./services/demo-seed.js";
 import { initMinio, setDataDir } from "./services/minio.js";
 import { DATA_DIR } from "./db/fileStore.js";
 import { getMinioSettings } from "./repositories/settings.js";
@@ -106,6 +107,7 @@ async function start() {
   await runMigration();
   await loadSkills();
   await loadDdlFiles();
+  await seedDemoDataIfNeeded();
 
   // Init MinIO from persisted settings
   setDataDir(DATA_DIR);
