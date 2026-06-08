@@ -38,12 +38,16 @@ const isDev = process.env["NODE_ENV"] !== "production";
 const allowedOrigins = process.env["ALLOWED_ORIGINS"]
   ? process.env["ALLOWED_ORIGINS"].split(",").map(o => o.trim())
   : ["http://localhost:5173", "http://localhost:3005"];
-app.use(cors({
+
+// CORS applies only to /api routes — static asset requests (crossorigin attribute
+// on <script>/<link> tags) must not hit this middleware or they return 500 in prod.
+const apiCors = cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes(origin)) cb(null, true);
     else cb(new Error(`CORS: origin not allowed — ${origin}`));
   },
-}));
+});
+app.use("/api", apiCors);
 app.use(express.json());
 
 // Health
