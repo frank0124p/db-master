@@ -18,7 +18,13 @@ data/naming/
 data/versions/
 data/wide-tables/
 data/rules/
+data/suites/
+data/_sys/
 data/_counters.json
 data/_index.json
 data/_ddl-manifest.json
 data/settings.json
+
+# E2E test artifacts
+e2e/.test-data/
+test-results/
