@@ -35,16 +35,21 @@ const app = express();
 const PORT = Number(process.env["PORT"] ?? 3005);
 const isDev = process.env["NODE_ENV"] !== "production";
 
-const allowedOrigins = process.env["ALLOWED_ORIGINS"]
+// If ALLOWED_ORIGINS is set, use the explicit list.
+// If not set (e.g. GCP prod with colocated frontend+API), allow all origins —
+// the user can lock this down by setting ALLOWED_ORIGINS in their env.
+const explicitOrigins = process.env["ALLOWED_ORIGINS"]
   ? process.env["ALLOWED_ORIGINS"].split(",").map(o => o.trim())
-  : ["http://localhost:5173", "http://localhost:3005"];
+  : null;
 
 // CORS applies only to /api routes — static asset requests (crossorigin attribute
 // on <script>/<link> tags) must not hit this middleware or they return 500 in prod.
 const apiCors = cors({
   origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) cb(null, true);
-    else cb(new Error(`CORS: origin not allowed — ${origin}`));
+    if (!origin) { cb(null, true); return; }  // no-origin (curl, same-origin GET)
+    if (!explicitOrigins) { cb(null, true); return; }  // no allowlist → open
+    if (explicitOrigins.includes(origin)) { cb(null, true); return; }
+    cb(new Error(`CORS: origin not allowed — ${origin}`));
   },
 });
 app.use("/api", apiCors);
