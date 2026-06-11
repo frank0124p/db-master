@@ -113,11 +113,23 @@ interface Counters {
   wideSources: number;
   wideColumns: number;
   suites: number;
+  // governance workflow counters
+  knowledge: number;
+  concept: number;
+  bizRule: number;
+  importBatch: number;
+  wtProposal: number;
+  wtDraft: number;
+  valReport: number;
+  governedWt: number;
+  instance: number;
 }
 
 const defaultCounters: Counters = {
   schemas: 0, tables: 0, fields: 0, namingEntries: 0,
   versions: 0, wideTables: 0, wideSources: 0, wideColumns: 0, suites: 0,
+  knowledge: 0, concept: 0, bizRule: 0, importBatch: 0,
+  wtProposal: 0, wtDraft: 0, valReport: 0, governedWt: 0, instance: 0,
 };
 
 // In-memory counter state — loaded once, incremented atomically in process memory.

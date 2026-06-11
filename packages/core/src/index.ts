@@ -7,3 +7,6 @@ export * from "./naming/matcher.js";
 export * from "./rules/engine.js";
 export * from "./rules/built-in.js";
 export * from "./rules/validation.js";
+export * from "./governance/types.js";
+export * from "./governance/classifier-features.js";
+export * from "./governance/governance-rules.js";

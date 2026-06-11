@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
-export type Page   = "editor" | "dict" | "versions" | "analysis" | "er" | "wide" | "rules" | "datahub";
+export type Page   = "editor" | "dict" | "versions" | "analysis" | "er" | "wide" | "rules" | "datahub"
+  | "knowledge" | "import-classify" | "compose" | "workspace" | "catalog" | "instances";
 export type Theme  = "dark" | "light";
 export type Locale = "zh" | "en";
 

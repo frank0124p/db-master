@@ -14,6 +14,12 @@ import WideTablePage from "./pages/WideTablePage.js";
 import RulesPage from "./pages/RulesPage.js";
 import DataHubPage from "./pages/DataHubPage.js";
 import SettingsPanel from "./pages/SettingsPanel.js";
+import KnowledgePage from "./pages/KnowledgePage.js";
+import ImportBatchPage from "./pages/ImportBatchPage.js";
+import ComposePage from "./pages/ComposePage.js";
+import WorkspacePage from "./pages/WorkspacePage.js";
+import CatalogPage from "./pages/CatalogPage.js";
+import InstanceListPage from "./pages/InstanceListPage.js";
 
 const NAV_KEYS: { id: Page; key: string; icon: string }[] = [
   { id: "editor",   key: "nav.editor",   icon: "⬡" },
@@ -24,6 +30,15 @@ const NAV_KEYS: { id: Page; key: string; icon: string }[] = [
   { id: "wide",     key: "nav.wide",     icon: "⊞" },
   { id: "rules",    key: "nav.rules",    icon: "◈" },
   { id: "datahub",  key: "nav.datahub",  icon: "⬆" },
+];
+
+const GOV_NAV_KEYS: { id: Page; key: string; icon: string }[] = [
+  { id: "knowledge",       key: "nav.knowledge",       icon: "⊕" },
+  { id: "import-classify", key: "nav.import_classify", icon: "⊟" },
+  { id: "compose",         key: "nav.compose",         icon: "✦" },
+  { id: "workspace",       key: "nav.workspace",       icon: "⊗" },
+  { id: "catalog",         key: "nav.catalog",         icon: "⊞" },
+  { id: "instances",       key: "nav.instances",       icon: "⊛" },
 ];
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
@@ -1102,6 +1117,19 @@ function MobileDrawer({ open, onClose, onSearch }: { open: boolean; onClose: () 
               {t(n.key)}
             </button>
           ))}
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.8px", padding: "8px 8px 4px", borderTop: "1px solid var(--border)", marginTop: 4 }}>治理工作流</div>
+          {GOV_NAV_KEYS.map(n => (
+            <button key={n.id} onClick={() => navigate(n.id)}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
+                padding: "9px 10px", borderRadius: "var(--radius)", border: "none",
+                background: page === n.id ? "var(--accent-dim)" : "transparent",
+                color: page === n.id ? "var(--accent)" : "var(--text-2)",
+                cursor: "pointer", fontSize: 13, fontFamily: "inherit", textAlign: "left",
+                marginBottom: 2, transition: "all 0.12s" }}>
+              <span style={{ fontSize: 14, width: 20, textAlign: "center", flexShrink: 0 }}>{n.icon}</span>
+              {t(n.key)}
+            </button>
+          ))}
         </div>
 
         <div style={{ height: 1, background: "var(--border)", margin: "4px 16px", flexShrink: 0 }} />
@@ -1307,6 +1335,11 @@ export default function App() {
             {NAV_KEYS.map((n) => (
               <NavBtn key={n.id} active={page === n.id} onClick={() => setPage(n.id)}>{t(n.key)}</NavBtn>
             ))}
+            <div style={{ width: 1, height: 18, background: "var(--border)", margin: "0 4px", alignSelf: "center", flexShrink: 0 }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", padding: "0 4px", alignSelf: "center", letterSpacing: "0.4px", flexShrink: 0 }}>治理</span>
+            {GOV_NAV_KEYS.map((n) => (
+              <NavBtn key={n.id} active={page === n.id} onClick={() => setPage(n.id)}>{t(n.key)}</NavBtn>
+            ))}
           </nav>
         )}
 
@@ -1371,14 +1404,20 @@ export default function App() {
               <SuiteSplash />
             ) : (
               <>
-                {page === "editor"   && <SchemaEditorPage />}
-                {page === "dict"     && <NamingDictPage />}
-                {page === "versions" && <VersionHistoryPage />}
-                {page === "analysis" && <AnalysisPage />}
-                {page === "er"       && <ErDiagramPage />}
-                {page === "wide"     && <WideTablePage />}
-                {page === "rules"    && <RulesPage />}
-                {page === "datahub"  && <DataHubPage />}
+                {page === "editor"          && <SchemaEditorPage />}
+                {page === "dict"            && <NamingDictPage />}
+                {page === "versions"        && <VersionHistoryPage />}
+                {page === "analysis"        && <AnalysisPage />}
+                {page === "er"              && <ErDiagramPage />}
+                {page === "wide"            && <WideTablePage />}
+                {page === "rules"           && <RulesPage />}
+                {page === "datahub"         && <DataHubPage />}
+                {page === "knowledge"       && <KnowledgePage />}
+                {page === "import-classify" && <ImportBatchPage />}
+                {page === "compose"         && <ComposePage />}
+                {page === "workspace"       && <WorkspacePage />}
+                {page === "catalog"         && <CatalogPage />}
+                {page === "instances"       && <InstanceListPage />}
               </>
             )}
           </ErrorBoundary>

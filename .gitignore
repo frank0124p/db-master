@@ -12,7 +12,8 @@ apps/api/public/
 *.tsbuildinfo
 
 # Data directory — runtime file-based store (NOT committed, created at runtime)
-# Exceptions: data/ddl/ (sample SQL) and data/skills/ (custom rules) ARE tracked
+# Exceptions: data/ddl/ (sample SQL), data/skills/ (custom rules),
+# data/governance/catalog/ (governed catalog is team's source of truth) ARE tracked
 data/schemas/
 data/naming/
 data/versions/
@@ -24,6 +25,18 @@ data/_counters.json
 data/_index.json
 data/_ddl-manifest.json
 data/settings.json
+
+# Governance runtime data (not committed)
+data/knowledge/
+data/imports/
+data/proposals/
+data/workspace/
+data/governance/reports/
+data/instances/
+data/settings/
+
+# Governance catalog IS committed
+!data/governance/catalog/
 
 # E2E test artifacts
 e2e/.test-data/

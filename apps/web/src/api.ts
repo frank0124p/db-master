@@ -159,6 +159,137 @@ export interface WideTablePreview {
   sql: string;
 }
 
+// ── Governance types ──────────────────────────────────────────────────────────
+
+export type GovStatus = "pending" | "approved" | "rejected";
+export type GovDraftStatus = "draft" | "passed" | "failed" | "published";
+export type GovWtStatus = "proposed" | "discarded" | "to_draft";
+export type GovBatchStatus = "imported" | "classified" | "accepted";
+export type GovStationId = "knowledge" | "classify" | "compose" | "review" | "publish";
+export type GovStationStatus = "waiting" | "in_progress" | "completed" | "bypassed" | "blocked";
+
+export interface GovSourceDoc {
+  id: number; slug: string; title: string; content: string;
+  tags: string[]; chunksCount: number;
+  createdAt: string; updatedAt: string;
+}
+
+export interface GovConceptCard {
+  id: number; slug: string; name: string; stdName: string;
+  aliases: string[]; definition: string;
+  tableHints: Array<{ tableName: string; role: string }>;
+  status: GovStatus; reviewers: Array<{ userId: string; name: string; signedAt: string | null }>;
+  sourceRefs: number[]; createdAt: string; updatedAt: string;
+}
+
+export interface GovBusinessRule {
+  id: number; slug: string; title: string; ruleType: string;
+  statement: string; machine: Record<string, unknown> | null;
+  sourceRefs: number[]; status: GovStatus;
+  reviewers: Array<{ userId: string; name: string; signedAt: string | null }>;
+  createdAt: string; updatedAt: string;
+}
+
+export interface GovImportBatch {
+  id: number; name: string; ddl: string;
+  status: GovBatchStatus;
+  tables: Array<{
+    tableName: string; fieldCount: number;
+    classification: { blockKind: "small" | "medium"; confidence: number; rationale: string } | null;
+    accepted: boolean; override?: { blockKind: string; rationale: string };
+  }>;
+  createdAt: string; updatedAt: string;
+}
+
+export interface GovProposedColumn {
+  name: string; dataType: string; definition: string;
+  source: { schemaId: number; tableName: string; fieldName: string };
+  conceptId?: number; namingDictId?: number; transform?: string;
+  _phantom?: boolean;
+}
+
+export interface GovProposedJoin {
+  leftRef: string; rightRef: string; type: "inner" | "left";
+  on: Array<{ leftField: string; rightField: string }>;
+}
+
+export interface GovRelationship {
+  targetKind: "table" | "wide-table" | "governed-wide-table";
+  targetRef: string; relation: string; onFields: string[]; note: string;
+}
+
+export interface GovWtProposal {
+  id: number; scenario: string; blockKind: "small" | "medium";
+  name: string; description: string;
+  columns: GovProposedColumn[];
+  joinGraph: GovProposedJoin[];
+  relationships: GovRelationship[];
+  reasoningTrace: Array<{ step: string; detail: string; refs?: { conceptIds?: number[]; tableRefs?: string[] } }>;
+  candidatePool: Array<{ schemaId: number; tableName: string; fromBatchId?: number }>;
+  status: GovWtStatus;
+  createdAt: string; updatedAt: string;
+}
+
+export interface GovEditLogEntry {
+  at: string; by: string; op: string;
+  path: string; before: unknown; after: unknown;
+}
+
+export interface GovWtDraft {
+  id: number; blockKind: "small" | "medium";
+  name: string; description: string;
+  columns: GovProposedColumn[];
+  joinGraph: GovProposedJoin[];
+  relationships: GovRelationship[];
+  editLog: GovEditLogEntry[];
+  versions: Array<{ version: number; at: string; snapshot: unknown }>;
+  status: GovDraftStatus;
+  lastReportId?: number;
+  proposalId?: number;
+  createdAt: string; updatedAt: string;
+}
+
+export interface GovValidationReport {
+  id: number; draftId: number;
+  results: Array<{ ruleId: string; passed: boolean; violations: Array<{ target: string; message: string }> }>;
+  overallPassed: boolean;
+  createdAt: string;
+}
+
+export interface GovGovernedWideTable {
+  id: number; slug: string; draftId: number; reportId: number;
+  blockKind: "small" | "medium"; name: string; description: string;
+  columns: GovProposedColumn[];
+  joinGraph: GovProposedJoin[];
+  relationships: GovRelationship[];
+  publishedBy: string; publishedAt: string; version: number;
+}
+
+export interface GovCatalogGraph {
+  generatedAt: string;
+  nodes: Array<{ id: string; kind: string; label: string; meta: Record<string, unknown> }>;
+  edges: Array<{ from: string; to: string; kind: string; meta?: Record<string, unknown> }>;
+}
+
+export interface GovStationState {
+  stationId: GovStationId; status: GovStationStatus;
+  startedAt?: string; completedAt?: string; bypassedAt?: string;
+  bypassReason?: string; artifactId?: number;
+}
+
+export interface GovInstance {
+  id: number; subject: string; blockKind: string;
+  stations: GovStationState[];
+  status: "active" | "completed" | "cancelled" | "on_hold";
+  currentStation: GovStationId | null;
+  events: Array<{ at: string; type: string; detail: string }>;
+  createdAt: string; updatedAt: string;
+}
+
+export interface GovGatePolicy {
+  stations: Record<GovStationId, { required: boolean; bypassed: boolean }>;
+}
+
 // ── DDL Import ────────────────────────────────────────────────────────────────
 
 export interface ParsedTableSummary {
@@ -495,6 +626,95 @@ const realApi = {
   },
   search: (q: string) => req<SearchResults>(`/search?q=${encodeURIComponent(q)}`),
   reload: () => req<{ ok: boolean; reloadedAt: string }>("/reload", { method: "POST" }),
+
+  // ── Governance ──────────────────────────────────────────────────────────────
+  knowledge: {
+    listSources: () => req<GovSourceDoc[]>("/knowledge/sources"),
+    createSource: (b: { title: string; content: string; tags?: string[] }) =>
+      req<GovSourceDoc>("/knowledge/sources", { method: "POST", body: JSON.stringify(b) }),
+    deleteSource: (id: number) => req<void>(`/knowledge/sources/${id}`, { method: "DELETE" }),
+    extractSSE: (sourceId: number) =>
+      fetch(`/api/v1/knowledge/sources/${sourceId}/extract`, { method: "POST" }),
+    listConcepts: (params?: { status?: string }) =>
+      req<GovConceptCard[]>(`/knowledge/concepts${params?.status ? `?status=${params.status}` : ""}`),
+    approveConcept: (id: number) => req<GovConceptCard>(`/knowledge/concepts/${id}/approve`, { method: "POST" }),
+    rejectConcept: (id: number) => req<GovConceptCard>(`/knowledge/concepts/${id}/reject`, { method: "POST" }),
+    listRules: (params?: { status?: string }) =>
+      req<GovBusinessRule[]>(`/knowledge/business-rules${params?.status ? `?status=${params.status}` : ""}`),
+    approveRule: (id: number) => req<GovBusinessRule>(`/knowledge/business-rules/${id}/approve`, { method: "POST" }),
+    rejectRule: (id: number) => req<GovBusinessRule>(`/knowledge/business-rules/${id}/reject`, { method: "POST" }),
+    retrieve: (q: string) =>
+      req<{ concepts: GovConceptCard[]; rules: GovBusinessRule[] }>(
+        "/knowledge/retrieve", { method: "POST", body: JSON.stringify({ query: q }) }
+      ),
+  },
+
+  importBatches: {
+    list: () => req<GovImportBatch[]>("/import-batches"),
+    get: (id: number) => req<GovImportBatch>(`/import-batches/${id}`),
+    create: (b: { name: string; ddl: string }) =>
+      req<GovImportBatch>("/import-batches", { method: "POST", body: JSON.stringify(b) }),
+    classifySSE: (id: number) =>
+      fetch(`/api/v1/import-batches/${id}/classify`, { method: "POST" }),
+    accept: (batchId: number, tableIdx: number) =>
+      req<unknown>(`/import-batches/${batchId}/proposals/${tableIdx}/accept`, { method: "POST" }),
+    override: (batchId: number, tableIdx: number, b: { blockKind: string; rationale?: string }) =>
+      req<unknown>(`/import-batches/${batchId}/proposals/${tableIdx}/override`, { method: "POST", body: JSON.stringify(b) }),
+    acceptAll: (batchId: number, threshold?: number) =>
+      req<unknown>(`/import-batches/${batchId}/proposals/accept-all`, { method: "POST", body: JSON.stringify({ threshold }) }),
+  },
+
+  wtProposals: {
+    list: () => req<GovWtProposal[]>("/wide-table-proposals"),
+    get: (id: number) => req<GovWtProposal>(`/wide-table-proposals/${id}`),
+    composeSSE: (b: { scenario: string; blockKind?: string; batchIds?: number[] }) =>
+      fetch("/api/v1/wide-table-proposals/compose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }),
+    toDraft: (id: number) => req<GovWtDraft>(`/wide-table-proposals/${id}/to-draft`, { method: "POST" }),
+    discard: (id: number) => req<void>(`/wide-table-proposals/${id}/discard`, { method: "POST" }),
+  },
+
+  workspace: {
+    list: () => req<GovWtDraft[]>("/workspace/drafts"),
+    get: (id: number) => req<GovWtDraft>(`/workspace/drafts/${id}`),
+    patch: (id: number, b: Partial<GovWtDraft>) =>
+      req<GovWtDraft>(`/workspace/drafts/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+    previewSql: (id: number) => req<{ sql: string }>(`/workspace/drafts/${id}/preview-sql`, { method: "POST" }),
+    validate: (id: number) => req<GovValidationReport>(`/workspace/drafts/${id}/validate`, { method: "POST" }),
+    publish: (id: number, b: { publishedBy: string }) =>
+      req<GovGovernedWideTable>(`/workspace/drafts/${id}/publish`, { method: "POST", body: JSON.stringify(b) }),
+    delete: (id: number) => req<void>(`/workspace/drafts/${id}`, { method: "DELETE" }),
+    saveVersion: (id: number) => req<unknown>(`/workspace/drafts/${id}/versions`, { method: "POST" }),
+  },
+
+  catalog: {
+    list: () => req<GovGovernedWideTable[]>("/catalog/wide-tables"),
+    get: (slug: string) => req<GovGovernedWideTable>(`/catalog/wide-tables/${slug}`),
+    getMarkdown: (slug: string) => req<{ markdown: string }>(`/catalog/wide-tables/${slug}/markdown`),
+    getGraph: () => req<GovCatalogGraph>("/catalog/graph"),
+    retrieve: (q: string) =>
+      req<{ wideTables: GovGovernedWideTable[] }>(
+        "/catalog/retrieve", { method: "POST", body: JSON.stringify({ query: q }) }
+      ),
+  },
+
+  instances: {
+    list: () => req<GovInstance[]>("/instances"),
+    get: (id: number) => req<GovInstance>(`/instances/${id}`),
+    create: (b: { subject: string; blockKind: string }) =>
+      req<GovInstance>("/instances", { method: "POST", body: JSON.stringify(b) }),
+    startStation: (instanceId: number, stationId: string) =>
+      req<GovInstance>(`/instances/${instanceId}/stations/${stationId}/start`, { method: "POST" }),
+    completeStation: (instanceId: number, stationId: string, b: { artifactId?: number }) =>
+      req<GovInstance>(`/instances/${instanceId}/stations/${stationId}/complete`, { method: "POST", body: JSON.stringify(b) }),
+    bypassStation: (instanceId: number, stationId: string, b: { reason: string }) =>
+      req<GovInstance>(`/instances/${instanceId}/stations/${stationId}/bypass`, { method: "POST", body: JSON.stringify(b) }),
+    hold: (id: number, b: { reason: string }) =>
+      req<GovInstance>(`/instances/${id}/hold`, { method: "POST", body: JSON.stringify(b) }),
+    resume: (id: number) => req<GovInstance>(`/instances/${id}/resume`, { method: "POST" }),
+    cancel: (id: number, b: { reason: string }) =>
+      req<GovInstance>(`/instances/${id}/cancel`, { method: "POST", body: JSON.stringify(b) }),
+    gatePolicy: () => req<GovGatePolicy>("/instances/gate-policy"),
+  },
 };
 
 // ── Mock toggle ───────────────────────────────────────────────────────────────
@@ -502,4 +722,4 @@ const realApi = {
 // All features are covered; mutations update in-memory state for the session.
 
 import { mockApi } from "./mock/api.js";
-export const api = import.meta.env["VITE_USE_MOCK"] === "true" ? mockApi : realApi;
+export const api = (import.meta.env["VITE_USE_MOCK"] === "true" ? mockApi : realApi) as typeof realApi;

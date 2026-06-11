@@ -30,6 +30,12 @@ import datahubRouter from "./routes/datahub.js";
 import suitesRouter from "./routes/suites.js";
 import searchRouter from "./routes/search.js";
 import usersRouter from "./routes/users.js";
+import knowledgeRouter from "./routes/knowledge.js";
+import importBatchesRouter from "./routes/import-batches.js";
+import wtProposalsRouter from "./routes/wt-proposals.js";
+import workspaceRouter from "./routes/workspace.js";
+import catalogRouter from "./routes/catalog.js";
+import instancesRouter from "./routes/instances.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -90,6 +96,35 @@ app.use("/api/v1/datahub", datahubRouter);
 app.use("/api/v1/suites", suitesRouter);
 app.use("/api/v1/search", searchRouter);
 app.use("/api/v1/users", usersRouter);
+
+// Governance Workflow routes
+app.use("/api/v1/knowledge", knowledgeRouter);
+app.use("/api/v1/import-batches", importBatchesRouter);
+app.use("/api/v1/wide-table-proposals", wtProposalsRouter);
+app.use("/api/v1/workspace", workspaceRouter);
+app.use("/api/v1/catalog", catalogRouter);
+app.use("/api/v1/instances", instancesRouter);
+
+// Gate-policy settings (admin only)
+app.get("/api/v1/settings/gate-policy", async (_req, res, next) => {
+  try {
+    const { getGatePolicy } = await import("./repositories/instances.js");
+    res.json(await getGatePolicy());
+  } catch (e) { next(e); }
+});
+app.patch("/api/v1/settings/gate-policy", async (req, res, next) => {
+  try {
+    const { getGatePolicy, saveGatePolicy } = await import("./repositories/instances.js");
+    const user = (req as { user?: { role?: string } }).user;
+    if (user?.role !== "admin") {
+      return res.status(403).json({ error: { code: "FORBIDDEN", message: "Admin only" } });
+    }
+    const current = await getGatePolicy();
+    const updated = { ...current, ...req.body };
+    await saveGatePolicy(updated);
+    return res.json(updated);
+  } catch (e) { next(e); }
+});
 
 process.on("unhandledRejection", (reason) => {
   console.error("[unhandledRejection]", reason);

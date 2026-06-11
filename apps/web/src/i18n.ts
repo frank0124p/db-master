@@ -183,6 +183,57 @@ const zh = {
   "misc.delete_confirm":     "確定刪除「{name}」？",
   "misc.ai_output":          "LLM 輸出",
   "misc.generating_schema":  "正在生成 Schema…",
+
+  // ── Governance Workflow ────────────────────────────────────────────────────
+  "nav.knowledge":           "知識庫",
+  "nav.import_classify":     "批次分類",
+  "nav.compose":             "情境組裝",
+  "nav.workspace":           "審核工作區",
+  "nav.catalog":             "治理目錄",
+  "nav.instances":           "工作流上線單",
+  "nav.governance":          "治理工作流",
+
+  "gov.status.pending":      "待審核",
+  "gov.status.approved":     "已核准",
+  "gov.status.rejected":     "已拒絕",
+  "gov.status.draft":        "草稿",
+  "gov.status.passed":       "通過",
+  "gov.status.failed":       "未通過",
+  "gov.status.published":    "已發佈",
+  "gov.status.proposed":     "提案",
+  "gov.status.imported":     "已匯入",
+  "gov.status.classified":   "已分類",
+
+  "gov.concept.approve":     "核准",
+  "gov.concept.reject":      "拒絕",
+  "gov.concept.add":         "新增概念卡",
+  "gov.concept.extract":     "✦ LLM 抽取",
+
+  "gov.doc.upload":          "上傳文件",
+  "gov.doc.title":           "文件標題",
+  "gov.doc.content":         "內容",
+
+  "gov.batch.new":           "新增匯入批次",
+  "gov.batch.classify":      "✦ 執行分類",
+  "gov.batch.accept":        "接受",
+  "gov.batch.override":      "改派",
+  "gov.batch.accept_all":    "批次接受",
+
+  "gov.compose.scenario":    "使用情境",
+  "gov.compose.run":         "✦ 組裝寬表",
+  "gov.compose.to_draft":    "轉入工作區",
+
+  "gov.draft.validate":      "執行檢查",
+  "gov.draft.publish":       "發佈",
+  "gov.draft.save_version":  "存版本",
+  "gov.draft.preview_sql":   "SQL 預覽",
+
+  "gov.instance.new":        "新建上線單",
+  "gov.instance.bypass":     "跳過此站",
+  "gov.instance.reason":     "原因（必填）",
+  "gov.instance.subject":    "資料主題",
+
+  "gov.catalog.retrieve":    "語意檢索",
 };
 
 const en: Record<string, string> = {
@@ -336,6 +387,57 @@ const en: Record<string, string> = {
   "import.errors":        "Errors",
   "import.warnings":      "Warnings",
   "import.passed":        "Passed",
+
+  // ── Governance Workflow ────────────────────────────────────────────────────
+  "nav.knowledge":           "Knowledge Base",
+  "nav.import_classify":     "Batch Classification",
+  "nav.compose":             "Scenario Compose",
+  "nav.workspace":           "Review Workspace",
+  "nav.catalog":             "Governed Catalog",
+  "nav.instances":           "Workflow Instances",
+  "nav.governance":          "Governance Workflow",
+
+  "gov.status.pending":      "Pending",
+  "gov.status.approved":     "Approved",
+  "gov.status.rejected":     "Rejected",
+  "gov.status.draft":        "Draft",
+  "gov.status.passed":       "Passed",
+  "gov.status.failed":       "Failed",
+  "gov.status.published":    "Published",
+  "gov.status.proposed":     "Proposed",
+  "gov.status.imported":     "Imported",
+  "gov.status.classified":   "Classified",
+
+  "gov.concept.approve":     "Approve",
+  "gov.concept.reject":      "Reject",
+  "gov.concept.add":         "Add Concept",
+  "gov.concept.extract":     "✦ Extract with LLM",
+
+  "gov.doc.upload":          "Upload Document",
+  "gov.doc.title":           "Document Title",
+  "gov.doc.content":         "Content",
+
+  "gov.batch.new":           "New Import Batch",
+  "gov.batch.classify":      "✦ Run Classification",
+  "gov.batch.accept":        "Accept",
+  "gov.batch.override":      "Override",
+  "gov.batch.accept_all":    "Accept All",
+
+  "gov.compose.scenario":    "Usage Scenario",
+  "gov.compose.run":         "✦ Compose Wide Table",
+  "gov.compose.to_draft":    "Send to Workspace",
+
+  "gov.draft.validate":      "Run Validation",
+  "gov.draft.publish":       "Publish",
+  "gov.draft.save_version":  "Save Version",
+  "gov.draft.preview_sql":   "SQL Preview",
+
+  "gov.instance.new":        "New Instance",
+  "gov.instance.bypass":     "Bypass Station",
+  "gov.instance.reason":     "Reason (required)",
+  "gov.instance.subject":    "Data Subject",
+
+  "gov.catalog.retrieve":    "Semantic Search",
 
   "toast.ddl_exported":   "✓ DDL exported",
   "toast.version_saved":  "✓ Version saved",
