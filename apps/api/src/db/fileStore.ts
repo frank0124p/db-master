@@ -140,13 +140,16 @@ let _countersDirty = false;
 
 async function loadCounters(): Promise<Counters> {
   if (_counters) return _counters;
-  _counters = (await readJson<Counters>(sysPath("counters.json"))) ?? { ...defaultCounters };
+  // Merge with defaultCounters so any missing keys (added later) get default 0
+  const persisted = (await readJson<Partial<Counters>>(sysPath("counters.json"))) ?? {};
+  _counters = { ...defaultCounters, ...persisted };
   return _counters;
 }
 
 export async function nextId(key: keyof Counters): Promise<number> {
   const counters = await loadCounters();
-  counters[key]++;
+  // Guard against null/undefined/NaN from old persisted data
+  counters[key] = ((counters[key] as number | null | undefined) ?? 0) + 1;
   _countersDirty = true;
   await writeJson(sysPath("counters.json"), counters);
   _countersDirty = false;

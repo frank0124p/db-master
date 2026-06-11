@@ -55,3 +55,7 @@ export async function getRuleSettingsMap(): Promise<Map<string, RuleSettings>> {
   const rules = await listRules();
   return new Map(rules.map(r => [r.ruleId, r]));
 }
+
+export async function getRuleOverrides(): Promise<RuleOverrides> {
+  return (await store.readJson<RuleOverrides>(overridesFile())) ?? {};
+}

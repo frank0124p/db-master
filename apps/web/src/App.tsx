@@ -41,6 +41,16 @@ const GOV_NAV_KEYS: { id: Page; key: string; icon: string }[] = [
   { id: "instances",       key: "nav.instances",       icon: "⊛" },
 ];
 
+const GOV_PAGES_SET = new Set<Page>(["knowledge", "import-classify", "compose", "workspace", "catalog", "instances"]);
+
+const GOV_STEPS: { step: number; id: Page; icon: string; labelKey: string; desc: string }[] = [
+  { step: 1, id: "knowledge",       icon: "⊕", labelKey: "nav.knowledge",       desc: "文件 · 概念 · 業務規則" },
+  { step: 2, id: "import-classify", icon: "⊟", labelKey: "nav.import_classify", desc: "DDL 批次 · 分類提案" },
+  { step: 3, id: "compose",         icon: "✦", labelKey: "nav.compose",         desc: "LLM 寬表情境組裝" },
+  { step: 4, id: "workspace",       icon: "⊗", labelKey: "nav.workspace",       desc: "草稿編輯 · 驗證發布" },
+  { step: 5, id: "catalog",         icon: "⊞", labelKey: "nav.catalog",         desc: "已發布治理寬表" },
+];
+
 // ── Error Boundary ────────────────────────────────────────────────────────────
 
 interface EBState { hasError: boolean; message: string }
@@ -1067,6 +1077,86 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
   );
 }
 
+// ── Governance Workflow Sidebar ───────────────────────────────────────────────
+function GovWorkflowSidebar() {
+  const { page, setPage } = useStore();
+  const t = useT();
+  return (
+    <div style={{ width: "100%", height: "100%", background: "var(--bg-1)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Header */}
+      <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 2 }}>Governance Workflow</div>
+        <div style={{ fontSize: 10, color: "var(--text-3)" }}>5-Step Data Governance</div>
+      </div>
+
+      {/* Workflow steps */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
+        {GOV_STEPS.map(s => {
+          const active = page === s.id;
+          return (
+            <button key={s.id} onClick={() => setPage(s.id)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 10,
+                padding: "9px 12px", border: "none", cursor: "pointer",
+                background: active ? "rgba(167,139,250,0.12)" : "transparent",
+                borderLeft: active ? "2px solid #a78bfa" : "2px solid transparent",
+                textAlign: "left", fontFamily: "inherit", transition: "background 0.12s",
+              }}
+              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-2)"; }}
+              onMouseLeave={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}>
+              {/* Step circle */}
+              <div style={{
+                width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
+                background: active ? "#a78bfa" : "var(--bg-3)",
+                border: active ? "none" : "1px solid var(--border-light)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 11, fontWeight: 700,
+                color: active ? "#fff" : "var(--text-3)",
+                transition: "all 0.15s",
+              }}>{s.step}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: active ? 700 : 500, color: active ? "#a78bfa" : "var(--text-2)", marginBottom: 1 }}>
+                  {t(s.labelKey)}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.desc}</div>
+              </div>
+            </button>
+          );
+        })}
+
+        <div style={{ margin: "6px 12px", height: 1, background: "var(--border)", flexShrink: 0 }} />
+
+        {/* Instances — overview, separate from the 5-step flow */}
+        {(() => {
+          const active = page === "instances";
+          return (
+            <button onClick={() => setPage("instances")}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 10,
+                padding: "9px 12px", border: "none", cursor: "pointer",
+                background: active ? "rgba(167,139,250,0.12)" : "transparent",
+                borderLeft: active ? "2px solid #a78bfa" : "2px solid transparent",
+                textAlign: "left", fontFamily: "inherit", transition: "background 0.12s",
+              }}
+              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-2)"; }}
+              onMouseLeave={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}>
+              <div style={{ width: 24, height: 24, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: 16, color: active ? "#a78bfa" : "var(--text-3)" }}>⊛</span>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: active ? 700 : 500, color: active ? "#a78bfa" : "var(--text-2)", marginBottom: 1 }}>
+                  {t("nav.instances")}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-3)" }}>追蹤各資料主體進度</div>
+              </div>
+            </button>
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
+
 // Desktop/Tablet sidebar shell
 function Sidebar({ onSearch }: { onSearch?: () => void }) {
   return (
@@ -1104,32 +1194,65 @@ function MobileDrawer({ open, onClose, onSearch }: { open: boolean; onClose: () 
 
         {/* Page navigation */}
         <div style={{ padding: "8px 8px 4px", flexShrink: 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.8px", padding: "6px 8px 4px" }}>頁面</div>
-          {NAV_KEYS.map(n => (
-            <button key={n.id} onClick={() => navigate(n.id)}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
-                padding: "9px 10px", borderRadius: "var(--radius)", border: "none",
-                background: page === n.id ? "var(--accent-dim)" : "transparent",
-                color: page === n.id ? "var(--accent)" : "var(--text-2)",
-                cursor: "pointer", fontSize: 13, fontFamily: "inherit", textAlign: "left",
-                marginBottom: 2, transition: "all 0.12s" }}>
-              <span style={{ fontSize: 14, width: 20, textAlign: "center", flexShrink: 0 }}>{n.icon}</span>
-              {t(n.key)}
+          {/* Mode toggle */}
+          <div style={{ display: "flex", gap: 6, padding: "6px 8px 10px" }}>
+            <button onClick={() => navigate("editor")}
+              style={{ flex: 1, padding: "7px 8px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                background: !GOV_PAGES_SET.has(page) ? "var(--accent)" : "var(--bg-3)",
+                color: !GOV_PAGES_SET.has(page) ? "#fff" : "var(--text-3)" }}>
+              ⬡ Studio
             </button>
-          ))}
-          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.8px", padding: "8px 8px 4px", borderTop: "1px solid var(--border)", marginTop: 4 }}>治理工作流</div>
-          {GOV_NAV_KEYS.map(n => (
-            <button key={n.id} onClick={() => navigate(n.id)}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
-                padding: "9px 10px", borderRadius: "var(--radius)", border: "none",
-                background: page === n.id ? "var(--accent-dim)" : "transparent",
-                color: page === n.id ? "var(--accent)" : "var(--text-2)",
-                cursor: "pointer", fontSize: 13, fontFamily: "inherit", textAlign: "left",
-                marginBottom: 2, transition: "all 0.12s" }}>
-              <span style={{ fontSize: 14, width: 20, textAlign: "center", flexShrink: 0 }}>{n.icon}</span>
-              {t(n.key)}
+            <button onClick={() => navigate("knowledge")}
+              style={{ flex: 1, padding: "7px 8px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                background: GOV_PAGES_SET.has(page) ? "#a78bfa" : "var(--bg-3)",
+                color: GOV_PAGES_SET.has(page) ? "#fff" : "var(--text-3)" }}>
+              ◈ Governance
             </button>
-          ))}
+          </div>
+
+          {!GOV_PAGES_SET.has(page) ? (
+            <>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.8px", padding: "4px 8px 4px" }}>頁面</div>
+              {NAV_KEYS.map(n => (
+                <button key={n.id} onClick={() => navigate(n.id)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
+                    padding: "9px 10px", borderRadius: "var(--radius)", border: "none",
+                    background: page === n.id ? "var(--accent-dim)" : "transparent",
+                    color: page === n.id ? "var(--accent)" : "var(--text-2)",
+                    cursor: "pointer", fontSize: 13, fontFamily: "inherit", textAlign: "left",
+                    marginBottom: 2, transition: "all 0.12s" }}>
+                  <span style={{ fontSize: 14, width: 20, textAlign: "center", flexShrink: 0 }}>{n.icon}</span>
+                  {t(n.key)}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", textTransform: "uppercase", letterSpacing: "0.8px", padding: "4px 8px 4px" }}>Governance Steps</div>
+              {GOV_STEPS.map(s => (
+                <button key={s.id} onClick={() => navigate(s.id)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
+                    padding: "9px 10px", borderRadius: "var(--radius)", border: "none",
+                    background: page === s.id ? "rgba(167,139,250,0.15)" : "transparent",
+                    color: page === s.id ? "#a78bfa" : "var(--text-2)",
+                    cursor: "pointer", fontSize: 13, fontFamily: "inherit", textAlign: "left",
+                    marginBottom: 2, transition: "all 0.12s" }}>
+                  <span style={{ width: 20, height: 20, borderRadius: "50%", background: page === s.id ? "#a78bfa" : "var(--bg-4)", color: page === s.id ? "#fff" : "var(--text-3)", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.step}</span>
+                  {t(s.labelKey)}
+                </button>
+              ))}
+              <button onClick={() => navigate("instances")}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
+                  padding: "9px 10px", borderRadius: "var(--radius)", border: "none",
+                  background: page === "instances" ? "rgba(167,139,250,0.15)" : "transparent",
+                  color: page === "instances" ? "#a78bfa" : "var(--text-2)",
+                  cursor: "pointer", fontSize: 13, fontFamily: "inherit", textAlign: "left",
+                  marginBottom: 2, transition: "all 0.12s" }}>
+                <span style={{ fontSize: 16, width: 20, textAlign: "center", flexShrink: 0 }}>⊛</span>
+                {t("nav.instances")}
+              </button>
+            </>
+          )}
         </div>
 
         <div style={{ height: 1, background: "var(--border)", margin: "4px 16px", flexShrink: 0 }} />
@@ -1328,20 +1451,66 @@ export default function App() {
           })()}
         </div>
 
-        {/* Desktop: full nav | Tablet: scrollable nav | Mobile: nothing (in drawer) */}
-        {!isMobile && (
-          <nav className={isTablet ? "nav-scroll" : undefined}
-            style={{ display: "flex", gap: 2, flex: isTablet ? 1 : undefined, minWidth: 0 }}>
-            {NAV_KEYS.map((n) => (
-              <NavBtn key={n.id} active={page === n.id} onClick={() => setPage(n.id)}>{t(n.key)}</NavBtn>
-            ))}
-            <div style={{ width: 1, height: 18, background: "var(--border)", margin: "0 4px", alignSelf: "center", flexShrink: 0 }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", padding: "0 4px", alignSelf: "center", letterSpacing: "0.4px", flexShrink: 0 }}>治理</span>
-            {GOV_NAV_KEYS.map((n) => (
-              <NavBtn key={n.id} active={page === n.id} onClick={() => setPage(n.id)}>{t(n.key)}</NavBtn>
-            ))}
-          </nav>
-        )}
+        {/* Desktop / Tablet: mode toggle + current-mode page tabs */}
+        {!isMobile && (() => {
+          const mode = GOV_PAGES_SET.has(page) ? "governance" : "studio";
+          return (
+            <nav style={{ display: "flex", gap: 2, alignItems: "center", flex: isTablet ? 1 : undefined, minWidth: 0 }}>
+              {/* Mode toggle pill */}
+              <div style={{ display: "flex", background: "var(--bg-3)", borderRadius: 7, padding: 2, gap: 1, flexShrink: 0 }}>
+                <button
+                  onClick={() => setPage("editor")}
+                  style={{
+                    padding: "3px 9px", borderRadius: 5, border: "none", fontSize: 11, fontWeight: 700,
+                    cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap",
+                    background: mode === "studio" ? "var(--accent)" : "transparent",
+                    color: mode === "studio" ? "#fff" : "var(--text-3)",
+                  }}>
+                  ⬡ Studio
+                </button>
+                <button
+                  onClick={() => setPage("knowledge")}
+                  style={{
+                    padding: "3px 9px", borderRadius: 5, border: "none", fontSize: 11, fontWeight: 700,
+                    cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap",
+                    background: mode === "governance" ? "#a78bfa" : "transparent",
+                    color: mode === "governance" ? "#fff" : "var(--text-3)",
+                  }}>
+                  ◈ Governance
+                </button>
+              </div>
+
+              <div style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px", flexShrink: 0 }} />
+
+              {/* Studio mode: show 8 page tabs */}
+              {mode === "studio" && (
+                <div className={isTablet ? "nav-scroll" : undefined} style={{ display: "flex", gap: 2, minWidth: 0 }}>
+                  {NAV_KEYS.map((n) => (
+                    <NavBtn key={n.id} active={page === n.id} onClick={() => setPage(n.id)}>{t(n.key)}</NavBtn>
+                  ))}
+                </div>
+              )}
+
+              {/* Governance mode: breadcrumb only (sidebar handles step nav) */}
+              {mode === "governance" && (() => {
+                const govKey = GOV_NAV_KEYS.find(k => k.id === page);
+                const stepNum = GOV_STEPS.find(s => s.id === page)?.step;
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {stepNum && (
+                      <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#a78bfa", color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {stepNum}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#a78bfa" }}>
+                      {govKey ? t(govKey.key) : ""}
+                    </span>
+                  </div>
+                );
+              })()}
+            </nav>
+          );
+        })()}
 
         <div style={{ marginLeft: isMobile ? "auto" : !isTablet ? "auto" : undefined, display: "flex", gap: 6, alignItems: "center" }}>
           {/* Tablet: sidebar toggle */}
@@ -1381,16 +1550,24 @@ export default function App() {
       </div>
 
       {/* ── Main content ── */}
+      {(() => {
+        const mode = GOV_PAGES_SET.has(page) ? "governance" : "studio";
+        const govSidebarW = 200;
+      return (
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Sidebar: desktop always, tablet when open, mobile = hidden (in drawer) */}
         {!isMobile && (
           <div className="sidebar-panel"
-            style={{ width: (isDesktop || sidebarOpen) ? sidebarWidth : 0, opacity: (isDesktop || sidebarOpen) ? 1 : 0 }}>
-            {(isDesktop || sidebarOpen) && <Sidebar onSearch={() => setShowSearch(true)} />}
+            style={{ width: mode === "governance" ? govSidebarW : (isDesktop || sidebarOpen) ? sidebarWidth : 0, opacity: (isDesktop || sidebarOpen) ? 1 : 0 }}>
+            {(isDesktop || sidebarOpen) && (
+              mode === "governance"
+                ? <GovWorkflowSidebar />
+                : <Sidebar onSearch={() => setShowSearch(true)} />
+            )}
           </div>
         )}
-        {/* Drag handle */}
-        {!isMobile && (isDesktop || sidebarOpen) && (
+        {/* Drag handle — only in studio mode */}
+        {!isMobile && mode === "studio" && (isDesktop || sidebarOpen) && (
           <div onMouseDown={startSidebarResize}
             style={{ width: 4, flexShrink: 0, cursor: "col-resize", background: "var(--border)", zIndex: 10, transition: "background 0.15s" }}
             onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--accent)"; }}
@@ -1400,7 +1577,7 @@ export default function App() {
 
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           <ErrorBoundary>
-            {!suitePicked ? (
+            {!suitePicked && mode === "studio" ? (
               <SuiteSplash />
             ) : (
               <>
@@ -1423,6 +1600,7 @@ export default function App() {
           </ErrorBoundary>
         </div>
       </div>
+      );})()}
 
       {/* Mobile slide-in drawer */}
       {isMobile && <MobileDrawer open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} onSearch={() => setShowSearch(true)} />}
