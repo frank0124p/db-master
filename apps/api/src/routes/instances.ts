@@ -351,12 +351,82 @@ router.post("/:id/resync-gate", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── Artifact attach/detach ────────────────────────────────────────────────────
+
+const KIND_MAP: Record<string, keyof import("@schema-studio/core").GovernanceInstance["artifacts"]> = {
+  sourceDoc: "sourceDocIds",
+  concept: "conceptIds",
+  businessRule: "businessRuleIds",
+  importBatch: "importBatchIds",
+  wtProposal: "wtProposalIds",
+  draft: "draftIds",
+  report: "reportIds",
+  governed: "governedIds",
+};
+
+const ArtifactMutateInput = z.object({
+  kind: z.string(),
+  artifact_id: z.number().int(),
+});
+
+router.post("/:id/artifacts/attach", async (req, res, next) => {
+  try {
+    const id = Number(req.params["id"]);
+    const body = ArtifactMutateInput.parse(req.body);
+    const instance = await instanceRepo.getInstance(id);
+    if (!instance) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Instance not found" } });
+
+    const key = KIND_MAP[body.kind];
+    if (!key) return res.status(400).json({ error: { code: "BAD_REQUEST", message: `Unknown artifact kind: ${body.kind}` } });
+
+    const artifacts = { ...instance.artifacts };
+    if (!(artifacts[key] as number[]).includes(body.artifact_id)) {
+      (artifacts[key] as number[]) = [...(artifacts[key] as number[]), body.artifact_id];
+    }
+    const upd = await instanceRepo.updateInstance(id, { artifacts });
+    if (upd) await instanceRepo.updateInstance(id, { currentStation: instanceRepo.computeCurrentStation(upd.stations) });
+    return res.json(await instanceRepo.getInstance(id));
+  } catch (e) { next(e); }
+});
+
+router.post("/:id/artifacts/detach", async (req, res, next) => {
+  try {
+    const id = Number(req.params["id"]);
+    const body = ArtifactMutateInput.parse(req.body);
+    const instance = await instanceRepo.getInstance(id);
+    if (!instance) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Instance not found" } });
+
+    const key = KIND_MAP[body.kind];
+    if (!key) return res.status(400).json({ error: { code: "BAD_REQUEST", message: `Unknown artifact kind: ${body.kind}` } });
+
+    const artifacts = { ...instance.artifacts };
+    (artifacts[key] as number[]) = (artifacts[key] as number[]).filter((x: number) => x !== body.artifact_id);
+    const upd = await instanceRepo.updateInstance(id, { artifacts });
+    if (upd) await instanceRepo.updateInstance(id, { currentStation: instanceRepo.computeCurrentStation(upd.stations) });
+    return res.json(await instanceRepo.getInstance(id));
+  } catch (e) { next(e); }
+});
+
 // ── Gate Policy ───────────────────────────────────────────────────────────────
 
 router.get("/settings/gate-policy", async (_req, res, next) => {
   try {
     const policy = await instanceRepo.getGatePolicy();
     res.json(policy);
+  } catch (e) { next(e); }
+});
+
+router.patch("/settings/gate-policy", async (req, res, next) => {
+  try {
+    const user = (req as { user?: { role?: string } }).user;
+    if (!user || user.role !== "admin") {
+      return res.status(403).json({ error: { code: "FORBIDDEN", message: "Only admin can update gate policy" } });
+    }
+    const current = await instanceRepo.getGatePolicy();
+    const body = req.body as Partial<typeof current>;
+    const updated = { ...current, ...body };
+    await instanceRepo.saveGatePolicy(updated);
+    return res.json(updated);
   } catch (e) { next(e); }
 });
 

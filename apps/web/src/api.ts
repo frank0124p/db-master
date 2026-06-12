@@ -165,8 +165,8 @@ export type GovStatus = "pending" | "approved" | "rejected";
 export type GovDraftStatus = "draft" | "passed" | "failed" | "published";
 export type GovWtStatus = "proposed" | "discarded" | "to_draft";
 export type GovBatchStatus = "imported" | "classified" | "accepted";
-export type GovStationId = "knowledge" | "classify" | "compose" | "review" | "publish";
-export type GovStationStatus = "waiting" | "in_progress" | "completed" | "bypassed" | "blocked";
+export type GovStationId = "knowledge" | "classify" | "compose" | "review" | "validate";
+export type GovStationStatus = "not-started" | "in-progress" | "done" | "bypassed" | "blocked";
 
 export interface GovSourceDoc {
   id: number; slug: string; title: string; content: string;
@@ -271,23 +271,50 @@ export interface GovCatalogGraph {
   edges: Array<{ from: string; to: string; kind: string; meta?: Record<string, unknown> }>;
 }
 
+export interface GovArtifacts {
+  sourceDocIds: number[];
+  conceptIds: number[];
+  businessRuleIds: number[];
+  importBatchIds: number[];
+  wtProposalIds: number[];
+  draftIds: number[];
+  reportIds: number[];
+  governedIds: number[];
+}
+
 export interface GovStationState {
-  stationId: GovStationId; status: GovStationStatus;
-  startedAt?: string; completedAt?: string; bypassedAt?: string;
-  bypassReason?: string; artifactId?: number;
+  station: GovStationId;
+  status: GovStationStatus;
+  enteredAt?: string;
+  completedAt?: string;
+  bypass?: { by: string; at: string; reason: string };
+  manualComplete?: { by: string; at: string; reason: string };
+  gate: { required: boolean; source: "policy" | "override" };
+  exitCheck?: { met: boolean; detail: string; checkedAt: string };
 }
 
 export interface GovInstance {
-  id: number; subject: string; blockKind: string;
+  id: number;
+  slug: string;
+  subjectName: string;
+  description?: string;
+  owner: { userId: number; name: string };
+  suiteId?: number;
+  routeTemplate: "default-5";
   stations: GovStationState[];
-  status: "active" | "completed" | "cancelled" | "on_hold";
-  currentStation: GovStationId | null;
-  events: Array<{ at: string; type: string; detail: string }>;
-  createdAt: string; updatedAt: string;
+  currentStation: GovStationId | "completed";
+  artifacts: GovArtifacts;
+  status: "active" | "completed" | "cancelled" | "on-hold";
+  holdReason?: string;
+  events: Array<{ at: string; by: string; type: string; detail: string }>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface GovGatePolicy {
-  stations: Record<GovStationId, { required: boolean; bypassed: boolean }>;
+  stations: Record<GovStationId, { required: boolean; note?: string }>;
+  bypassRoles: Array<"admin" | "suite_owner" | "maintainer">;
+  manualCompleteRoles: Array<"admin" | "suite_owner">;
 }
 
 // ── DDL Import ────────────────────────────────────────────────────────────────

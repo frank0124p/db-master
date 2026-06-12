@@ -36,6 +36,7 @@ import wtProposalsRouter from "./routes/wt-proposals.js";
 import workspaceRouter from "./routes/workspace.js";
 import catalogRouter from "./routes/catalog.js";
 import instancesRouter from "./routes/instances.js";
+import governanceRouter from "./routes/governance.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -104,6 +105,7 @@ app.use("/api/v1/wide-table-proposals", wtProposalsRouter);
 app.use("/api/v1/workspace", workspaceRouter);
 app.use("/api/v1/catalog", catalogRouter);
 app.use("/api/v1/instances", instancesRouter);
+app.use("/api/v1/governance", governanceRouter);
 
 // Gate-policy settings (admin only)
 app.get("/api/v1/settings/gate-policy", async (_req, res, next) => {

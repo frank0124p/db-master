@@ -2,40 +2,41 @@ import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api, type GovInstance, type GovStationId } from "../api.js";
 import { useStore } from "../store.js";
+import InstanceDetailPage from "./InstanceDetailPage.js";
 
 const STATION_LABELS: Record<GovStationId, string> = {
   knowledge: "知識庫",
   classify: "分類",
   compose: "組裝",
   review: "審閱",
-  publish: "發布",
+  validate: "發布",
 };
 
 const STATUS_COLOR: Record<GovInstance["status"], string> = {
   active: "#60a5fa",
   completed: "#4ade80",
   cancelled: "#f87171",
-  on_hold: "#fbbf24",
+  "on-hold": "#fbbf24",
 };
 
 function StationProgress({ instance }: { instance: GovInstance }) {
-  const stations: GovStationId[] = ["knowledge", "classify", "compose", "review", "publish"];
+  const stations: GovStationId[] = ["knowledge", "classify", "compose", "review", "validate"];
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
       {stations.map((sid, i) => {
-        const st = instance.stations.find(s => s.stationId === sid);
+        const st = instance.stations.find(s => s.station === sid);
         const status = st?.status ?? "waiting";
         const isCurrentStation = instance.currentStation === sid;
         const color =
-          status === "completed" ? "#4ade80" :
+          status === "done" ? "#4ade80" :
           status === "bypassed" ? "#a78bfa" :
-          status === "in_progress" ? "#60a5fa" :
+          status === "in-progress" ? "#60a5fa" :
           status === "blocked" ? "#f87171" :
           "var(--text-3)";
         const icon =
-          status === "completed" ? "✓" :
+          status === "done" ? "✓" :
           status === "bypassed" ? "⤳" :
-          status === "in_progress" ? "●" :
+          status === "in-progress" ? "●" :
           status === "blocked" ? "✗" : "○";
 
         return (
@@ -52,7 +53,7 @@ function StationProgress({ instance }: { instance: GovInstance }) {
               <div style={{ fontSize: 8, color: "var(--text-3)", whiteSpace: "nowrap" }}>{STATION_LABELS[sid]}</div>
             </div>
             {i < stations.length - 1 && (
-              <div style={{ width: 14, height: 1, background: status === "completed" ? "#4ade80" : "var(--border)", marginBottom: 14, flexShrink: 0 }} />
+              <div style={{ width: 14, height: 1, background: status === "done" ? "#4ade80" : "var(--border)", marginBottom: 14, flexShrink: 0 }} />
             )}
           </div>
         );
@@ -104,7 +105,12 @@ function NewInstanceModal({ onClose }: { onClose: () => void }) {
 
 export default function InstanceListPage() {
   const [showNew, setShowNew] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const { data: instances = [] } = useQuery({ queryKey: ["gov-instances"], queryFn: api.instances.list });
+
+  if (selectedId !== null) {
+    return <InstanceDetailPage instanceId={selectedId} onBack={() => setSelectedId(null)} />;
+  }
 
   const active = instances.filter(i => i.status === "active");
   const completed = instances.filter(i => i.status === "completed");
@@ -119,17 +125,19 @@ export default function InstanceListPage() {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 10 }}>
           {items.map(inst => (
-            <div key={inst.id} style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 14, borderLeft: `3px solid ${STATUS_COLOR[inst.status]}` }}>
+            <div key={inst.id} onClick={() => setSelectedId(inst.id)} style={{ background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 14, borderLeft: `3px solid ${STATUS_COLOR[inst.status]}`, cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", marginBottom: 2 }}>{inst.subject}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", marginBottom: 2 }}>{inst.subjectName}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ fontSize: 9, fontWeight: 700, color: STATUS_COLOR[inst.status], background: `${STATUS_COLOR[inst.status]}20`, padding: "1px 5px", borderRadius: 3 }}>
                       {inst.status}
                     </span>
-                    <span style={{ fontSize: 10, color: "var(--text-3)" }}>{inst.blockKind}</span>
-                    {inst.currentStation && (
+                    {inst.currentStation !== "completed" && inst.currentStation && (
                       <span style={{ fontSize: 10, color: "var(--text-3)" }}>→ {STATION_LABELS[inst.currentStation]}</span>
+                    )}
+                    {inst.currentStation === "completed" && (
+                      <span style={{ fontSize: 10, color: "#4ade80" }}>✓ 已完成</span>
                     )}
                   </div>
                 </div>
