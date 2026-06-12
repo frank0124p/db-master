@@ -1,27 +1,32 @@
 {
   "mes_equipment.sql": {
-    "schemaId": 1,
+    "schemaId": 13,
     "mtimeMs": 1777712459729.3398,
-    "importedAt": "2026-06-02T13:57:47.492Z"
+    "importedAt": "2026-06-08T02:56:13.662Z"
   },
   "mes_process.sql": {
-    "schemaId": 2,
+    "schemaId": 14,
     "mtimeMs": 1777712475363.0078,
-    "importedAt": "2026-06-02T13:57:47.526Z"
+    "importedAt": "2026-06-08T02:56:13.678Z"
   },
   "plm-core.sql": {
-    "schemaId": 3,
+    "schemaId": 15,
     "mtimeMs": 1777708838643.593,
-    "importedAt": "2026-06-02T13:57:47.570Z"
+    "importedAt": "2026-06-08T02:56:13.694Z"
   },
   "test-quality.sql": {
-    "schemaId": 4,
+    "schemaId": 16,
     "mtimeMs": 1777712463874.5442,
-    "importedAt": "2026-06-02T13:57:47.595Z"
+    "importedAt": "2026-06-08T02:56:13.710Z"
+  },
+  "unified_analytics.sql": {
+    "schemaId": 17,
+    "mtimeMs": 1780887218172.3167,
+    "importedAt": "2026-06-08T02:56:13.726Z"
   },
   "wip-tracking.sql": {
-    "schemaId": 5,
+    "schemaId": 18,
     "mtimeMs": 1777799247380.1528,
-    "importedAt": "2026-06-02T13:57:47.607Z"
+    "importedAt": "2026-06-08T02:56:13.734Z"
   }
 }

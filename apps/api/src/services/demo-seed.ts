@@ -308,7 +308,25 @@ OEE = 可用率 × 效能率 × 品質率。計算所需的三個維度資料應
     reviewers: [],
   });
 
-  console.warn(`[gov-seed] Created 5 concept cards (3 approved, 2 pending)`);
+  const concept6 = await createConcept({
+    slug: "equipment-maintenance",
+    name: "設備保養",
+    stdName: "equipment_maintenance",
+    definition: "對製程設備執行的預防性或矯正性保養作業，包含定期清潔、零件更換、校準，以維持設備稼動率與製程穩定性。",
+    aliases: ["equip_maintenance", "pm_activity", "maintenance_event", "preventive_maintenance"],
+    domain: "semiconductor",
+    relatedConcepts: [concept2.id, concept4.id],
+    tableHints: [
+      { tableName: "equipment_pm_schedule", role: "ssot", note: "保養排程主檔" },
+      { tableName: "equipment_pm_log", role: "replica", note: "實際保養執行記錄" },
+    ],
+    namingDictIds: [8],
+    sourceRefs: [{ docId: doc1.id, chunkIdx: 1 }],
+    status: "pending",
+    reviewers: [],
+  });
+
+  console.warn(`[gov-seed] Created 6 concept cards (3 approved, 3 pending)`);
 
   // ── 3. Business Rules ────────────────────────────────────────────────────────
   const rule1 = await createBusinessRule({
@@ -697,6 +715,40 @@ sources: [wip_lots, process_records, test_results]
     ],
   });
 
-  console.warn(`[gov-seed] Created 3 governance instances (1 completed, 1 in-progress, 1 on-hold)`);
+  // Instance 4: equipment maintenance subject — knowledge station in-progress
+  const inst4 = await createInstance({
+    subjectName: "設備保養資料主題",
+    description: "治理設備保養相關資料主題，整合保養排程、執行記錄與 OEE 影響分析，建立設備保養寬表。",
+    owner: { userId: 1, name: "Admin" },
+    routeTemplate: "default-5",
+    status: "active",
+  });
+  const maintenanceStations = buildInitialStations(policy).map((s, i) => ({
+    ...s,
+    status: (i === 0 ? "in-progress" : "not-started") as "in-progress" | "not-started",
+    enteredAt: i === 0 ? now : undefined,
+    completedAt: undefined,
+  }));
+  await updateInstance(inst4.id, {
+    stations: maintenanceStations,
+    currentStation: "knowledge" as const,
+    status: "active" as const,
+    artifacts: {
+      sourceDocIds: [doc1.id],
+      conceptIds: [concept2.id, concept4.id, concept6.id],
+      businessRuleIds: [rule2.id],
+      importBatchIds: [],
+      wtProposalIds: [],
+      draftIds: [],
+      reportIds: [],
+      governedIds: [],
+    },
+    events: [
+      { at: now, by: "admin", type: "created", detail: "Instance created for subject: 設備保養資料主題" },
+      { at: now, by: "admin", type: "station-start", detail: "knowledge: 開始整理設備保養業務概念，已初步關聯設備識別碼、設備綜合效率、設備保養三個概念" },
+    ],
+  });
+
+  console.warn(`[gov-seed] Created 4 governance instances (1 completed, 1 in-progress, 1 on-hold, 1 knowledge-in-progress)`);
   console.warn("[gov-seed] ✓ Governance demo data seeded successfully");
 }
