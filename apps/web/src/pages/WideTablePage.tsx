@@ -1,33 +1,39 @@
 import { useState, useEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useStore } from "../store.js";
-import { api, type PreviewColumn, type PreviewSource, type WideTablePreview, type JoinType } from "../api.js";
+import { api, type PreviewColumn, type PreviewSource, type WideTablePreview, type JoinType, type GovGovernedWideTable, type GovProposedColumn } from "../api.js";
+import { useResizable } from "../hooks/useResizable.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type WideTableType = "unified" | "r2u";
+type ListTab = WideTableType | "governed";
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function WideTablePage() {
   const { selectedSchemaId } = useStore();
-  const [view, setView] = useState<"list" | "builder" | "detail">("list");
+  const [view, setView] = useState<"list" | "builder" | "detail" | "govDetail">("list");
   const [detailId, setDetailId] = useState<number | null>(null);
-  const [layerTab, setLayerTab] = useState<WideTableType>("r2u");
+  const [govDetailSlug, setGovDetailSlug] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ListTab>("r2u");
 
   if (!selectedSchemaId) {
     return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>← 從左側選擇一個 Schema</div>;
   }
 
-  if (view === "builder") return <WideTableBuilder schemaId={selectedSchemaId} wideTableType={layerTab} onDone={() => setView("list")} />;
+  const builderType: WideTableType = activeTab === "governed" ? "r2u" : activeTab;
+  if (view === "builder") return <WideTableBuilder schemaId={selectedSchemaId} wideTableType={builderType} onDone={() => setView("list")} />;
   if (view === "detail" && detailId) return <WideTableDetailView schemaId={selectedSchemaId} id={detailId} onBack={() => setView("list")} />;
+  if (view === "govDetail" && govDetailSlug) return <GovernedWideTableDetail slug={govDetailSlug} schemaId={selectedSchemaId} onBack={() => setView("list")} />;
   return (
     <WideTableList
       schemaId={selectedSchemaId}
-      layerTab={layerTab}
-      onTabChange={setLayerTab}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
       onNew={() => setView("builder")}
       onOpen={id => { setDetailId(id); setView("detail"); }}
+      onOpenGoverned={slug => { setGovDetailSlug(slug); setView("govDetail"); }}
     />
   );
 }
@@ -56,28 +62,41 @@ const LAYER_TABS: { type: WideTableType; label: string; shortDesc: string; fullD
 ];
 
 function WideTableList({
-  schemaId, layerTab, onTabChange, onNew, onOpen,
+  schemaId, activeTab, onTabChange, onNew, onOpen, onOpenGoverned,
 }: {
   schemaId: number;
-  layerTab: WideTableType;
-  onTabChange: (t: WideTableType) => void;
+  activeTab: ListTab;
+  onTabChange: (t: ListTab) => void;
   onNew: () => void;
   onOpen: (id: number) => void;
+  onOpenGoverned: (slug: string) => void;
 }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const { data: schema } = useQuery({ queryKey: ["schema", schemaId], queryFn: () => api.schemas.get(schemaId) });
   const { data: wideTables } = useQuery({ queryKey: ["wideTables", schemaId], queryFn: () => api.wideTables.list(schemaId) });
+  const { data: governedTables = [] } = useQuery({ queryKey: ["catalog-wide-tables"], queryFn: () => api.catalog.list() });
+  const { size: leftW, onMouseDown: startLeftResize } = useResizable(200, "horizontal", 120, 400);
 
   // Persistent selection state — click left panel table to filter cards; click card to highlight tables
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
   const [selectedWtId, setSelectedWtId] = useState<number | null>(null);
 
+  const layerTab: WideTableType = activeTab === "governed" ? "r2u" : activeTab;
   const tabCfg = LAYER_TABS.find(t => t.type === layerTab)!;
 
   // Tables highlighted in left panel = sources of selected WT
   const selectedWt = selectedWtId !== null ? (wideTables ?? []).find(w => w.id === selectedWtId) : null;
   const highlightedTableIds = new Set(selectedWt?.sourceTableIds ?? []);
+
+  // Governed tables filtered to this schema
+  const visibleGoverned = governedTables.filter(g =>
+    g.columns.some(c => c.source.schemaId === schemaId) &&
+    (selectedTableId === null || g.columns.some(c => {
+      const tbl = schema?.tables.find(t => t.name === c.source.tableName);
+      return tbl?.id === selectedTableId;
+    }))
+  );
 
   // Cards filtered by selected table (from left panel click)
   const visible = (wideTables ?? []).filter(wt => {
@@ -103,7 +122,7 @@ function WideTableList({
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
       {/* Left panel — 資料結構 */}
-      <div style={{ width: 200, flexShrink: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-1)" }}>
+      <div style={{ width: leftW, flexShrink: 0, borderRight: "none", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-1)" }}>
         <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", flex: 1 }}>資料結構</span>
           {selectedTableId !== null && (
@@ -162,20 +181,29 @@ function WideTableList({
         )}
       </div>
 
+      {/* Drag handle */}
+      <div onMouseDown={startLeftResize}
+        style={{ width: 4, flexShrink: 0, cursor: "col-resize", background: "var(--border)", zIndex: 1, transition: "background 0.15s" }}
+        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = tabCfg.color; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--border)"; }}
+      />
+
       {/* Right panel */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Toolbar */}
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-2)", flexShrink: 0 }}>
           <span style={{ fontSize: 14, fontWeight: 600 }}>Wide Tables — {schema?.name}</span>
-          <span style={{ fontSize: 12, color: "var(--text-3)" }}>{wideTables?.length ?? 0} 個合併寬表</span>
-          <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
+          <span style={{ fontSize: 12, color: "var(--text-3)" }}>{wideTables?.length ?? 0} 個合併寬表 · {governedTables.length > 0 ? `${visibleGoverned.length} Governed` : ""}</span>
+          {activeTab !== "governed" && (
+            <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={onNew}>＋ 新建 {tabCfg.label} 寬表</button>
+          )}
         </div>
 
         {/* Layer tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "var(--bg-2)", flexShrink: 0 }}>
           {LAYER_TABS.map(tab => {
             const count = wideTables?.filter(w => w.wideTableType === tab.type).length ?? 0;
-            const active = layerTab === tab.type;
+            const active = activeTab === tab.type;
             return (
               <button
                 key={tab.type}
@@ -208,6 +236,35 @@ function WideTableList({
               </button>
             );
           })}
+          {/* Governed tab */}
+          {(() => {
+            const active = activeTab === "governed";
+            const count = visibleGoverned.length;
+            return (
+              <button
+                onClick={() => { onTabChange("governed"); setSelectedTableId(null); setSelectedWtId(null); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "10px 20px", border: "none", cursor: "pointer",
+                  background: active ? "var(--bg-1)" : "transparent",
+                  borderBottom: `2px solid ${active ? "#a78bfa" : "transparent"}`,
+                  transition: "all 0.15s",
+                }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
+                  background: active ? "rgba(167,139,250,0.15)" : "var(--bg-4)",
+                  color: active ? "#a78bfa" : "var(--text-3)",
+                  border: `1px solid ${active ? "rgba(167,139,250,0.4)" : "var(--border)"}`,
+                }}>◆ Governed</span>
+                <span style={{ fontSize: 12, color: active ? "var(--text-1)" : "var(--text-3)", fontWeight: active ? 600 : 400 }}>治理後寬表</span>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 8,
+                  background: active ? "rgba(167,139,250,0.15)" : "var(--bg-4)",
+                  color: active ? "#a78bfa" : "var(--text-3)",
+                }}>{count}</span>
+              </button>
+            );
+          })()}
         </div>
 
         {/* Description banner */}
@@ -230,7 +287,43 @@ function WideTableList({
 
         {/* Cards */}
         <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-          {visible.length === 0 && (
+          {/* Governed tab content */}
+          {activeTab === "governed" && (
+            <>
+              {visibleGoverned.length === 0 && (
+                <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-3)" }}>
+                  <div style={{ fontSize: 32, marginBottom: 12, color: "#a78bfa" }}>◆</div>
+                  <div style={{ fontSize: 13, marginBottom: 6 }}>此 Schema 尚無治理後寬表</div>
+                  <div style={{ fontSize: 12, color: "var(--text-3)" }}>請先在 Governance 工作台完成治理流程並發布</div>
+                </div>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+                {visibleGoverned.map(g => (
+                  <div key={g.slug}
+                    onClick={() => onOpenGoverned(g.slug)}
+                    style={{
+                      background: "var(--bg-2)", border: "1px solid rgba(167,139,250,0.3)",
+                      borderRadius: 8, padding: 16, cursor: "pointer", transition: "border-color 0.15s",
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "#a78bfa"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(167,139,250,0.3)"; }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(167,139,250,0.15)", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.3)" }}>◆ v{g.version}</span>
+                          <span style={{ fontSize: 9, color: "var(--text-3)" }}>{g.blockKind}</span>
+                        </div>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "#a78bfa", fontWeight: 600, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</div>
+                        {g.description && <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8, lineHeight: 1.4 }}>{g.description}</div>}
+                        <div style={{ fontSize: 10, color: "var(--text-3)" }}>{g.columns.length} 欄位 · 發布者 {g.publishedBy}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {activeTab !== "governed" && visible.length === 0 && (
             <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-3)" }}>
               <div style={{ fontSize: 32, marginBottom: 12, color: tabCfg.color }}>⊞</div>
               {selectedTableId !== null
@@ -244,7 +337,7 @@ function WideTableList({
               )}
             </div>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+          {activeTab !== "governed" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
             {visible.map(wt => {
               const isSelected = selectedWtId === wt.id;
               return (
@@ -290,7 +383,7 @@ function WideTableList({
                 </div>
               );
             })}
-          </div>
+          </div>}
         </div>
       </div>
     </div>
@@ -490,6 +583,7 @@ function WideTableDetailView({ schemaId, id, onBack }: { schemaId: number; id: n
   const { showToast } = useStore();
   const [showDiagram, setShowDiagram] = useState(false);
   const [focusTableId, setFocusTableId] = useState<number | null>(null);
+  const { size: leftW, onMouseDown: startLeftResize } = useResizable(220, "horizontal", 140, 420);
   const { data: wt } = useQuery({ queryKey: ["wideTable", schemaId, id], queryFn: () => api.wideTables.get(schemaId, id) });
   if (!wt) return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: "var(--text-3)" }}>載入中...</span></div>;
 
@@ -530,7 +624,7 @@ function WideTableDetailView({ schemaId, id, onBack }: { schemaId: number; id: n
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
         {/* Left panel — 來源資料結構 */}
-        <div style={{ width: 220, flexShrink: 0, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-1)" }}>
+        <div style={{ width: leftW, flexShrink: 0, borderRight: "none", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-1)" }}>
           <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>來源資料結構</span>
           </div>
@@ -589,6 +683,13 @@ function WideTableDetailView({ schemaId, id, onBack }: { schemaId: number; id: n
           </div>
         </div>
 
+        {/* Drag handle */}
+        <div onMouseDown={startLeftResize}
+          style={{ width: 4, flexShrink: 0, cursor: "col-resize", background: "var(--border)", zIndex: 1, transition: "background 0.15s" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--accent)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--border)"; }}
+        />
+
         {/* Right panel — existing content */}
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
           <JoinGraph sources={sources} />
@@ -605,6 +706,123 @@ function WideTableDetailView({ schemaId, id, onBack }: { schemaId: number; id: n
           onClose={() => setShowDiagram(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Governed Wide Table Detail (shared view/edit between Studio & Governance) ──
+
+function GovernedWideTableDetail({ slug, schemaId, onBack }: { slug: string; schemaId: number; onBack: () => void }) {
+  const qc = useQueryClient();
+  const { showToast } = useStore();
+  const { size: leftW, onMouseDown: startLeftResize } = useResizable(220, "horizontal", 140, 420);
+  const { data: gwt, isLoading } = useQuery({ queryKey: ["gov-gwt", slug], queryFn: () => api.catalog.get(slug) });
+  const [editCols, setEditCols] = useState<GovProposedColumn[] | null>(null);
+  const [editDesc, setEditDesc] = useState<string | null>(null);
+
+  const patchMut = useMutation({
+    mutationFn: (patch: { description?: string; columns?: GovProposedColumn[] }) => api.catalog.patch(slug, patch),
+    onSuccess: async (updated) => {
+      await qc.invalidateQueries({ queryKey: ["gov-gwt", slug] });
+      await qc.invalidateQueries({ queryKey: ["catalog-wide-tables"] });
+      setEditCols(updated.columns);
+      showToast("✓ 已儲存");
+    },
+  });
+
+  if (isLoading) return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: "var(--text-3)" }}>載入中...</span></div>;
+  if (!gwt) return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: "var(--text-3)" }}>找不到治理寬表</span></div>;
+
+  const cols = editCols ?? gwt.columns;
+  const description = editDesc ?? gwt.description;
+
+  // Derive unique source tables
+  const sourceTables = Array.from(new Map(cols.map(c => [c.source.tableName, c.source])).values());
+
+  function updateColDef(idx: number, def: string) {
+    setEditCols(prev => (prev ?? gwt!.columns).map((c, i) => i === idx ? { ...c, definition: def } : c));
+  }
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Toolbar */}
+      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10, background: "var(--bg-2)", flexShrink: 0 }}>
+        <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={onBack}>← 返回</button>
+        <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(167,139,250,0.15)", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.3)" }}>◆ Governed v{gwt.version}</span>
+        <span style={{ fontSize: 14, fontWeight: 600, fontFamily: "var(--font-mono)", color: "#a78bfa" }}>{gwt.name}</span>
+        <span style={{ fontSize: 11, color: "var(--text-3)" }}>發布者 {gwt.publishedBy}</span>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          <button className="btn btn-primary" style={{ fontSize: 11 }}
+            disabled={patchMut.isPending}
+            onClick={() => patchMut.mutate({ description, columns: cols })}>
+            {patchMut.isPending ? "儲存中…" : "儲存"}
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        {/* Left panel — source tables */}
+        <div style={{ width: leftW, flexShrink: 0, borderRight: "none", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-1)" }}>
+          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px" }}>來源資料表</span>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
+            {sourceTables.map(src => (
+              <div key={src.tableName} style={{ padding: "6px 12px", borderBottom: "1px solid var(--border)" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-1)", fontWeight: 500 }}>{src.tableName}</div>
+                <div style={{ fontSize: 10, color: "var(--text-3)" }}>{cols.filter(c => c.source.tableName === src.tableName).length} 欄位</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Drag handle */}
+        <div onMouseDown={startLeftResize}
+          style={{ width: 4, flexShrink: 0, cursor: "col-resize", background: "var(--border)", zIndex: 1, transition: "background 0.15s" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "#a78bfa"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--border)"; }}
+        />
+
+        {/* Right panel */}
+        <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Description */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>描述</div>
+            <textarea value={description} onChange={e => setEditDesc(e.target.value)}
+              style={{ width: "100%", background: "var(--bg-2)", border: "1px solid var(--border)", color: "var(--text-1)", padding: "8px 10px", borderRadius: 6, fontSize: 12, outline: "none", fontFamily: "inherit", resize: "vertical", boxSizing: "border-box", lineHeight: 1.5 } as React.CSSProperties}
+              rows={3} />
+          </div>
+
+          {/* Columns */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>欄位定義 ({cols.length})</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: "var(--bg-2)", borderBottom: "1px solid var(--border)" }}>
+                  {["欄位名稱", "型別", "來源", "定義"].map(h => (
+                    <th key={h} style={{ padding: "7px 12px", textAlign: "left", color: "var(--text-3)", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cols.map((col, idx) => (
+                  <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ padding: "7px 12px", fontFamily: "var(--font-mono)", color: "var(--accent)", fontSize: 11 }}>{col.name}</td>
+                    <td style={{ padding: "7px 12px", fontFamily: "var(--font-mono)", color: "var(--text-3)", fontSize: 11 }}>{col.dataType}</td>
+                    <td style={{ padding: "7px 12px", fontFamily: "var(--font-mono)", color: "var(--text-3)", fontSize: 11 }}>{col.source.tableName}.{col.source.fieldName}</td>
+                    <td style={{ padding: "6px 8px" }}>
+                      <input value={col.definition ?? ""} onChange={e => updateColDef(idx, e.target.value)}
+                        style={{ width: "100%", background: "var(--bg-3)", border: "1px solid var(--border)", color: "var(--text-1)", padding: "4px 7px", borderRadius: 4, fontSize: 11, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                        placeholder="欄位業務定義..." />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -744,6 +962,7 @@ type InputMode = "check" | "sql";
 function WideTableBuilder({ schemaId, wideTableType, onDone }: { schemaId: number; wideTableType: WideTableType; onDone: () => void }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
+  const { size: builderLeftW, onMouseDown: startBuilderLeftResize } = useResizable(280, "horizontal", 180, 480);
   const { data: schema } = useQuery({ queryKey: ["schema", schemaId], queryFn: () => api.schemas.get(schemaId) });
 
   const [step, setStep] = useState<Step>("select");
@@ -921,7 +1140,7 @@ function WideTableBuilder({ schemaId, wideTableType, onDone }: { schemaId: numbe
         {step === "select" && (
           <>
             {/* Left: input panel */}
-            <div style={{ width: 280, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0 }}>
+            <div style={{ width: builderLeftW, borderRight: "none", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0 }}>
               {/* Mode toggle */}
               <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", gap: 0 }}>
                 <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)", width: "100%" }}>
@@ -970,6 +1189,13 @@ function WideTableBuilder({ schemaId, wideTableType, onDone }: { schemaId: numbe
                 </div>
               )}
             </div>
+
+            {/* Builder drag handle */}
+            <div onMouseDown={startBuilderLeftResize}
+              style={{ width: 4, flexShrink: 0, cursor: "col-resize", background: "var(--border)", zIndex: 1, transition: "background 0.15s" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--accent)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--border)"; }}
+            />
 
             {/* Right: live preview + flow diagram */}
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>

@@ -727,6 +727,8 @@ const realApi = {
   catalog: {
     list: () => req<GovGovernedWideTable[]>("/catalog/wide-tables"),
     get: (slug: string) => req<GovGovernedWideTable>(`/catalog/wide-tables/${slug}`),
+    patch: (slug: string, b: { name?: string; description?: string; columns?: GovProposedColumn[] }) =>
+      req<GovGovernedWideTable>(`/catalog/wide-tables/${slug}`, { method: "PATCH", body: JSON.stringify(b) }),
     getMarkdown: (slug: string) => req<{ markdown: string }>(`/catalog/wide-tables/${slug}/markdown`),
     getGraph: () => req<GovCatalogGraph>("/catalog/graph"),
     retrieve: (q: string) =>

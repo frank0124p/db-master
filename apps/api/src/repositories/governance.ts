@@ -82,6 +82,14 @@ export async function saveGoverned(gwt: GovernedWideTable): Promise<void> {
   await saveGovernedIndex(idx);
 }
 
+export async function patchGoverned(slug: string, patch: Partial<GovernedWideTable>): Promise<GovernedWideTable | null> {
+  const existing = await getGoverned(slug);
+  if (!existing) return null;
+  const updated: GovernedWideTable = { ...existing, ...patch };
+  await saveGoverned(updated);
+  return updated;
+}
+
 // ── CatalogGraph ──────────────────────────────────────────────────────────────
 
 const graphPath = () =>

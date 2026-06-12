@@ -5,6 +5,7 @@ import { useT } from "./i18n.js";
 import { api, type ProductSuite, type SchemaLayer, type SchemaEnvironment, type SearchResults, type SearchNamingResult, type DomainDef } from "./api.js";
 import { useBreakpoint } from "./hooks/useBreakpoint.js";
 import { useLayerSettings } from "./hooks/useLayerSettings.js";
+import { useResizable } from "./hooks/useResizable.js";
 import SchemaEditorPage from "./pages/SchemaEditorPage.js";
 import NamingDictPage from "./pages/NamingDictPage.js";
 import VersionHistoryPage from "./pages/VersionHistoryPage.js";
@@ -1353,6 +1354,7 @@ export default function App() {
     const s = localStorage.getItem("schema-studio-sidebar-width");
     return s ? Math.max(160, Math.min(480, Number(s))) : 220;
   });
+  const { size: govSidebarW, onMouseDown: startGovSidebarResize } = useResizable(200, "horizontal", 140, 360);
   const resizing = useRef(false);
   const resizeStartX = useRef(0);
   const resizeStartW = useRef(0);
@@ -1552,7 +1554,6 @@ export default function App() {
       {/* ── Main content ── */}
       {(() => {
         const mode = GOV_PAGES_SET.has(page) ? "governance" : "studio";
-        const govSidebarW = 200;
       return (
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Sidebar: desktop always, tablet when open, mobile = hidden (in drawer) */}
@@ -1566,11 +1567,18 @@ export default function App() {
             )}
           </div>
         )}
-        {/* Drag handle — only in studio mode */}
+        {/* Drag handle — studio mode and governance mode both resizable */}
         {!isMobile && mode === "studio" && (isDesktop || sidebarOpen) && (
           <div onMouseDown={startSidebarResize}
             style={{ width: 4, flexShrink: 0, cursor: "col-resize", background: "var(--border)", zIndex: 10, transition: "background 0.15s" }}
             onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--accent)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--border)"; }}
+          />
+        )}
+        {!isMobile && mode === "governance" && (
+          <div onMouseDown={startGovSidebarResize}
+            style={{ width: 4, flexShrink: 0, cursor: "col-resize", background: "var(--border)", zIndex: 10, transition: "background 0.15s" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "#a78bfa"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--border)"; }}
           />
         )}

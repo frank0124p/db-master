@@ -24,6 +24,21 @@ router.get("/wide-tables/:slug", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── PATCH /api/v1/catalog/wide-tables/:slug ───────────────────────────────────
+
+router.patch("/wide-tables/:slug", async (req, res, next) => {
+  try {
+    const { slug } = req.params as { slug: string };
+    const allowed = ["name", "description", "columns"] as const;
+    const patch = Object.fromEntries(
+      Object.entries(req.body as Record<string, unknown>).filter(([k]) => (allowed as readonly string[]).includes(k))
+    );
+    const updated = await govRepo.patchGoverned(slug, patch);
+    if (!updated) return res.status(404).json({ error: { code: "NOT_FOUND", message: "GovernedWideTable not found" } });
+    return res.json(updated);
+  } catch (e) { next(e); }
+});
+
 // ── GET /api/v1/catalog/wide-tables/:slug/markdown ────────────────────────────
 
 router.get("/wide-tables/:slug/markdown", async (req, res, next) => {
