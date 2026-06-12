@@ -752,3 +752,106 @@ sources: [wip_lots, process_records, test_results]
   console.warn(`[gov-seed] Created 4 governance instances (1 completed, 1 in-progress, 1 on-hold, 1 knowledge-in-progress)`);
   console.warn("[gov-seed] ✓ Governance demo data seeded successfully");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lineage sample data seed
+// Guard: only runs if no lineage edges exist yet
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function seedLineageDemoIfNeeded(): Promise<void> {
+  const { listEdges, recordEdge } = await import("../repositories/lineage.js");
+  const existing = await listEdges();
+  if (existing.length > 0) return;
+
+  const schemas = await listSchemas();
+  if (schemas.length === 0) return;
+
+  // Build a map: domain → schemas → tables
+  const schemaDetails = await Promise.all(schemas.map(s => getSchemaById(s.id)));
+
+  // Helper to find a schema by partial name
+  function findSchema(namePart: string) {
+    return schemaDetails.find(s => s.name.toLowerCase().includes(namePart.toLowerCase()));
+  }
+  // Helper to find a table in a schema by partial name
+  function findTable(schema: typeof schemaDetails[0] | undefined, namePart: string) {
+    return schema?.tables.find(t => t.name.toLowerCase().includes(namePart.toLowerCase()));
+  }
+
+  const seedEdges: Array<Parameters<typeof recordEdge>[0]> = [];
+
+  // ── MES Domain edges ────────────────────────────────────────────────────────
+  const mesLot = findSchema("lot");
+  const mesEquip = findSchema("equip");
+
+  if (mesLot && mesEquip) {
+    const lotTable = findTable(mesLot, "lot");
+    const wtTable = findTable(mesEquip, "production");
+    if (lotTable && wtTable) {
+      seedEdges.push({
+        fromSchemaId: mesLot.id, fromSchemaName: mesLot.name, fromDomain: mesLot.domain || "MES",
+        fromTableId: lotTable.id, fromTableName: lotTable.name, fromKind: "table",
+        toSchemaId: mesEquip.id, toSchemaName: mesEquip.name, toDomain: mesEquip.domain || "MES",
+        toTableId: wtTable.id, toTableName: wtTable.name, toKind: "table",
+        transformType: "direct", description: "批次綁定設備，lot.equip_id = production.equip_id",
+        source: "manual",
+      });
+    }
+  }
+
+  // Try to find any schemas and build meaningful cross-domain edges
+  const allDomains = [...new Set(schemaDetails.map(s => s.domain || "未分類"))];
+
+  for (let i = 0; i < allDomains.length - 1 && seedEdges.length < 6; i++) {
+    const fromDomain = allDomains[i]!;
+    const toDomain = allDomains[i + 1]!;
+    const fromSchemas = schemaDetails.filter(s => (s.domain || "未分類") === fromDomain);
+    const toSchemas = schemaDetails.filter(s => (s.domain || "未分類") === toDomain);
+
+    for (const fromS of fromSchemas.slice(0, 2)) {
+      for (const toS of toSchemas.slice(0, 2)) {
+        if (fromS.tables.length === 0 || toS.tables.length === 0) continue;
+        const fromT = fromS.tables[0]!;
+        const toT = toS.tables[0]!;
+        if (seedEdges.some(e => e.fromTableId === fromT.id && e.toTableId === toT.id)) continue;
+        seedEdges.push({
+          fromSchemaId: fromS.id, fromSchemaName: fromS.name, fromDomain,
+          fromTableId: fromT.id, fromTableName: fromT.name, fromKind: "table",
+          toSchemaId: toS.id, toSchemaName: toS.name, toDomain,
+          toTableId: toT.id, toTableName: toT.name, toKind: "table",
+          transformType: "direct",
+          description: `${fromDomain} → ${toDomain} 跨域資料流（示例）`,
+          source: "manual",
+        });
+        if (seedEdges.length >= 6) break;
+      }
+      if (seedEdges.length >= 6) break;
+    }
+  }
+
+  // Add a few within-domain join edges if we have schemas with multiple tables
+  for (const schema of schemaDetails.slice(0, 3)) {
+    if (schema.tables.length < 2) continue;
+    const t1 = schema.tables[0]!;
+    const t2 = schema.tables[1]!;
+    if (seedEdges.some(e => e.fromTableId === t1.id && e.toTableId === t2.id)) continue;
+    seedEdges.push({
+      fromSchemaId: schema.id, fromSchemaName: schema.name, fromDomain: schema.domain || "未分類",
+      fromTableId: t1.id, fromTableName: t1.name, fromKind: "table",
+      toSchemaId: schema.id, toSchemaName: schema.name, toDomain: schema.domain || "未分類",
+      toTableId: t2.id, toTableName: t2.name, toKind: "table",
+      transformType: "join",
+      description: `${schema.name} 內部 JOIN：${t1.name} → ${t2.name}`,
+      source: "manual",
+    });
+    if (seedEdges.length >= 10) break;
+  }
+
+  for (const edge of seedEdges) {
+    await recordEdge(edge).catch(() => undefined);
+  }
+
+  if (seedEdges.length > 0) {
+    console.warn(`[lineage-seed] ✓ Seeded ${seedEdges.length} demo lineage edges`);
+  }
+}

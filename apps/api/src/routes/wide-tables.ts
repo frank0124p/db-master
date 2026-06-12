@@ -4,6 +4,8 @@ import {
   listWideTables, getWideTable, createWideTable, deleteWideTable,
   previewWideTable, buildViewSql, CreateWideTableInput, type PreviewSource, type TableRef,
 } from "../repositories/wide-tables.js";
+import { recordEdge } from "../repositories/lineage.js";
+import { getSchemaById } from "../repositories/schemas.js";
 // autoCompose is exposed via the /auto-compose route which calls previewWideTable (same logic)
 
 const router: RouterType = Router({ mergeParams: true });
@@ -58,8 +60,42 @@ router.get("/:id", async (req, res, next) => {
 // POST /schemas/:schemaId/wide-tables
 router.post("/", async (req, res, next) => {
   try {
+    const schemaId = sid(req);
     const input = CreateWideTableInput.parse(req.body);
-    res.status(201).json(await createWideTable(sid(req), input));
+    const wt = await createWideTable(schemaId, input);
+    res.status(201).json(wt);
+
+    // Auto-record lineage: each source table → this wide table
+    void (async () => {
+      try {
+        const destSchema = await getSchemaById(schemaId);
+        const uniqueSourceSchemaIds = [...new Set(wt.sources.map(s => s.schemaId))];
+        const srcSchemas = new Map(
+          await Promise.all(uniqueSourceSchemaIds.map(async id => [id, await getSchemaById(id)] as const))
+        );
+        for (const src of wt.sources) {
+          const srcSchema = srcSchemas.get(src.schemaId);
+          if (!srcSchema) continue;
+          await recordEdge({
+            fromSchemaId: src.schemaId,
+            fromSchemaName: srcSchema.name,
+            fromDomain: srcSchema.domain || "未分類",
+            fromTableId: src.tableId,
+            fromTableName: src.tableName,
+            fromKind: "table",
+            toSchemaId: schemaId,
+            toSchemaName: destSchema.name,
+            toDomain: destSchema.domain || "未分類",
+            toTableId: wt.id,
+            toTableName: wt.name,
+            toKind: "wide-table",
+            transformType: src.joinType === "BASE" ? "direct" : "join",
+            description: `寬表 ${wt.name} 自動記錄`,
+            source: "wide-table",
+          });
+        }
+      } catch { /* lineage recording is non-critical */ }
+    })();
   } catch (e) { next(e); }
 });
 

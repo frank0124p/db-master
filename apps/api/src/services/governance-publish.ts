@@ -1,5 +1,7 @@
 import type { WideTableDraft, GovernedWideTable, CatalogGraph } from "@schema-studio/core";
 import * as govRepo from "../repositories/governance.js";
+import { recordEdge } from "../repositories/lineage.js";
+import { getSchemaById } from "../repositories/schemas.js";
 
 function buildMarkdown(gwt: GovernedWideTable): string {
   const concepts = [...new Set(gwt.columns.map(c => c.conceptId).filter(Boolean))];
@@ -161,6 +163,42 @@ export async function publishDraft(
   // Save markdown export
   const md = buildMarkdown(gwt);
   await govRepo.saveMarkdownExport(slug, md);
+
+  // Auto-record lineage: each unique source schema/table → this governed wide table
+  void (async () => {
+    try {
+      const sourcesBySchema = new Map<number, Set<string>>();
+      for (const col of gwt.columns) {
+        const schemaId = col.source.schemaId;
+        if (!sourcesBySchema.has(schemaId)) sourcesBySchema.set(schemaId, new Set());
+        sourcesBySchema.get(schemaId)!.add(col.source.tableName);
+      }
+      for (const [srcSchemaId, tableNames] of sourcesBySchema) {
+        const srcSchema = await getSchemaById(srcSchemaId).catch(() => null);
+        if (!srcSchema) continue;
+        for (const tableName of tableNames) {
+          const tbl = srcSchema.tables.find(t => t.name === tableName);
+          await recordEdge({
+            fromSchemaId: srcSchemaId,
+            fromSchemaName: srcSchema.name,
+            fromDomain: srcSchema.domain || "未分類",
+            fromTableId: tbl?.id ?? 0,
+            fromTableName: tableName,
+            fromKind: "table",
+            toSchemaId: 0,
+            toSchemaName: "Governed Catalog",
+            toDomain: "Governed",
+            toTableId: gwt.id,
+            toTableName: gwt.name,
+            toKind: "governed",
+            transformType: "derived",
+            description: `Governance 發布 ${gwt.name} v${gwt.version}`,
+            source: "governance",
+          });
+        }
+      }
+    } catch { /* non-critical */ }
+  })();
 
   return gwt;
 }

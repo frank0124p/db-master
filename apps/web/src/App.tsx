@@ -22,6 +22,7 @@ import WorkspacePage from "./pages/WorkspacePage.js";
 import CatalogPage from "./pages/CatalogPage.js";
 import InstanceListPage from "./pages/InstanceListPage.js";
 import LineagePage from "./pages/LineagePage.js";
+import GlobalGraphPage from "./pages/GlobalGraphPage.js";
 
 const NAV_KEYS: { id: Page; key: string; icon: string }[] = [
   { id: "editor",   key: "nav.editor",   icon: "⬡" },
@@ -32,7 +33,8 @@ const NAV_KEYS: { id: Page; key: string; icon: string }[] = [
   { id: "wide",     key: "nav.wide",     icon: "⊞" },
   { id: "rules",    key: "nav.rules",    icon: "◈" },
   { id: "datahub",  key: "nav.datahub",  icon: "⬆" },
-  { id: "lineage",  key: "nav.lineage",  icon: "⇝" },
+  { id: "lineage",       key: "nav.lineage",       icon: "⇝" },
+  { id: "lineage-graph", key: "nav.lineage_graph", icon: "⊛" },
 ];
 
 const GOV_NAV_KEYS: { id: Page; key: string; icon: string }[] = [
@@ -1606,6 +1608,7 @@ export default function App() {
                 {page === "catalog"         && <CatalogPage />}
                 {page === "instances"       && <InstanceListPage />}
                 {page === "lineage"         && <LineagePage />}
+                {page === "lineage-graph"  && <GlobalGraphPage />}
               </>
             )}
           </ErrorBoundary>

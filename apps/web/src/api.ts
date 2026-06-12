@@ -162,15 +162,18 @@ export interface WideTablePreview {
 // ── Lineage types ─────────────────────────────────────────────────────────────
 
 export type LineageTransformType = "direct" | "aggregate" | "join" | "derived" | "filter";
+export type LineageNodeKind = "table" | "wide-table" | "governed";
+export type LineageSource = "manual" | "wide-table" | "governance" | "field";
 
 export interface LineageEdge {
   id: string;
   fromSchemaId: number; fromSchemaName: string; fromDomain: string;
-  fromTableId: number; fromTableName: string;
+  fromTableId: number; fromTableName: string; fromKind: LineageNodeKind;
   toSchemaId: number; toSchemaName: string; toDomain: string;
-  toTableId: number; toTableName: string;
+  toTableId: number; toTableName: string; toKind: LineageNodeKind;
   transformType: LineageTransformType;
   description: string;
+  source: LineageSource;
   createdAt: string;
 }
 
@@ -179,11 +182,16 @@ export interface LineageQueryResult {
   relevantEdgeIds: string[];
   relevantTables: Array<{
     schemaId: number; schemaName: string; domain: string;
-    tableId: number; tableName: string;
+    tableId: number; tableName: string; kind: LineageNodeKind;
   }>;
   sql: string;
   explanation: string;
   joinPath: string;
+}
+
+export interface LineageThinkingStep {
+  step: string;
+  text: string;
 }
 
 // ── Governance types ──────────────────────────────────────────────────────────
@@ -790,6 +798,8 @@ const realApi = {
     remove: (id: string) => req<void>(`/lineage/${id}`, { method: "DELETE" }),
     query: (question: string) =>
       req<LineageQueryResult>("/lineage/query", { method: "POST", body: JSON.stringify({ question }) }),
+    queryStream: (question: string) =>
+      fetch("/api/v1/lineage/query-stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) }),
   },
 };
 

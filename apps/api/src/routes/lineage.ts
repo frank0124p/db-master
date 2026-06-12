@@ -1,7 +1,7 @@
 import { Router } from "express";
 import * as lineageRepo from "../repositories/lineage.js";
 import type { LineageTransformType } from "@schema-studio/core";
-import { queryWithLineage } from "../services/lineage-query.js";
+import { queryWithLineage, queryWithLineageStream } from "../services/lineage-query.js";
 import { listSchemas, getSchemaById } from "../repositories/schemas.js";
 
 const router = Router();
@@ -18,9 +18,9 @@ router.post("/", async (req, res, next) => {
   try {
     const body = req.body as {
       fromSchemaId: number; fromSchemaName: string; fromDomain: string;
-      fromTableId: number; fromTableName: string;
+      fromTableId: number; fromTableName: string; fromKind?: string;
       toSchemaId: number; toSchemaName: string; toDomain: string;
-      toTableId: number; toTableName: string;
+      toTableId: number; toTableName: string; toKind?: string;
       transformType: string; description?: string;
     };
     const edge = await lineageRepo.addEdge({
@@ -29,13 +29,16 @@ router.post("/", async (req, res, next) => {
       fromDomain: String(body.fromDomain),
       fromTableId: Number(body.fromTableId),
       fromTableName: String(body.fromTableName),
+      fromKind: (body.fromKind ?? "table") as import("@schema-studio/core").LineageNodeKind,
       toSchemaId: Number(body.toSchemaId),
       toSchemaName: String(body.toSchemaName),
       toDomain: String(body.toDomain),
       toTableId: Number(body.toTableId),
       toTableName: String(body.toTableName),
+      toKind: (body.toKind ?? "table") as import("@schema-studio/core").LineageNodeKind,
       transformType: (body.transformType ?? "direct") as LineageTransformType,
       description: body.description ?? "",
+      source: "manual",
     });
     res.status(201).json(edge);
   } catch (e) { next(e); }
@@ -50,7 +53,7 @@ router.delete("/:id", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// POST /api/v1/lineage/query  — NL query using lineage graph
+// POST /api/v1/lineage/query  — non-streaming fallback
 router.post("/query", async (req, res, next) => {
   try {
     const { question } = req.body as { question: string };
@@ -61,9 +64,48 @@ router.post("/query", async (req, res, next) => {
       listSchemas(),
     ]);
     const schemas = await Promise.all(schemaMetas.map(m => getSchemaById(m.id)));
-
     const result = await queryWithLineage(question.trim(), edges, schemas);
     return res.json(result);
+  } catch (e) { next(e); }
+});
+
+// POST /api/v1/lineage/query-stream  — SSE streaming with thinking steps
+router.post("/query-stream", async (req, res, next) => {
+  try {
+    const { question } = req.body as { question: string };
+    if (!question?.trim()) return res.status(400).json({ error: { code: "INVALID", message: "question required" } });
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    const [edges, schemaMetas] = await Promise.all([
+      lineageRepo.listEdges(),
+      listSchemas(),
+    ]);
+    const schemas = await Promise.all(schemaMetas.map(m => getSchemaById(m.id)));
+
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    for await (const ev of queryWithLineageStream(question.trim(), edges, schemas)) {
+      if (ev.type === "thinking") {
+        send("thinking", ev.step);
+      } else if (ev.type === "done") {
+        send("done", ev.result);
+        res.end();
+        return;
+      } else if (ev.type === "error") {
+        send("error", { message: ev.message });
+        res.end();
+        return;
+      }
+    }
+
+    res.end();
   } catch (e) { next(e); }
 });
 
