@@ -159,6 +159,33 @@ export interface WideTablePreview {
   sql: string;
 }
 
+// ── Lineage types ─────────────────────────────────────────────────────────────
+
+export type LineageTransformType = "direct" | "aggregate" | "join" | "derived" | "filter";
+
+export interface LineageEdge {
+  id: string;
+  fromSchemaId: number; fromSchemaName: string; fromDomain: string;
+  fromTableId: number; fromTableName: string;
+  toSchemaId: number; toSchemaName: string; toDomain: string;
+  toTableId: number; toTableName: string;
+  transformType: LineageTransformType;
+  description: string;
+  createdAt: string;
+}
+
+export interface LineageQueryResult {
+  question: string;
+  relevantEdgeIds: string[];
+  relevantTables: Array<{
+    schemaId: number; schemaName: string; domain: string;
+    tableId: number; tableName: string;
+  }>;
+  sql: string;
+  explanation: string;
+  joinPath: string;
+}
+
 // ── Governance types ──────────────────────────────────────────────────────────
 
 export type GovStatus = "pending" | "approved" | "rejected";
@@ -484,14 +511,14 @@ const realApi = {
     analyze: (id: number, tableId?: number, signal?: AbortSignal) => fetch(`/api/v1/schemas/${id}/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(tableId != null ? { tableId } : {}),
-      ...(signal != null ? { signal } : {}),
+      body: JSON.stringify(tableId !== null && tableId !== undefined ? { tableId } : {}),
+      ...(signal !== null && signal !== undefined ? { signal } : {}),
     }),
     suggest: (id: number, signal?: AbortSignal) => fetch(`/api/v1/schemas/${id}/suggest`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
-      ...(signal != null ? { signal } : {}),
+      ...(signal !== null && signal !== undefined ? { signal } : {}),
     }),
     exportSchema: (id: number) => fetch(`/api/v1/schemas/${id}/export`),
     importSchema: (body: unknown) => req<SchemaDetail>("/schemas/import", {
@@ -754,6 +781,15 @@ const realApi = {
     cancel: (id: number, b: { reason: string }) =>
       req<GovInstance>(`/instances/${id}/cancel`, { method: "POST", body: JSON.stringify(b) }),
     gatePolicy: () => req<GovGatePolicy>("/instances/gate-policy"),
+  },
+
+  lineage: {
+    list: () => req<LineageEdge[]>("/lineage"),
+    add: (b: Omit<LineageEdge, "id" | "createdAt">) =>
+      req<LineageEdge>("/lineage", { method: "POST", body: JSON.stringify(b) }),
+    remove: (id: string) => req<void>(`/lineage/${id}`, { method: "DELETE" }),
+    query: (question: string) =>
+      req<LineageQueryResult>("/lineage/query", { method: "POST", body: JSON.stringify({ question }) }),
   },
 };
 

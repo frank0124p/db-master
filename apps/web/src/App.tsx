@@ -21,6 +21,7 @@ import ComposePage from "./pages/ComposePage.js";
 import WorkspacePage from "./pages/WorkspacePage.js";
 import CatalogPage from "./pages/CatalogPage.js";
 import InstanceListPage from "./pages/InstanceListPage.js";
+import LineagePage from "./pages/LineagePage.js";
 
 const NAV_KEYS: { id: Page; key: string; icon: string }[] = [
   { id: "editor",   key: "nav.editor",   icon: "⬡" },
@@ -31,6 +32,7 @@ const NAV_KEYS: { id: Page; key: string; icon: string }[] = [
   { id: "wide",     key: "nav.wide",     icon: "⊞" },
   { id: "rules",    key: "nav.rules",    icon: "◈" },
   { id: "datahub",  key: "nav.datahub",  icon: "⬆" },
+  { id: "lineage",  key: "nav.lineage",  icon: "⇝" },
 ];
 
 const GOV_NAV_KEYS: { id: Page; key: string; icon: string }[] = [
@@ -782,7 +784,7 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
       name: form.name,
       ...(form.description ? { description: form.description } : {}),
       domain: form.domain,
-      ...(suiteId != null ? { suiteId } : {}),
+      ...(suiteId !== null && suiteId !== undefined ? { suiteId } : {}),
       ...(layerType ? { layerType } : {}),
       ...(environment ? { environment } : {}),
     });
@@ -1603,6 +1605,7 @@ export default function App() {
                 {page === "workspace"       && <WorkspacePage />}
                 {page === "catalog"         && <CatalogPage />}
                 {page === "instances"       && <InstanceListPage />}
+                {page === "lineage"         && <LineagePage />}
               </>
             )}
           </ErrorBoundary>

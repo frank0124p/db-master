@@ -12,6 +12,7 @@ const zh = {
   "nav.wide":      "寬表",
   "nav.rules":     "規則 & Skills",
   "nav.datahub":   "DataHub",
+  "nav.lineage":   "Data Lineage",
 
   // ── Sidebar ───────────────────────────────────────────────────────────────
   "sidebar.schemas":    "Schemas",
@@ -245,6 +246,7 @@ const en: Record<string, string> = {
   "nav.wide":      "Wide Tables",
   "nav.rules":     "Rules & Skills",
   "nav.datahub":   "DataHub",
+  "nav.lineage":   "Data Lineage",
 
   "sidebar.schemas":    "Schemas",
   "sidebar.ai_gen":     "AI Generate",

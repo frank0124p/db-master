@@ -32,6 +32,7 @@ import workspaceRouter from "./routes/workspace.js";
 import catalogRouter from "./routes/catalog.js";
 import instancesRouter from "./routes/instances.js";
 import governanceRouter from "./routes/governance.js";
+import lineageRouter from "./routes/lineage.js";
 
 export function createApp(dataDir?: string) {
   if (dataDir) process.env["DATA_DIR"] = dataDir;
@@ -73,6 +74,7 @@ export function createApp(dataDir?: string) {
   app.use("/api/v1/catalog", catalogRouter);
   app.use("/api/v1/instances", instancesRouter);
   app.use("/api/v1/governance", governanceRouter);
+  app.use("/api/v1/lineage", lineageRouter);
 
   app.use(errorMiddleware);
   return app;
