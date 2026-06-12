@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { useT } from "../i18n.js";
+import { useResizable } from "../hooks/useResizable.js";
 import { api, type Field, type Table, type SchemaDetail, type NamingEntry, type MatchResult, type ImportCheckResult, type ViolationSummary, type SchemaVersion, type TableNamingCheck, type SchemaEnvironment } from "../api.js";
 import { MarkdownView } from "../MarkdownView.js";
 import { useLayerSettings } from "../hooks/useLayerSettings.js";
@@ -1825,7 +1826,7 @@ function SchemaSettingsModal({ schema, suites, onClose, onDeleted }: {
     name: schema.name,
     description: schema.description ?? "",
     domain: schema.domain,
-    suiteId: schema.suiteId != null ? String(schema.suiteId) : "",
+    suiteId: schema.suiteId !== null && schema.suiteId !== undefined ? String(schema.suiteId) : "",
     layerType: schema.layerType ?? "",
     environment: schema.environment ?? "",
     targetDb: schema.targetDb ?? "",
@@ -2070,6 +2071,7 @@ export default function SchemaEditorPage() {
   const { data: naming } = useQuery({ queryKey: ["naming"], queryFn: () => api.naming.list() });
   const namingEntries: NamingEntry[] = naming ?? [];
 
+  const { size: tableListW, onMouseDown: startTableResize } = useResizable(200, "horizontal", 120, 380);
   const activeTableId = selectedTableId ?? schema?.tables[0]?.id ?? null;
   const activeTable = schema?.tables.find(t => t.id === activeTableId);
 
@@ -2097,7 +2099,7 @@ export default function SchemaEditorPage() {
   return (
     <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
       {/* Table list panel */}
-      <div style={{ width: 200, background: "var(--bg-1)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: tableListW, flexShrink: 0, background: "var(--bg-1)", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span className="panel-title">Tables</span>
           <div style={{ display: "flex", gap: 4 }}>
@@ -2119,6 +2121,14 @@ export default function SchemaEditorPage() {
           ))}
         </div>
       </div>
+
+      {/* Resize handle */}
+      <div
+        onMouseDown={startTableResize}
+        style={{ width: 4, flexShrink: 0, cursor: "col-resize", background: "var(--border)", zIndex: 10, transition: "background 0.15s" }}
+        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--accent)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--border)"; }}
+      />
 
       {/* Field editor */}
       {activeTable
