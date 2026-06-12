@@ -67,7 +67,7 @@ function DocTab() {
   });
 
   async function extract(doc: GovSourceDoc) {
-    if (extractingId != null) return;
+    if (extractingId !== null && extractingId !== undefined) return;
     setExtractingId(doc.id); setSseLines([`正在抽取 "${doc.title}"...`]);
     abortRef.current = new AbortController();
     try {

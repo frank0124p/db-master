@@ -574,7 +574,7 @@ export default function VersionHistoryPage() {
 
                       {/* DDL 檢查 */}
                       <td style={cs()}>
-                        {v.ddlCheck == null
+                        {v.ddlCheck === null || v.ddlCheck === undefined
                           ? <span style={{ color: "var(--text-3)" }}>—</span>
                           : v.ddlCheck.passed && v.ddlCheck.errors === 0
                             ? <span style={{ fontSize: 11, fontWeight: 700, color: "var(--success,#4ade80)" }}>✓ 無錯誤</span>

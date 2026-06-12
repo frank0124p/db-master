@@ -47,6 +47,8 @@ const GOV_NAV_KEYS: { id: Page; key: string; icon: string }[] = [
 ];
 
 const GOV_PAGES_SET = new Set<Page>(["knowledge", "import-classify", "compose", "workspace", "catalog", "instances"]);
+// Pages that are independent of suite selection (cross-domain or global views)
+const SUITE_FREE_PAGES = new Set<Page>(["lineage", "lineage-graph"]);
 
 const GOV_STEPS: { step: number; id: Page; icon: string; labelKey: string; desc: string }[] = [
   { step: 1, id: "knowledge",       icon: "⊕", labelKey: "nav.knowledge",       desc: "文件 · 概念 · 業務規則" },
@@ -1589,7 +1591,7 @@ export default function App() {
 
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           <ErrorBoundary>
-            {!suitePicked && mode === "studio" ? (
+            {!suitePicked && mode === "studio" && !SUITE_FREE_PAGES.has(page) ? (
               <SuiteSplash />
             ) : (
               <>

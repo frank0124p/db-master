@@ -149,7 +149,7 @@ export function recomputeStations(
       }
 
       // Preserve manual-complete state.
-      if (status === "done" && manualComplete != null) {
+      if (status === "done" && manualComplete !== null && manualComplete !== undefined) {
         return stationState;
       }
 

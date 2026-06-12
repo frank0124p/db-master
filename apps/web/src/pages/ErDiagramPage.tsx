@@ -87,7 +87,7 @@ function computeLayout(tables: Table[], visible: Set<number>, expanded: Set<numb
   for (const e of edges) {
     const fromId = nameToId.get(e.fromTable);
     const toId   = nameToId.get(e.toTable);
-    if (fromId == null || toId == null || fromId === toId) continue;
+    if (fromId === null || fromId === undefined || toId === null || toId === undefined || fromId === toId) continue;
     // toTable is parent/source → place on LEFT (lower layer)
     // fromTable is child/derived → place on RIGHT (higher layer)
     outN.get(toId)?.add(fromId);

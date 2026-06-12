@@ -17,7 +17,7 @@ router.post("/", async (req, res, next) => {
     const entries = await listNamingEntries(schema.domain);
     const settingsMap = await getRuleSettingsMap();
 
-    const tables = tableId != null
+    const tables = tableId !== null && tableId !== undefined
       ? schema.tables.filter(t => t.id === tableId)
       : schema.tables;
 
@@ -69,7 +69,7 @@ router.post("/", async (req, res, next) => {
 
     const skills = getSkillsForDomain(schema.domain);
     const skillsText = formatSkillsForPrompt(skills);
-    const scopeLabel = tableId != null ? `表「${tables[0]?.name ?? tableId}」` : `Schema「${schema.name}」`;
+    const scopeLabel = tableId !== null && tableId !== undefined ? `表「${tables[0]?.name ?? tableId}」` : `Schema「${schema.name}」`;
     const schemaJson = JSON.stringify({
       name: scopeLabel, tables: tables.map(t => ({
         name: t.name, comment: t.comment,

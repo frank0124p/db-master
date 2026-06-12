@@ -90,7 +90,7 @@ export default function AnalysisPage() {
   async function runAnalysis() {
     if (!selectedSchemaId || running) return;
     setRunning(true);
-    const scopeLabel = selectedTableId != null
+    const scopeLabel = selectedTableId !== null && selectedTableId !== undefined
       ? schema?.tables.find(t => t.id === selectedTableId)?.name ?? "單表"
       : "整個 Schema";
     setStatus(`分析中（${scopeLabel}）...`);

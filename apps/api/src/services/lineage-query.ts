@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import Anthropic from "@anthropic-ai/sdk";
 import type { LineageEdge, LineageQueryResult, LineageThinkingStep } from "@schema-studio/core";
 import type { SchemaWithTables } from "../repositories/schemas.js";
+import { MOCK_SCENARIOS, MOCK_FALLBACK } from "./lineage-mock-config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROMPTS_DIR = path.resolve(__dirname, "../../../../prompts");
@@ -106,6 +107,37 @@ export async function queryWithLineage(
   };
 }
 
+// ── Mock streaming (LINEAGE_MOCK=true) ───────────────────────────────────────
+
+function isMockEnabled(): boolean {
+  const flag = process.env["LINEAGE_MOCK"] ?? "";
+  return flag === "true" || flag === "1";
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Step delays (ms) — simulate LLM thinking cadence
+const STEP_DELAYS = [400, 550, 650, 500, 700];
+
+async function* mockLineageStream(
+  question: string,
+  edges: LineageEdge[],
+  schemas: SchemaWithTables[],
+): AsyncGenerator<StreamEvent> {
+  const scenario =
+    MOCK_SCENARIOS.find(s => s.match.test(question)) ?? MOCK_FALLBACK;
+
+  for (let i = 0; i < scenario.steps.length; i++) {
+    await sleep(STEP_DELAYS[i] ?? 400);
+    yield { type: "thinking", step: scenario.steps[i]! };
+  }
+
+  await sleep(300);
+  yield { type: "done", result: scenario.buildResult(question, edges, schemas) };
+}
+
 // ── Streaming query with thinking steps ──────────────────────────────────────
 
 export type StreamEvent =
@@ -118,6 +150,11 @@ export async function* queryWithLineageStream(
   edges: LineageEdge[],
   schemas: SchemaWithTables[],
 ): AsyncGenerator<StreamEvent> {
+  if (isMockEnabled()) {
+    yield* mockLineageStream(question, edges, schemas);
+    return;
+  }
+
   const template = await fs.readFile(path.join(PROMPTS_DIR, "lineage-query-stream.md"), "utf-8");
   const prompt = template
     .replace("{{lineage}}", buildLineageSummary(edges))

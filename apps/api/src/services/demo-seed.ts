@@ -766,92 +766,132 @@ export async function seedLineageDemoIfNeeded(): Promise<void> {
   const schemas = await listSchemas();
   if (schemas.length === 0) return;
 
-  // Build a map: domain → schemas → tables
   const schemaDetails = await Promise.all(schemas.map(s => getSchemaById(s.id)));
 
-  // Helper to find a schema by partial name
-  function findSchema(namePart: string) {
+  type SchemaDetail = typeof schemaDetails[0];
+
+  function findSchema(namePart: string): SchemaDetail | undefined {
     return schemaDetails.find(s => s.name.toLowerCase().includes(namePart.toLowerCase()));
   }
-  // Helper to find a table in a schema by partial name
-  function findTable(schema: typeof schemaDetails[0] | undefined, namePart: string) {
+  function findTable(schema: SchemaDetail | undefined, namePart: string) {
     return schema?.tables.find(t => t.name.toLowerCase().includes(namePart.toLowerCase()));
   }
 
-  const seedEdges: Array<Parameters<typeof recordEdge>[0]> = [];
+  type EdgeDef = {
+    fromS: SchemaDetail | undefined;
+    fromTName: string;
+    toS: SchemaDetail | undefined;
+    toTName: string;
+    transform: Parameters<typeof recordEdge>[0]["transformType"];
+    desc: string;
+    source?: Parameters<typeof recordEdge>[0]["source"];
+  };
 
-  // ── MES Domain edges ────────────────────────────────────────────────────────
-  const mesLot = findSchema("lot");
-  const mesEquip = findSchema("equip");
+  const mesEquip = findSchema("mes equipment");
+  const mesProcess = findSchema("mes process");
+  const plmCore = findSchema("plm");
+  const testQuality = findSchema("test quality");
+  const unified = findSchema("unified analytics");
+  const wip = findSchema("wip");
 
-  if (mesLot && mesEquip) {
-    const lotTable = findTable(mesLot, "lot");
-    const wtTable = findTable(mesEquip, "production");
-    if (lotTable && wtTable) {
-      seedEdges.push({
-        fromSchemaId: mesLot.id, fromSchemaName: mesLot.name, fromDomain: mesLot.domain || "MES",
-        fromTableId: lotTable.id, fromTableName: lotTable.name, fromKind: "table",
-        toSchemaId: mesEquip.id, toSchemaName: mesEquip.name, toDomain: mesEquip.domain || "MES",
-        toTableId: wtTable.id, toTableName: wtTable.name, toKind: "table",
-        transformType: "direct", description: "批次綁定設備，lot.equip_id = production.equip_id",
-        source: "manual",
-      });
-    }
+  const edgeDefs: EdgeDef[] = [
+    // ── MES Equipment 內部 ───────────────────────────────────────────
+    { fromS: mesEquip, fromTName: "equipments", toS: mesEquip, toTName: "equipment_pm_records",
+      transform: "join",    desc: "設備主檔 → 保養記錄：equipment_pm_records.equipment_id = equipments.id" },
+    { fromS: mesEquip, fromTName: "equipments", toS: mesEquip, toTName: "equipment_alarms",
+      transform: "direct",  desc: "設備主檔 → 設備警報：equipment_alarms.equipment_id = equipments.id" },
+    // ── MES Equipment → MES Process ─────────────────────────────────
+    { fromS: mesEquip, fromTName: "equipments", toS: mesProcess, toTName: "process_steps",
+      transform: "join",    desc: "設備參與製程步驟：process_steps.equipment_id = equipments.id" },
+    // ── MES Process 內部 ────────────────────────────────────────────
+    { fromS: mesProcess, fromTName: "lots",          toS: mesProcess, toTName: "wafers",
+      transform: "join",    desc: "批次拆解為晶圓：wafers.lot_id = lots.id" },
+    { fromS: mesProcess, fromTName: "lots",          toS: mesProcess, toTName: "process_steps",
+      transform: "direct",  desc: "批次拆解為製程步驟：process_steps.lot_id = lots.id" },
+    { fromS: mesProcess, fromTName: "wafers",        toS: mesProcess, toTName: "process_steps",
+      transform: "direct",  desc: "晶圓對應製程步驟：process_steps.wafer_id = wafers.id" },
+    { fromS: mesProcess, fromTName: "process_steps", toS: mesProcess, toTName: "measurements",
+      transform: "derived", desc: "製程步驟產生量測數據：measurements.step_id = process_steps.id" },
+    // ── PLM → MES Process ───────────────────────────────────────────
+    { fromS: plmCore, fromTName: "parts",         toS: mesProcess, toTName: "lots",
+      transform: "join",    desc: "零件（產品）定義對應生產批次：lots.product_code = parts.part_no" },
+    { fromS: plmCore, fromTName: "part_revisions",toS: mesProcess, toTName: "lots",
+      transform: "join",    desc: "零件版本決定批次使用規格：lots.rev = part_revisions.revision" },
+    { fromS: plmCore, fromTName: "bom_items",     toS: mesProcess, toTName: "lots",
+      transform: "derived", desc: "BOM 展開後驅動生產批次物料用料計畫" },
+    // ── PLM 內部 ────────────────────────────────────────────────────
+    { fromS: plmCore, fromTName: "parts",              toS: plmCore, toTName: "part_revisions",
+      transform: "join",    desc: "零件版本追蹤：part_revisions.part_id = parts.id" },
+    { fromS: plmCore, fromTName: "parts",              toS: plmCore, toTName: "bom_items",
+      transform: "direct",  desc: "零件主檔展開 BOM 結構：bom_items.parent_part_id = parts.id" },
+    { fromS: plmCore, fromTName: "engineering_changes",toS: plmCore, toTName: "part_revisions",
+      transform: "derived", desc: "ECO 工程變更觸發新版本建立：part_revisions.ec_no = engineering_changes.ec_no" },
+    { fromS: plmCore, fromTName: "suppliers",          toS: plmCore, toTName: "part_suppliers",
+      transform: "direct",  desc: "供應商主檔關聯零件供應商：part_suppliers.supplier_id = suppliers.id" },
+    { fromS: plmCore, fromTName: "parts",              toS: plmCore, toTName: "part_suppliers",
+      transform: "direct",  desc: "零件與供應商多對多：part_suppliers.part_id = parts.id" },
+    // ── MES Process → Test Quality ──────────────────────────────────
+    { fromS: mesProcess, fromTName: "lots",   toS: testQuality, toTName: "wafer_lots",
+      transform: "direct",  desc: "生產批次流入品質檢測：wafer_lots.lot_no = lots.lot_no" },
+    { fromS: mesProcess, fromTName: "wafers", toS: testQuality, toTName: "inspection_records",
+      transform: "direct",  desc: "晶圓進入檢測站：inspection_records.wafer_id = wafers.wafer_id" },
+    // ── Test Quality 內部 ───────────────────────────────────────────
+    { fromS: testQuality, fromTName: "wafer_lots",        toS: testQuality, toTName: "inspection_records",
+      transform: "direct",  desc: "品質批次觸發檢測記錄：inspection_records.lot_id = wafer_lots.id" },
+    { fromS: testQuality, fromTName: "inspection_records",toS: testQuality, toTName: "defect_items",
+      transform: "direct",  desc: "檢測記錄展開缺陷明細：defect_items.inspection_id = inspection_records.id" },
+    { fromS: testQuality, fromTName: "inspection_records",toS: testQuality, toTName: "yield_info",
+      transform: "derived", desc: "檢測彙總計算良率統計：yield_info.lot_id = wafer_lots.id" },
+    { fromS: testQuality, fromTName: "spc_charts",        toS: testQuality, toTName: "inspection_records",
+      transform: "filter",  desc: "SPC 管制圖依規格篩選檢測記錄判斷標準" },
+    // ── MES Process → Wip Tracking ──────────────────────────────────
+    { fromS: mesProcess, fromTName: "lots",   toS: wip, toTName: "wip_lot",
+      transform: "direct",  desc: "生產批次同步至 WIP 追蹤：wip_lot.lot_no = lots.lot_no" },
+    { fromS: mesProcess, fromTName: "wafers", toS: wip, toTName: "wip_move",
+      transform: "direct",  desc: "晶圓移動事件記錄於 WIP：wip_move.wafer_id = wafers.wafer_id" },
+    // ── Wip Tracking 內部 ───────────────────────────────────────────
+    { fromS: wip, fromTName: "wip_lot",  toS: wip, toTName: "wip_move",
+      transform: "direct",  desc: "WIP 批次展開移動明細：wip_move.wip_lot_id = wip_lot.id" },
+    { fromS: wip, fromTName: "wip_move", toS: wip, toTName: "wip_defect",
+      transform: "direct",  desc: "移動過程發現缺陷記錄：wip_defect.wip_move_id = wip_move.id" },
+    // ── 各 domain → Unified Analytics（ETL 聚合整合層）───────────────
+    { fromS: mesProcess,  fromTName: "lots",                toS: unified, toTName: "prod_daily_summary",
+      transform: "aggregate", desc: "每日生產批次彙總至 prod_daily_summary（ETL 日結）", source: "governance" },
+    { fromS: mesProcess,  fromTName: "wafers",              toS: unified, toTName: "prod_daily_summary",
+      transform: "aggregate", desc: "晶圓產出數量納入每日生產彙總", source: "governance" },
+    { fromS: mesEquip,    fromTName: "equipments",          toS: unified, toTName: "equip_oee_summary",
+      transform: "aggregate", desc: "設備稼動數據彙總為 OEE 效率報表", source: "governance" },
+    { fromS: testQuality, fromTName: "yield_info",          toS: unified, toTName: "yield_trend",
+      transform: "aggregate", desc: "良率統計週彙總至良率趨勢週報", source: "governance" },
+    { fromS: testQuality, fromTName: "inspection_records",  toS: unified, toTName: "yield_trend",
+      transform: "aggregate", desc: "檢測記錄納入良率趨勢計算", source: "governance" },
+    { fromS: unified, fromTName: "prod_daily_summary",  toS: unified, toTName: "cross_system_kpi",
+      transform: "aggregate", desc: "每日生產彙總匯入跨系統 KPI", source: "governance" },
+    { fromS: unified, fromTName: "yield_trend",          toS: unified, toTName: "cross_system_kpi",
+      transform: "aggregate", desc: "良率趨勢週報匯入跨系統 KPI", source: "governance" },
+    { fromS: unified, fromTName: "equip_oee_summary",    toS: unified, toTName: "cross_system_kpi",
+      transform: "aggregate", desc: "設備 OEE 彙總匯入跨系統 KPI", source: "governance" },
+  ];
+
+  let seeded = 0;
+  for (const def of edgeDefs) {
+    const fromT = findTable(def.fromS, def.fromTName);
+    const toT   = findTable(def.toS,   def.toTName);
+    if (!def.fromS || !def.toS || !fromT || !toT) continue;
+    await recordEdge({
+      fromSchemaId: def.fromS.id, fromSchemaName: def.fromS.name,
+      fromDomain: def.fromS.domain || "semiconductor",
+      fromTableId: fromT.id, fromTableName: fromT.name, fromKind: "table",
+      toSchemaId: def.toS.id, toSchemaName: def.toS.name,
+      toDomain: def.toS.domain || "semiconductor",
+      toTableId: toT.id, toTableName: toT.name, toKind: "table",
+      transformType: def.transform, description: def.desc,
+      source: def.source ?? "manual",
+    }).catch(() => undefined);
+    seeded++;
   }
 
-  // Try to find any schemas and build meaningful cross-domain edges
-  const allDomains = [...new Set(schemaDetails.map(s => s.domain || "未分類"))];
-
-  for (let i = 0; i < allDomains.length - 1 && seedEdges.length < 6; i++) {
-    const fromDomain = allDomains[i]!;
-    const toDomain = allDomains[i + 1]!;
-    const fromSchemas = schemaDetails.filter(s => (s.domain || "未分類") === fromDomain);
-    const toSchemas = schemaDetails.filter(s => (s.domain || "未分類") === toDomain);
-
-    for (const fromS of fromSchemas.slice(0, 2)) {
-      for (const toS of toSchemas.slice(0, 2)) {
-        if (fromS.tables.length === 0 || toS.tables.length === 0) continue;
-        const fromT = fromS.tables[0]!;
-        const toT = toS.tables[0]!;
-        if (seedEdges.some(e => e.fromTableId === fromT.id && e.toTableId === toT.id)) continue;
-        seedEdges.push({
-          fromSchemaId: fromS.id, fromSchemaName: fromS.name, fromDomain,
-          fromTableId: fromT.id, fromTableName: fromT.name, fromKind: "table",
-          toSchemaId: toS.id, toSchemaName: toS.name, toDomain,
-          toTableId: toT.id, toTableName: toT.name, toKind: "table",
-          transformType: "direct",
-          description: `${fromDomain} → ${toDomain} 跨域資料流（示例）`,
-          source: "manual",
-        });
-        if (seedEdges.length >= 6) break;
-      }
-      if (seedEdges.length >= 6) break;
-    }
-  }
-
-  // Add a few within-domain join edges if we have schemas with multiple tables
-  for (const schema of schemaDetails.slice(0, 3)) {
-    if (schema.tables.length < 2) continue;
-    const t1 = schema.tables[0]!;
-    const t2 = schema.tables[1]!;
-    if (seedEdges.some(e => e.fromTableId === t1.id && e.toTableId === t2.id)) continue;
-    seedEdges.push({
-      fromSchemaId: schema.id, fromSchemaName: schema.name, fromDomain: schema.domain || "未分類",
-      fromTableId: t1.id, fromTableName: t1.name, fromKind: "table",
-      toSchemaId: schema.id, toSchemaName: schema.name, toDomain: schema.domain || "未分類",
-      toTableId: t2.id, toTableName: t2.name, toKind: "table",
-      transformType: "join",
-      description: `${schema.name} 內部 JOIN：${t1.name} → ${t2.name}`,
-      source: "manual",
-    });
-    if (seedEdges.length >= 10) break;
-  }
-
-  for (const edge of seedEdges) {
-    await recordEdge(edge).catch(() => undefined);
-  }
-
-  if (seedEdges.length > 0) {
-    console.warn(`[lineage-seed] ✓ Seeded ${seedEdges.length} demo lineage edges`);
+  if (seeded > 0) {
+    console.warn(`[lineage-seed] ✓ Seeded ${seeded} lineage edges across 6 domains`);
   }
 }
