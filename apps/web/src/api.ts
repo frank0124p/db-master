@@ -163,40 +163,53 @@ export interface WideTablePreview {
 
 export type GovStatus = "pending" | "approved" | "rejected";
 export type GovDraftStatus = "draft" | "passed" | "failed" | "published";
-export type GovWtStatus = "proposed" | "discarded" | "to_draft";
-export type GovBatchStatus = "imported" | "classified" | "accepted";
+export type GovWtStatus = "proposed" | "discarded" | "drafted";
+export type GovBatchStatus = "imported" | "classifying" | "classified" | "review-done";
 export type GovStationId = "knowledge" | "classify" | "compose" | "review" | "validate";
 export type GovStationStatus = "not-started" | "in-progress" | "done" | "bypassed" | "blocked";
 
 export interface GovSourceDoc {
-  id: number; slug: string; title: string; content: string;
-  tags: string[]; chunksCount: number;
-  createdAt: string; updatedAt: string;
+  id: number; slug: string; title: string; content?: string; format: string;
+  chunks?: Array<{ idx: number; text: string }> | number;
+  uploadedBy?: string; createdAt: string;
 }
 
 export interface GovConceptCard {
   id: number; slug: string; name: string; stdName: string;
-  aliases: string[]; definition: string;
+  aliases: string[]; definition: string; domain?: string;
   tableHints: Array<{ tableName: string; role: string }>;
-  status: GovStatus; reviewers: Array<{ userId: string; name: string; signedAt: string | null }>;
-  sourceRefs: number[]; createdAt: string; updatedAt: string;
+  relatedConcepts: number[]; namingDictIds: number[];
+  status: GovStatus;
+  reviewers: Array<{ userId: number; name: string; signedAt: string | null }>;
+  sourceRefs: Array<{ docId: number; chunkIdx: number }>;
+  createdAt: string; updatedAt: string;
 }
 
 export interface GovBusinessRule {
   id: number; slug: string; title: string; ruleType: string;
   statement: string; machine: Record<string, unknown> | null;
-  sourceRefs: number[]; status: GovStatus;
-  reviewers: Array<{ userId: string; name: string; signedAt: string | null }>;
+  sourceRefs: Array<{ docId: number; chunkIdx: number }>;
+  status: GovStatus;
+  reviewers: Array<{ userId: number; name: string; signedAt: string | null }>;
   createdAt: string; updatedAt: string;
 }
 
 export interface GovImportBatch {
-  id: number; name: string; ddl: string;
+  id: number; name: string; source: string;
+  schemaIds: number[]; tableCount: number;
   status: GovBatchStatus;
-  tables: Array<{
-    tableName: string; fieldCount: number;
-    classification: { blockKind: "small" | "medium"; confidence: number; rationale: string } | null;
-    accepted: boolean; override?: { blockKind: string; rationale: string };
+  proposals: Array<{
+    tableId: number; schemaId: number; tableName: string;
+    confidence: number;
+    suggested: { suiteId?: number; domain?: string; layerType?: string };
+    rationale: {
+      matchedConcepts: number[];
+      matchedDictEntries: number[];
+      similarTables: Array<{ schemaId: number; tableName: string; score: number; reason: string }>;
+      summary: string;
+    };
+    status: "pending" | "accepted" | "overridden";
+    override?: { suiteId?: number; domain?: string; layerType?: string; by: string; at: string };
   }>;
   createdAt: string; updatedAt: string;
 }
@@ -231,8 +244,7 @@ export interface GovWtProposal {
 }
 
 export interface GovEditLogEntry {
-  at: string; by: string; op: string;
-  path: string; before: unknown; after: unknown;
+  at: string; by: string; action: string; detail: string;
 }
 
 export interface GovWtDraft {
@@ -250,10 +262,9 @@ export interface GovWtDraft {
 }
 
 export interface GovValidationReport {
-  id: number; draftId: number;
-  results: Array<{ ruleId: string; passed: boolean; violations: Array<{ target: string; message: string }> }>;
-  overallPassed: boolean;
-  createdAt: string;
+  id: number; draftId: number; ranAt: string;
+  ruleResults: Array<{ ruleId: string; severity: string; passed: boolean; violations: Array<{ target?: string; message: string }> }>;
+  summary: { errors: number; warnings: number; infos: number; passed: boolean };
 }
 
 export interface GovGovernedWideTable {

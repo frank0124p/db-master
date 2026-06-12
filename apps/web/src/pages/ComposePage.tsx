@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api, type GovWtProposal } from "../api.js";
 import { useStore } from "../store.js";
+import { useResizable } from "../hooks/useResizable.js";
 
 const S = {
   page: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-1)" } as const,
@@ -101,6 +102,7 @@ export default function ComposePage() {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const [scenario, setScenario] = useState("");
+  const { size: leftW, onMouseDown } = useResizable(340, "horizontal", 200, 600);
   const [blockKind, setBlockKind] = useState<string>("auto");
   const [composing, setComposing] = useState(false);
   const [traceLines, setTraceLines] = useState<string[]>([]);
@@ -177,7 +179,7 @@ export default function ComposePage() {
       </div>
 
       <div style={S.body}>
-        <div style={S.left}>
+        <div style={{ ...S.left, width: leftW }}>
           <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase" }}>
             進行中 / 推理記錄
           </div>
@@ -196,6 +198,21 @@ export default function ComposePage() {
             )}
           </div>
         </div>
+
+        <div
+          onMouseDown={onMouseDown}
+          style={{
+            width: 5,
+            flexShrink: 0,
+            cursor: "col-resize",
+            background: "transparent",
+            borderLeft: "1px solid var(--border)",
+            position: "relative",
+            transition: "background 0.15s",
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "rgba(139,92,246,0.35)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+        />
 
         <div style={S.right}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-3)", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.6px" }}>

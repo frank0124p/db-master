@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type GovGovernedWideTable } from "../api.js";
+import { useResizable } from "../hooks/useResizable.js";
 
 const S = {
   page: { flex: 1, display: "flex", overflow: "hidden", background: "var(--bg-1)" } as const,
@@ -135,6 +136,7 @@ export default function CatalogPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const { data: tables = [] } = useQuery({ queryKey: ["gov-catalog"], queryFn: api.catalog.list });
+  const { size: listW, onMouseDown } = useResizable(280, "horizontal", 160, 500);
 
   const filtered = tables.filter(t =>
     !search.trim() ||
@@ -146,7 +148,7 @@ export default function CatalogPage() {
 
   return (
     <div style={S.page}>
-      <div style={S.list}>
+      <div style={{ ...S.list, width: listW }}>
         <div style={S.listHead}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>治理目錄</div>
           <div style={{ fontSize: 11, color: "var(--text-3)" }}>{tables.length} 張已治理寬表</div>
@@ -177,6 +179,21 @@ export default function CatalogPage() {
           ))}
         </div>
       </div>
+
+      <div
+        onMouseDown={onMouseDown}
+        style={{
+          width: 5,
+          flexShrink: 0,
+          cursor: "col-resize",
+          background: "transparent",
+          borderLeft: "1px solid var(--border)",
+          position: "relative",
+          transition: "background 0.15s",
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "rgba(139,92,246,0.35)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+      />
 
       <div style={S.main}>
         {selectedTable ? (

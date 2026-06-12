@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api, type GovWtDraft, type GovProposedColumn, type GovValidationReport } from "../api.js";
 import { useStore } from "../store.js";
+import { useResizable } from "../hooks/useResizable.js";
 
 const S = {
   page: { flex: 1, display: "flex", overflow: "hidden", background: "var(--bg-1)" } as const,
@@ -24,8 +25,8 @@ const S = {
 
 function ValidationBadge({ report }: { report: GovValidationReport | null }) {
   if (!report) return null;
-  const failCount = report.results.filter(r => !r.passed).length;
-  if (report.overallPassed) {
+  const failCount = report.ruleResults.filter(r => !r.passed).length;
+  if (report.summary.passed) {
     return <span style={{ fontSize: 11, color: "#4ade80" }}>✓ 全部通過</span>;
   }
   return <span style={{ fontSize: 11, color: "#f87171" }}>✗ {failCount} 項失敗</span>;
@@ -57,7 +58,7 @@ function DraftEditor({ draft }: { draft: GovWtDraft }) {
       setValidationReport(report);
       await qc.invalidateQueries({ queryKey: ["gov-drafts"] });
       setActiveTab("validate");
-      if (report.overallPassed) showToast("✓ 驗證全部通過");
+      if (report.summary.passed) showToast("✓ 驗證全部通過");
       else showToast("⚠ 驗證有失敗項目");
     },
   });
@@ -195,8 +196,8 @@ function DraftEditor({ draft }: { draft: GovWtDraft }) {
                 <div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, padding: "8px 12px", background: "var(--bg-2)", borderRadius: 6, border: "1px solid var(--border)" }}>
                   <div style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0 }}>{new Date(entry.at).toLocaleString()}</div>
                   <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-1)" }}>{entry.op}</span>
-                    <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 6 }}>{entry.path}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-1)" }}>{entry.action}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 6 }}>{entry.detail}</span>
                     <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 6 }}>by {entry.by}</span>
                   </div>
                 </div>
@@ -208,7 +209,7 @@ function DraftEditor({ draft }: { draft: GovWtDraft }) {
         {activeTab === "validate" && (
           <div style={{ padding: 16 }}>
             {!validationReport && <div style={{ color: "var(--text-3)", fontSize: 12, textAlign: "center", padding: "24px 0" }}>點「執行驗證」開始治理規則檢查</div>}
-            {validationReport && validationReport.results.map(r => (
+            {validationReport && validationReport.ruleResults.map(r => (
               <div key={r.ruleId} style={{ marginBottom: 8, padding: "10px 14px", background: "var(--bg-2)", borderRadius: 6, border: `1px solid ${r.passed ? "rgba(74,222,128,0.3)" : "rgba(248,113,113,0.3)"}`, borderLeft: `3px solid ${r.passed ? "#4ade80" : "#f87171"}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: r.violations.length > 0 ? 6 : 0 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: r.passed ? "#4ade80" : "#f87171" }}>{r.passed ? "✓" : "✗"}</span>
@@ -245,10 +246,11 @@ export default function WorkspacePage() {
   const [selected, setSelected] = useState<number | null>(null);
   const { data: drafts = [] } = useQuery({ queryKey: ["gov-drafts"], queryFn: api.workspace.list });
   const selectedDraft = drafts.find(d => d.id === selected) ?? null;
+  const { size: listW, onMouseDown } = useResizable(260, "horizontal", 140, 500);
 
   return (
     <div style={S.page}>
-      <div style={S.list}>
+      <div style={{ ...S.list, width: listW }}>
         <div style={S.listHead}>
           <span style={{ fontSize: 13, fontWeight: 700 }}>工作區草稿</span>
           <span style={{ fontSize: 11, color: "var(--text-3)" }}>{drafts.length}</span>
@@ -268,6 +270,21 @@ export default function WorkspacePage() {
           ))}
         </div>
       </div>
+
+      <div
+        onMouseDown={onMouseDown}
+        style={{
+          width: 5,
+          flexShrink: 0,
+          cursor: "col-resize",
+          background: "transparent",
+          borderLeft: "1px solid var(--border)",
+          position: "relative",
+          transition: "background 0.15s",
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "rgba(139,92,246,0.35)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+      />
 
       <div style={S.main}>
         {selectedDraft ? (

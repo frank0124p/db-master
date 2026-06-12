@@ -137,7 +137,7 @@ function DocTab() {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", marginBottom: 2 }}>{doc.title}</div>
-              <div style={{ fontSize: 11, color: "var(--text-3)" }}>{doc.chunksCount} 段落 · {new Date(doc.createdAt).toLocaleDateString()}</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)" }}>{typeof doc.chunks === "number" ? doc.chunks : (doc.chunks?.length ?? 0)} 段落 · {new Date(doc.createdAt).toLocaleDateString()}</div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button className="btn btn-primary" style={{ fontSize: 11 }}
@@ -149,9 +149,11 @@ function DocTab() {
                 onClick={() => deleteMut.mutate(doc.id)}>刪除</button>
             </div>
           </div>
-          <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)", whiteSpace: "pre-wrap", maxHeight: 60, overflow: "hidden" }}>
-            {doc.content.slice(0, 300)}{doc.content.length > 300 ? "…" : ""}
-          </div>
+          {doc.content && (
+            <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)", whiteSpace: "pre-wrap", maxHeight: 60, overflow: "hidden" }}>
+              {doc.content.slice(0, 300)}{doc.content.length > 300 ? "…" : ""}
+            </div>
+          )}
           {extractingId === doc.id && <SseLog lines={sseLines} />}
         </div>
       ))}

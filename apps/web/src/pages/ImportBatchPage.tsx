@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api, type GovImportBatch } from "../api.js";
 import { useStore } from "../store.js";
+import { useResizable } from "../hooks/useResizable.js";
 
 const S = {
   page: { flex: 1, display: "flex", overflow: "hidden", background: "var(--bg-1)" } as const,
@@ -77,7 +78,7 @@ function BatchDetail({ batch }: { batch: GovImportBatch }) {
   });
 
   const acceptMut = useMutation({
-    mutationFn: (tableIdx: number) => api.importBatches.accept(batch.id, tableIdx),
+    mutationFn: (tableId: number) => api.importBatches.accept(batch.id, tableId),
     onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["gov-batches"] }); },
   });
 
@@ -97,8 +98,8 @@ function BatchDetail({ batch }: { batch: GovImportBatch }) {
         buf = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
-          const ev = JSON.parse(line.slice(6)) as { type: string; tableName?: string; blockKind?: string; confidence?: number };
-          if (ev.type === "table-classified") setClassifyLog(prev => [...prev, `✓ ${ev.tableName}: ${ev.blockKind} (${((ev.confidence ?? 0) * 100).toFixed(0)}%)`]);
+          const ev = JSON.parse(line.slice(6)) as { type: string; tableName?: string; layerType?: string; confidence?: number };
+          if (ev.type === "table-classified") setClassifyLog(prev => [...prev, `✓ ${ev.tableName}: ${ev.layerType ?? "?"} (${((ev.confidence ?? 0) * 100).toFixed(0)}%)`]);
           if (ev.type === "done") {
             setClassifyLog(prev => [...prev, "✓ 分類完成"]);
             await qc.invalidateQueries({ queryKey: ["gov-batches"] });
@@ -110,8 +111,8 @@ function BatchDetail({ batch }: { batch: GovImportBatch }) {
     finally { setClassifying(false); }
   }
 
-  const classified = batch.tables.filter(t => t.classification !== null);
-  const accepted = batch.tables.filter(t => t.accepted);
+  const acceptedCount = batch.proposals.filter(p => p.status === "accepted").length;
+  const classifiedCount = batch.proposals.filter(p => p.status !== "pending").length;
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -119,7 +120,7 @@ function BatchDetail({ batch }: { batch: GovImportBatch }) {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>{batch.name}</div>
           <div style={{ fontSize: 11, color: "var(--text-3)" }}>
-            {batch.tables.length} 張表 · {classified.length} 已分類 · {accepted.length} 已接受
+            {batch.proposals.length} 張表 · {classifiedCount} 已分類 · {acceptedCount} 已接受
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -150,48 +151,44 @@ function BatchDetail({ batch }: { batch: GovImportBatch }) {
           <thead>
             <tr style={{ background: "var(--bg-2)", borderBottom: "1px solid var(--border)" }}>
               <th style={{ padding: "8px 16px", textAlign: "left", color: "var(--text-3)", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>表名</th>
-              <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text-3)", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>欄位數</th>
-              <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text-3)", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>分類</th>
+              <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text-3)", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>Domain</th>
+              <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text-3)", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>Layer</th>
               <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text-3)", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>信心度</th>
               <th style={{ padding: "8px 16px", textAlign: "left", color: "var(--text-3)", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>依據</th>
               <th style={{ padding: "8px 12px", textAlign: "center", color: "var(--text-3)", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>動作</th>
             </tr>
           </thead>
           <tbody>
-            {batch.tables.map(table => (
-              <tr key={table.tableName} style={{ borderBottom: "1px solid var(--border)", background: table.accepted ? "rgba(74,222,128,0.04)" : "transparent" }}>
+            {batch.proposals.map(p => (
+              <tr key={p.tableName} style={{ borderBottom: "1px solid var(--border)", background: p.status === "accepted" ? "rgba(74,222,128,0.04)" : "transparent" }}>
                 <td style={{ padding: "8px 16px", fontFamily: "var(--font-mono)", color: "var(--text-1)" }}>
-                  {table.tableName}
-                  {table.accepted && <span style={{ marginLeft: 6, fontSize: 9, color: "#4ade80" }}>✓ accepted</span>}
+                  {p.tableName}
+                  {p.status === "accepted" && <span style={{ marginLeft: 6, fontSize: 9, color: "#4ade80" }}>✓ accepted</span>}
+                  {p.status === "overridden" && <span style={{ marginLeft: 6, fontSize: 9, color: "#a78bfa" }}>✦ overridden</span>}
                 </td>
-                <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--text-3)" }}>{table.fieldCount}</td>
-                <td style={{ padding: "8px 12px", textAlign: "center" }}>
-                  {table.override ? (
-                    <span style={{ fontSize: 11, color: "#a78bfa", fontWeight: 700 }}>{table.override.blockKind} (override)</span>
-                  ) : table.classification ? (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: table.classification.blockKind === "small" ? "#34d399" : "#a78bfa" }}>
-                      {table.classification.blockKind}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 10, color: "var(--text-3)" }}>-</span>
-                  )}
+                <td style={{ padding: "8px 12px", textAlign: "center", fontSize: 11, color: "var(--text-2)" }}>
+                  {(p.override?.domain ?? p.suggested.domain) || <span style={{ color: "var(--text-3)" }}>-</span>}
                 </td>
                 <td style={{ padding: "8px 12px", textAlign: "center" }}>
-                  {table.classification && (
-                    <span style={S.confidence(table.classification.confidence)}>
-                      {(table.classification.confidence * 100).toFixed(0)}%
+                  {(p.override?.layerType ?? p.suggested.layerType) ? (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
+                      background: "rgba(96,165,250,0.12)", color: "#60a5fa", border: "1px solid rgba(96,165,250,0.3)" }}>
+                      {p.override?.layerType ?? p.suggested.layerType}
                     </span>
-                  )}
+                  ) : <span style={{ fontSize: 10, color: "var(--text-3)" }}>-</span>}
+                </td>
+                <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                  <span style={S.confidence(p.confidence)}>{(p.confidence * 100).toFixed(0)}%</span>
                 </td>
                 <td style={{ padding: "8px 16px", color: "var(--text-3)", fontSize: 11, maxWidth: 300 }}>
                   <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {table.override?.rationale ?? table.classification?.rationale ?? ""}
+                    {p.rationale.summary}
                   </div>
                 </td>
                 <td style={{ padding: "8px 12px", textAlign: "center" }}>
-                  {!table.accepted && table.classification && (
+                  {p.status === "pending" && (
                     <button className="btn btn-ghost" style={{ fontSize: 10, padding: "2px 8px" }}
-                      onClick={() => acceptMut.mutate(batch.tables.indexOf(table))}>
+                      onClick={() => acceptMut.mutate(p.tableId)}>
                       接受
                     </button>
                   )}
@@ -210,10 +207,11 @@ export default function ImportBatchPage() {
   const [showNew, setShowNew] = useState(false);
   const { data: batches = [] } = useQuery({ queryKey: ["gov-batches"], queryFn: api.importBatches.list });
   const selectedBatch = batches.find(b => b.id === selected) ?? null;
+  const { size: leftW, onMouseDown } = useResizable(280, "horizontal", 160, 600);
 
   return (
     <div style={S.page}>
-      <div style={S.left}>
+      <div style={{ ...S.left, width: leftW }}>
         <div style={S.listHead}>
           <span style={{ fontSize: 13, fontWeight: 700 }}>匯入批次</span>
           <button className="btn btn-primary" style={{ fontSize: 11 }} onClick={() => setShowNew(true)}>+ 新增</button>
@@ -227,12 +225,27 @@ export default function ImportBatchPage() {
               <div style={{ fontSize: 12, fontWeight: 600, color: selected === b.id ? "var(--accent)" : "var(--text-1)", marginBottom: 3 }}>{b.name}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={S.badge(b.status)}>{b.status}</span>
-                <span style={{ fontSize: 10, color: "var(--text-3)" }}>{b.tables.length} 張表</span>
+                <span style={{ fontSize: 10, color: "var(--text-3)" }}>{b.proposals.length} 張表</span>
               </div>
             </div>
           ))}
         </div>
       </div>
+
+      <div
+        onMouseDown={onMouseDown}
+        style={{
+          width: 5,
+          flexShrink: 0,
+          cursor: "col-resize",
+          background: "transparent",
+          borderLeft: "1px solid var(--border)",
+          position: "relative",
+          transition: "background 0.15s",
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "rgba(139,92,246,0.35)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+      />
 
       <div style={S.right}>
         {selectedBatch ? (
