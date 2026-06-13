@@ -433,7 +433,7 @@ export interface ParsedTableSummary {
 export interface ViolationSummary {
   ruleId: string; severity: "error" | "warning" | "info";
   message: string; tableName: string; fieldName?: string;
-  group: "naming" | "semantic" | "structure";
+  group: "naming" | "semantic" | "structure" | "governance";
 }
 
 export interface ImportCheckSummary {
@@ -455,7 +455,7 @@ export interface ImportResult { dryRun: false; check: ImportCheckResult; import:
 
 export interface SkillRuleDef {
   id: string;
-  group: "naming" | "semantic" | "structure";
+  group: "naming" | "semantic" | "structure" | "governance";
   severity: "error" | "warning" | "info";
   description: string;
   tablePattern?: string;
@@ -466,7 +466,7 @@ export interface SkillRuleDef {
 }
 
 export interface RuleDetail {
-  id: string; group: "naming" | "semantic" | "structure";
+  id: string; group: "naming" | "semantic" | "structure" | "governance";
   description: string; defaultSeverity: "error" | "warning" | "info";
   defaultConfig: Record<string, unknown>;
   severity: "error" | "warning" | "info";

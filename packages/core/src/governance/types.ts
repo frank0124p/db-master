@@ -185,6 +185,9 @@ export interface WideTableDraft {
   status: "draft" | "validating" | "failed" | "passed" | "published";
   createdAt: string;
   updatedAt: string;
+  // Phase 10 — governance metadata (optional, carried through for rule evaluation)
+  ownerUserId?: number;
+  stewardUserId?: number;
 }
 
 // ── Step 5 — Validation & Catalog ────────────────────────────────────────────

@@ -5,9 +5,10 @@ import { useStore } from "../store.js";
 
 // ── shared helpers ────────────────────────────────────────────────────────────
 const GROUP_CFG = {
-  naming:    { label: "命名",   color: "#60a5fa" },
-  semantic:  { label: "語意",   color: "#4ade80" },
-  structure: { label: "結構",   color: "#f59e0b" },
+  naming:     { label: "命名",   color: "#60a5fa" },
+  semantic:   { label: "語意",   color: "#4ade80" },
+  structure:  { label: "結構",   color: "#f59e0b" },
+  governance: { label: "治理",   color: "#c084fc" },
 } as const;
 
 const SEV_CFG = {
@@ -258,7 +259,7 @@ function SnapshotDiff({ snap, prevSnap, rules }: {
 
 interface RuleDefFormState {
   id: string;
-  group: "naming" | "semantic" | "structure";
+  group: "naming" | "semantic" | "structure" | "governance";
   severity: "error" | "warning" | "info";
   description: string;
   tablePattern: string | undefined;

@@ -21,7 +21,7 @@ export interface ParsedTableSummary {
 export interface ViolationSummary {
   ruleId: string; severity: "error" | "warning" | "info";
   message: string; tableName: string; fieldName?: string;
-  group: "naming" | "semantic" | "structure";
+  group: "naming" | "semantic" | "structure" | "governance";
 }
 
 export async function checkDDL(sql: string): Promise<ImportCheckResult> {

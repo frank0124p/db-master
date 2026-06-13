@@ -296,6 +296,181 @@ export function runDuplicateSemanticsRule(
   };
 }
 
+// ── gov.owner_required ────────────────────────────────────────────────────────
+
+/**
+ * Governed wide table (or draft being published) must have an ownerUserId set.
+ * This rule checks the draft for the ownerUserId field added in Phase 10.
+ */
+export function runOwnerRequiredRule(
+  draft: WideTableDraft,
+): GovRuleResult {
+  const violations: GovRuleResult["violations"] = [];
+
+  if (!draft.ownerUserId) {
+    violations.push({
+      target: draft.name,
+      message: "寬表尚未指定 Data Owner (ownerUserId)",
+      suggestion: "請在元資料中設定 ownerUserId，指定對業務定義負責的使用者",
+    });
+  }
+
+  return {
+    ruleId: "gov.owner_required",
+    severity: "warning",
+    passed: violations.length === 0,
+    violations,
+  };
+}
+
+// ── gov.sensitivity_declared ──────────────────────────────────────────────────
+
+/** Default PII-indicator field name patterns */
+const DEFAULT_PII_PATTERNS = [
+  /.*_name$/i,
+  /.*_phone$/i,
+  /.*_email$/i,
+  /.*_id_no$/i,
+];
+
+export function runSensitivityDeclaredRule(
+  draft: WideTableDraft,
+  opts: { patterns?: RegExp[] } = {},
+): GovRuleResult {
+  const violations: GovRuleResult["violations"] = [];
+  const patterns = opts.patterns ?? DEFAULT_PII_PATTERNS;
+
+  for (const col of draft.columns) {
+    const looksLikePii = patterns.some(p => p.test(col.name));
+    if (looksLikePii && !col.sensitivity) {
+      violations.push({
+        target: col.name,
+        message: `欄位 "${col.name}" 名稱命中 PII 特徵但未標記 sensitivity`,
+        suggestion: "請為此欄設定 sensitivity（建議 'pii' 或 'confidential'）",
+      });
+    }
+  }
+
+  return {
+    ruleId: "gov.sensitivity_declared",
+    severity: "info",
+    passed: violations.length === 0,
+    violations,
+  };
+}
+
+// ── gov.no_deprecated_source ──────────────────────────────────────────────────
+
+/**
+ * Governed wide table columns must not reference deprecated source tables.
+ * Uses GovernanceContext.allTables[].table.deprecated for lookup.
+ */
+export function runNoDeprecatedSourceRule(
+  draft: WideTableDraft,
+  ctx: GovernanceContext,
+): GovRuleResult {
+  const violations: GovRuleResult["violations"] = [];
+
+  // Build deprecated table lookup: schemaId.tableName → true
+  const deprecatedTables = new Set<string>();
+  for (const { schemaId, table } of ctx.allTables) {
+    if (table.deprecated) {
+      deprecatedTables.add(`${schemaId}.${table.name}`);
+      deprecatedTables.add(table.name); // also by name only for loose lookup
+    }
+  }
+
+  for (const col of draft.columns) {
+    const keyFull = `${col.source.schemaId}.${col.source.tableName}`;
+    const keyName = col.source.tableName;
+    if (deprecatedTables.has(keyFull) || deprecatedTables.has(keyName)) {
+      violations.push({
+        target: col.name,
+        message: `欄位來源 ${col.source.tableName} 已被標記為 deprecated`,
+        evidence: `source: ${col.source.tableName}.${col.source.fieldName}`,
+        suggestion: "請將此欄的來源改為非 deprecated 的替代表",
+      });
+    }
+  }
+
+  return {
+    ruleId: "gov.no_deprecated_source",
+    severity: "error",
+    passed: violations.length === 0,
+    violations,
+  };
+}
+
+// ── gov.freshness_declared ────────────────────────────────────────────────────
+
+/**
+ * Governed wide table source tables should have refreshCycle declared.
+ * Coverage = (source tables with refreshCycle) / (total distinct source tables).
+ * threshold defaults to 0.5.
+ */
+export function runFreshnessDeclaredRule(
+  draft: WideTableDraft,
+  ctx: GovernanceContext,
+  threshold = 0.5,
+): GovRuleResult {
+  const violations: GovRuleResult["violations"] = [];
+
+  // Collect distinct source tables used in this draft
+  const sourceTables = new Set<string>();
+  for (const col of draft.columns) {
+    if (col.source.tableName) {
+      sourceTables.add(`${col.source.schemaId ?? 0}.${col.source.tableName}`);
+    }
+  }
+
+  if (sourceTables.size === 0) {
+    return {
+      ruleId: "gov.freshness_declared",
+      severity: "info",
+      passed: true,
+      violations,
+    };
+  }
+
+  // Build refreshCycle lookup
+  const tablesWithFreshness = new Set<string>();
+  for (const { schemaId, table } of ctx.allTables) {
+    if (table.refreshCycle) {
+      tablesWithFreshness.add(`${schemaId}.${table.name}`);
+      tablesWithFreshness.add(`0.${table.name}`); // also loose match
+    }
+  }
+
+  let covered = 0;
+  const missing: string[] = [];
+  for (const key of sourceTables) {
+    if (tablesWithFreshness.has(key)) {
+      covered++;
+    } else {
+      // Extract table name from key for display
+      missing.push(key.split(".").slice(1).join("."));
+    }
+  }
+
+  const coverage = covered / sourceTables.size;
+
+  if (coverage < threshold) {
+    violations.push({
+      target: missing.join(", "),
+      message: `來源表 refreshCycle 宣告覆蓋率 ${(coverage * 100).toFixed(0)}% 低於門檻 ${(threshold * 100).toFixed(0)}%`,
+      evidence: `未宣告 refreshCycle 的來源表: ${missing.join(", ")}`,
+      suggestion: "請為來源表設定 refreshCycle（如 daily/hourly）以說明資料新鮮度",
+    });
+  }
+
+  return {
+    ruleId: "gov.freshness_declared",
+    severity: "info",
+    passed: violations.length === 0,
+    violations,
+  };
+}
+
 // ── Run all governance rules ──────────────────────────────────────────────────
 
 export function runGovernanceRules(
@@ -310,6 +485,10 @@ export function runGovernanceRules(
     runNamingCoverageRule(draft, ctx),
     runDefinitionRule(draft),
     runDuplicateSemanticsRule(draft),
+    runOwnerRequiredRule(draft),
+    runSensitivityDeclaredRule(draft),
+    runNoDeprecatedSourceRule(draft, ctx),
+    runFreshnessDeclaredRule(draft, ctx),
   ];
 
   // Apply overrides (severity adjustments / disable)

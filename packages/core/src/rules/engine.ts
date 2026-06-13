@@ -29,7 +29,7 @@ export interface RuleConfig {
 
 export interface RuleDefinition {
   id: string;
-  group: "naming" | "semantic" | "structure";
+  group: "naming" | "semantic" | "structure" | "governance";
   defaultSeverity: Severity;
   description: string;
   defaultConfig: RuleConfig;

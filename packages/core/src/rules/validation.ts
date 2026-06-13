@@ -18,7 +18,7 @@ export interface ValidationResult {
   errors: string[];
 }
 
-const VALID_GROUPS = new Set(["naming", "semantic", "structure"]);
+const VALID_GROUPS = new Set(["naming", "semantic", "structure", "governance"]);
 const VALID_SEVERITIES = new Set(["error", "warning", "info"]);
 const ID_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9-]*)+$/;
 

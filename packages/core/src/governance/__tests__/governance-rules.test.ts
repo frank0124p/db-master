@@ -8,6 +8,10 @@ import {
   runDefinitionRule,
   runDuplicateSemanticsRule,
   runGovernanceRules,
+  runOwnerRequiredRule,
+  runSensitivityDeclaredRule,
+  runNoDeprecatedSourceRule,
+  runFreshnessDeclaredRule,
 } from "../governance-rules.js";
 import type {
   WideTableDraft,
@@ -281,14 +285,245 @@ describe("gov.no_duplicate_semantics", () => {
   });
 });
 
+// ── gov.owner_required ────────────────────────────────────────────────────────
+
+describe("gov.owner_required", () => {
+  it("passes when draft has ownerUserId set", () => {
+    const draft = makeDraft({ ownerUserId: 42 });
+    const result = runOwnerRequiredRule(draft);
+    expect(result.passed).toBe(true);
+    expect(result.violations).toHaveLength(0);
+  });
+
+  it("fails when draft has no ownerUserId", () => {
+    const draft = makeDraft(); // no ownerUserId
+    const result = runOwnerRequiredRule(draft);
+    expect(result.passed).toBe(false);
+    expect(result.severity).toBe("warning");
+    expect(result.violations[0]?.target).toBe(draft.name);
+  });
+
+  it("fails when draft is created without ownerUserId", () => {
+    // makeDraft() doesn't set ownerUserId so it's absent (same as undefined)
+    const draft = makeDraft();
+    expect(draft.ownerUserId).toBeUndefined();
+    const result = runOwnerRequiredRule(draft);
+    expect(result.passed).toBe(false);
+  });
+});
+
+// ── gov.sensitivity_declared ──────────────────────────────────────────────────
+
+describe("gov.sensitivity_declared", () => {
+  it("passes when pii-named fields have sensitivity set", () => {
+    const draft = makeDraft({
+      columns: [
+        {
+          name: "customer_name", dataType: "VARCHAR(64)",
+          definition: "Customer full name",
+          source: { schemaId: 1, tableName: "customers", fieldName: "customer_name" },
+          sensitivity: "pii",
+        },
+        {
+          name: "order_id", dataType: "INT",
+          definition: "Order identifier",
+          source: { schemaId: 1, tableName: "orders", fieldName: "id" },
+          sensitivity: "internal",
+        },
+      ],
+    });
+    const result = runSensitivityDeclaredRule(draft);
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails when pii-named field has no sensitivity", () => {
+    const draft = makeDraft({
+      columns: [
+        {
+          name: "user_phone", dataType: "VARCHAR(20)",
+          definition: "User phone number",
+          source: { schemaId: 1, tableName: "users", fieldName: "phone" },
+          // no sensitivity
+        },
+      ],
+    });
+    const result = runSensitivityDeclaredRule(draft);
+    expect(result.passed).toBe(false);
+    expect(result.severity).toBe("info");
+    expect(result.violations[0]?.target).toBe("user_phone");
+  });
+
+  it("passes for non-pii-named fields without sensitivity", () => {
+    const draft = makeDraft({
+      columns: [
+        {
+          name: "quantity", dataType: "INT",
+          definition: "Quantity of items",
+          source: { schemaId: 1, tableName: "orders", fieldName: "qty" },
+        },
+      ],
+    });
+    const result = runSensitivityDeclaredRule(draft);
+    expect(result.passed).toBe(true);
+  });
+
+  it("detects all default pii patterns: _name, _phone, _email, _id_no", () => {
+    const draft = makeDraft({
+      columns: [
+        { name: "emp_name", dataType: "VARCHAR(64)", definition: "Name", source: { schemaId: 1, tableName: "t", fieldName: "emp_name" } },
+        { name: "emp_phone", dataType: "VARCHAR(20)", definition: "Phone", source: { schemaId: 1, tableName: "t", fieldName: "emp_phone" } },
+        { name: "emp_email", dataType: "VARCHAR(120)", definition: "Email", source: { schemaId: 1, tableName: "t", fieldName: "emp_email" } },
+        { name: "emp_id_no", dataType: "VARCHAR(20)", definition: "ID number", source: { schemaId: 1, tableName: "t", fieldName: "emp_id_no" } },
+      ],
+    });
+    const result = runSensitivityDeclaredRule(draft);
+    expect(result.passed).toBe(false);
+    expect(result.violations).toHaveLength(4);
+  });
+});
+
+// ── gov.no_deprecated_source ──────────────────────────────────────────────────
+
+describe("gov.no_deprecated_source", () => {
+  it("passes when source tables are not deprecated", () => {
+    const draft = makeDraft({
+      columns: [
+        {
+          name: "lot_id", dataType: "VARCHAR(32)",
+          definition: "Lot identifier",
+          source: { schemaId: 1, tableName: "wip_lots", fieldName: "lot_id" },
+        },
+      ],
+    });
+    const ctx = makeCtx({
+      allTables: [
+        {
+          schemaId: 1, schemaSlug: "mes",
+          table: { name: "wip_lots", deprecated: false },
+        },
+      ],
+    });
+    const result = runNoDeprecatedSourceRule(draft, ctx);
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails when source table is deprecated", () => {
+    const draft = makeDraft({
+      columns: [
+        {
+          name: "lot_id", dataType: "VARCHAR(32)",
+          definition: "Lot identifier",
+          source: { schemaId: 1, tableName: "old_wip_lots", fieldName: "lot_id" },
+        },
+      ],
+    });
+    const ctx = makeCtx({
+      allTables: [
+        {
+          schemaId: 1, schemaSlug: "mes",
+          table: { name: "old_wip_lots", deprecated: true },
+        },
+      ],
+    });
+    const result = runNoDeprecatedSourceRule(draft, ctx);
+    expect(result.passed).toBe(false);
+    expect(result.severity).toBe("error");
+    expect(result.violations[0]?.target).toBe("lot_id");
+  });
+
+  it("passes when no tables are deprecated (empty allTables)", () => {
+    const draft = makeDraft({
+      columns: [
+        {
+          name: "lot_id", dataType: "VARCHAR(32)",
+          definition: "Lot identifier",
+          source: { schemaId: 1, tableName: "wip_lots", fieldName: "lot_id" },
+        },
+      ],
+    });
+    const ctx = makeCtx();
+    const result = runNoDeprecatedSourceRule(draft, ctx);
+    expect(result.passed).toBe(true);
+  });
+});
+
+// ── gov.freshness_declared ────────────────────────────────────────────────────
+
+describe("gov.freshness_declared", () => {
+  it("passes when all source tables have refreshCycle declared", () => {
+    const draft = makeDraft({
+      columns: [
+        {
+          name: "lot_id", dataType: "VARCHAR(32)",
+          definition: "Lot identifier",
+          source: { schemaId: 1, tableName: "wip_lots", fieldName: "lot_id" },
+        },
+        {
+          name: "step_id", dataType: "INT",
+          definition: "Process step",
+          source: { schemaId: 1, tableName: "process_steps", fieldName: "id" },
+        },
+      ],
+    });
+    const ctx = makeCtx({
+      allTables: [
+        { schemaId: 1, schemaSlug: "mes", table: { name: "wip_lots", refreshCycle: "daily" } },
+        { schemaId: 1, schemaSlug: "mes", table: { name: "process_steps", refreshCycle: "hourly" } },
+      ],
+    });
+    const result = runFreshnessDeclaredRule(draft, ctx);
+    expect(result.passed).toBe(true);
+  });
+
+  it("fails when coverage is below threshold (0.5)", () => {
+    const draft = makeDraft({
+      columns: [
+        {
+          name: "lot_id", dataType: "VARCHAR(32)",
+          definition: "Lot identifier",
+          source: { schemaId: 1, tableName: "wip_lots", fieldName: "lot_id" },
+        },
+        {
+          name: "step_id", dataType: "INT",
+          definition: "Process step",
+          source: { schemaId: 1, tableName: "process_steps", fieldName: "id" },
+        },
+        {
+          name: "equip_id", dataType: "INT",
+          definition: "Equipment",
+          source: { schemaId: 1, tableName: "equipments", fieldName: "id" },
+        },
+      ],
+    });
+    const ctx = makeCtx({
+      allTables: [
+        // Only 1 out of 3 source tables has refreshCycle (33% < 50%)
+        { schemaId: 1, schemaSlug: "mes", table: { name: "wip_lots", refreshCycle: "daily" } },
+        { schemaId: 1, schemaSlug: "mes", table: { name: "process_steps" } },
+        { schemaId: 1, schemaSlug: "mes", table: { name: "equipments" } },
+      ],
+    });
+    const result = runFreshnessDeclaredRule(draft, ctx);
+    expect(result.passed).toBe(false);
+    expect(result.severity).toBe("info");
+  });
+
+  it("passes when draft has no columns (empty coverage trivially passes)", () => {
+    const draft = makeDraft({ columns: [] });
+    const ctx = makeCtx();
+    const result = runFreshnessDeclaredRule(draft, ctx);
+    expect(result.passed).toBe(true);
+  });
+});
+
 // ── runGovernanceRules — integration ──────────────────────────────────────────
 
 describe("runGovernanceRules", () => {
-  it("returns 7 rule results", () => {
+  it("returns 11 rule results", () => {
     const draft = makeDraft();
     const ctx = makeCtx();
     const results = runGovernanceRules(draft, ctx);
-    expect(results.length).toBe(7);
+    expect(results.length).toBe(11);
   });
 
   it("returns all ruleIds for gov.* namespace", () => {
@@ -303,5 +538,10 @@ describe("runGovernanceRules", () => {
     expect(ruleIds).toContain("gov.naming_dict_coverage");
     expect(ruleIds).toContain("gov.definition_required");
     expect(ruleIds).toContain("gov.no_duplicate_semantics");
+    // Phase 10 new rules
+    expect(ruleIds).toContain("gov.owner_required");
+    expect(ruleIds).toContain("gov.sensitivity_declared");
+    expect(ruleIds).toContain("gov.no_deprecated_source");
+    expect(ruleIds).toContain("gov.freshness_declared");
   });
 });

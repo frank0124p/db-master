@@ -245,6 +245,46 @@ const doubleUnderscoreRule: RuleDefinition = {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
+// ── Phase 10 Governance Rules (metadata stubs for RulesPage + override system) ─
+// These rules are executed by the governance validation pipeline (runGovernanceRules),
+// not by the table/field rule engine. The check() no-op here is intentional.
+
+const govOwnerRequiredRule: RuleDefinition = {
+  id: "gov.owner_required",
+  group: "governance",
+  defaultSeverity: "warning",
+  description: "Governed wide table must have an ownerUserId set",
+  defaultConfig: {},
+  check: () => [],
+};
+
+const govSensitivityDeclaredRule: RuleDefinition = {
+  id: "gov.sensitivity_declared",
+  group: "governance",
+  defaultSeverity: "info",
+  description: "Fields with PII-indicator names (*_name, *_phone, *_email, *_id_no) should have sensitivity declared",
+  defaultConfig: {},
+  check: () => [],
+};
+
+const govNoDeprecatedSourceRule: RuleDefinition = {
+  id: "gov.no_deprecated_source",
+  group: "governance",
+  defaultSeverity: "error",
+  description: "Governed wide table columns must not reference deprecated source tables",
+  defaultConfig: {},
+  check: () => [],
+};
+
+const govFreshnessDeclaredRule: RuleDefinition = {
+  id: "gov.freshness_declared",
+  group: "governance",
+  defaultSeverity: "info",
+  description: "Governed wide table source tables should have refreshCycle declared (coverage ≥ 0.5)",
+  defaultConfig: { threshold: 0.5 },
+  check: () => [],
+};
+
 export const BUILT_IN_RULES: RuleDefinition[] = [
   snakeCaseRule,
   reservedWordRule,
@@ -257,4 +297,9 @@ export const BUILT_IN_RULES: RuleDefinition[] = [
   hasPKRule,
   timestampRule,
   doubleUnderscoreRule,
+  // Phase 10 governance rules
+  govOwnerRequiredRule,
+  govSensitivityDeclaredRule,
+  govNoDeprecatedSourceRule,
+  govFreshnessDeclaredRule,
 ];
