@@ -3,17 +3,11 @@ import { redactGraphNodes } from "../redact.js";
 import type { GraphNode } from "../../graph/types.js";
 import type { RedactPolicy } from "../redact.js";
 
-function makeNode(ref: string, sensitivity?: string, definition?: string): GraphNode {
-  return {
-    ref,
-    kind: "field",
-    label: ref,
-    meta: {
-      dataType: "VARCHAR(64)",
-      ...(sensitivity ? { sensitivity: sensitivity as GraphNode["meta"]["sensitivity"] } : {}),
-      ...(definition ? { definition } : {}),
-    },
-  };
+function makeNode(ref: string, sensitivity?: GraphNode["meta"]["sensitivity"], definition?: string): GraphNode {
+  const meta: GraphNode["meta"] = { dataType: "VARCHAR(64)" };
+  if (sensitivity !== undefined) meta.sensitivity = sensitivity;
+  if (definition !== undefined) meta.definition = definition;
+  return { ref, kind: "field", label: ref, meta };
 }
 
 const maskPolicy: RedactPolicy = {
