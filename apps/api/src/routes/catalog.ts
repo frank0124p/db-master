@@ -3,6 +3,8 @@ import { z } from "zod";
 import * as govRepo from "../repositories/governance.js";
 import * as knowledgeRepo from "../repositories/knowledge.js";
 import { scheduleRebuild } from "../services/graph-builder.js";
+import { getRedactPolicy } from "../repositories/settings.js";
+import type { Sensitivity } from "@schema-studio/core";
 
 const REFRESH_CYCLES = ["realtime", "hourly", "daily", "weekly", "monthly", "adhoc"] as const;
 
@@ -168,25 +170,48 @@ router.post("/retrieve", async (req, res, next) => {
       return { gwt, score, matchedConcepts, neighbors };
     });
 
+    const redactPolicy = await getRedactPolicy();
+    const hideLevelSet = new Set<Sensitivity>(redactPolicy.hideLevels);
+
+    function applyColumnRedact(col: { name: string; definition: string; sensitivity?: Sensitivity }): string {
+      if (
+        redactPolicy.enabled &&
+        col.sensitivity &&
+        hideLevelSet.has(col.sensitivity)
+      ) {
+        if (redactPolicy.mode === "mask-definition") return "🔒 [redacted]";
+        // exclude mode — caller filters columns
+        return col.definition;
+      }
+      return col.definition;
+    }
+
     const hits = scored
       .filter(s => s.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, top_k)
-      .map(s => ({
-        wideTable: {
-          slug: s.gwt.slug,
-          name: s.gwt.name,
-          description: s.gwt.description,
-        },
-        score: s.score,
-        matchedConcepts: s.matchedConcepts,
-        columns: s.gwt.columns.map(c => ({
-          name: c.name,
-          definition: c.definition,
-          source: `${c.source.tableName}.${c.source.fieldName}`,
-        })),
-        neighbors: s.neighbors,
-      }));
+      .map(s => {
+        let columns = s.gwt.columns;
+        // In 'exclude' mode, strip columns matching hideLevels
+        if (redactPolicy.enabled && redactPolicy.mode === "exclude") {
+          columns = columns.filter(c => !c.sensitivity || !hideLevelSet.has(c.sensitivity));
+        }
+        return {
+          wideTable: {
+            slug: s.gwt.slug,
+            name: s.gwt.name,
+            description: s.gwt.description,
+          },
+          score: s.score,
+          matchedConcepts: s.matchedConcepts,
+          columns: columns.map(c => ({
+            name: c.name,
+            definition: applyColumnRedact(c),
+            source: `${c.source.tableName}.${c.source.fieldName}`,
+          })),
+          neighbors: s.neighbors,
+        };
+      });
 
     return res.json({ query, hits });
   } catch (e) { next(e); }

@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { Router as RouterType } from "express";
 import { z } from "zod";
-import { getLlmSettings, updateLlmSettings, getMinioSettings, updateMinioSettings } from "../repositories/settings.js";
+import { getLlmSettings, updateLlmSettings, getMinioSettings, updateMinioSettings, getRedactPolicy, updateRedactPolicy } from "../repositories/settings.js";
 import { getLayerSettings, updateLayerSettings } from "../repositories/layerSettings.js";
 import { listDomains, createDomain, updateDomain, deleteDomain, reorderDomains } from "../repositories/domainSettings.js";
 import { resetLlmConfig } from "../services/llm.js";
@@ -166,6 +166,32 @@ router.patch("/domains/:id", async (req, res, next) => {
 
 router.delete("/domains/:id", async (req, res, next) => {
   try { await deleteDomain(req.params["id"]!); res.status(204).end(); } catch (e) { next(e); }
+});
+
+// ── Redact Policy ─────────────────────────────────────────────────────────────
+
+const RedactPolicyBody = z.object({
+  enabled:     z.boolean().optional(),
+  hideLevels:  z.array(z.enum(["public", "internal", "confidential", "pii"])).optional(),
+  mode:        z.enum(["mask-definition", "exclude"]).optional(),
+});
+
+router.get("/redact-policy", async (_req: Request, res: Response, next) => {
+  try {
+    res.json(await getRedactPolicy());
+  } catch (e) { next(e); }
+});
+
+router.patch("/redact-policy", async (req: Request, res: Response, next) => {
+  try {
+    const parsed = RedactPolicyBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: "VALIDATION_ERROR", detail: parsed.error.format() } });
+      return;
+    }
+    const updated = await updateRedactPolicy(parsed.data);
+    res.json(updated);
+  } catch (e) { next(e); }
 });
 
 export default router;

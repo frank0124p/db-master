@@ -1,5 +1,21 @@
 import * as store from "../db/fileStore.js";
+import { z } from "zod";
 import type { MinioConfig } from "../services/minio.js";
+import type { RedactPolicy } from "@schema-studio/core";
+
+const RedactPolicySchema = z.object({
+  enabled: z.boolean(),
+  hideLevels: z.array(z.enum(["public", "internal", "confidential", "pii"])),
+  mode: z.enum(["mask-definition", "exclude"]),
+});
+
+const REDACT_POLICY_FILE = () => store.dataPath("settings", "redact-policy.json");
+
+const DEFAULT_REDACT_POLICY: RedactPolicy = {
+  enabled: false,
+  hideLevels: ["pii"],
+  mode: "mask-definition",
+};
 
 const SETTINGS_FILE = () => store.dataPath("settings.json");
 
@@ -59,4 +75,20 @@ export async function updateMinioSettings(patch: Partial<MinioConfig>): Promise<
   settings.minio = { ...settings.minio, ...patch };
   await store.writeJson(SETTINGS_FILE(), settings);
   return settings.minio;
+}
+
+// ── Redact Policy ──────────────────────────────────────────────────────────────
+
+export async function getRedactPolicy(): Promise<RedactPolicy> {
+  const raw = await store.readJson<unknown>(REDACT_POLICY_FILE());
+  if (!raw) return DEFAULT_REDACT_POLICY;
+  const result = RedactPolicySchema.safeParse(raw);
+  return result.success ? result.data : DEFAULT_REDACT_POLICY;
+}
+
+export async function updateRedactPolicy(patch: Partial<RedactPolicy>): Promise<RedactPolicy> {
+  const current = await getRedactPolicy();
+  const updated: RedactPolicy = { ...current, ...patch };
+  await store.writeJson(REDACT_POLICY_FILE(), updated);
+  return updated;
 }

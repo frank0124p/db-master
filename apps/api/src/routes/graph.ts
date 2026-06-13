@@ -11,8 +11,9 @@
 
 import { Router } from "express";
 import { rebuildFor, readUnifiedGraph } from "../services/graph-builder.js";
-import { findJoinPath } from "@schema-studio/core";
-import type { UnifiedGraph, GraphNodeKind, GraphEdge } from "@schema-studio/core";
+import { findJoinPath, redactGraphNodes } from "@schema-studio/core";
+import type { UnifiedGraph, GraphNodeKind, GraphEdge, GraphNode } from "@schema-studio/core";
+import { getRedactPolicy } from "../repositories/settings.js";
 
 const router = Router();
 
@@ -22,6 +23,23 @@ async function getOrRebuild(): Promise<UnifiedGraph> {
   const existing = await readUnifiedGraph();
   if (existing) return existing;
   return rebuildFor();
+}
+
+/**
+ * Apply redact policy to a list of nodes, then remove edges whose
+ * endpoints were excluded (only needed in 'exclude' mode).
+ */
+async function applyRedact(
+  nodes: GraphNode[],
+  edges: UnifiedGraph["edges"],
+): Promise<{ nodes: GraphNode[]; edges: UnifiedGraph["edges"] }> {
+  const policy = await getRedactPolicy();
+  const redacted = redactGraphNodes(nodes, policy);
+  if (policy.enabled && policy.mode === "exclude") {
+    const keep = new Set(redacted.map(n => n.ref));
+    return { nodes: redacted, edges: edges.filter(e => keep.has(e.from) && keep.has(e.to)) };
+  }
+  return { nodes: redacted, edges };
 }
 
 function parseKinds(kindsParam: unknown): Set<GraphNodeKind> | null {
@@ -38,24 +56,24 @@ router.get("/", async (req, res, next) => {
     const graph = await getOrRebuild();
     const kinds = parseKinds(req.query["kinds"]);
 
-    if (!kinds) {
-      return res.json(graph);
+    let nodes = graph.nodes;
+    let edges = graph.edges;
+
+    if (kinds) {
+      nodes = nodes.filter(n => kinds.has(n.kind));
+      const filteredRefs = new Set(nodes.map(n => n.ref));
+      edges = edges.filter(e => filteredRefs.has(e.from) && filteredRefs.has(e.to));
     }
 
-    // Filter nodes by kind, then filter edges to only include endpoints in filtered nodes
-    const filteredNodes = graph.nodes.filter(n => kinds.has(n.kind));
-    const filteredRefs = new Set(filteredNodes.map(n => n.ref));
-    const filteredEdges = graph.edges.filter(
-      e => filteredRefs.has(e.from) && filteredRefs.has(e.to),
-    );
+    const redacted = await applyRedact(nodes, edges);
 
     return res.json({
       ...graph,
-      nodes: filteredNodes,
-      edges: filteredEdges,
+      nodes: redacted.nodes,
+      edges: redacted.edges,
       stats: {
-        nodeCount: filteredNodes.length,
-        edgeCount: filteredEdges.length,
+        nodeCount: redacted.nodes.length,
+        edgeCount: redacted.edges.length,
         byKind: graph.stats.byKind,
       },
     });
@@ -94,7 +112,13 @@ router.get("/node/:ref", async (req, res, next) => {
 
     const edges = graph.edges.filter(e => e.from === ref || e.to === ref);
 
-    return res.json({ node, edges });
+    // Apply redact: if excluded, return 404
+    const redacted = await applyRedact([node], edges);
+    if (redacted.nodes.length === 0) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: `Node not found: ${ref}` } });
+    }
+
+    return res.json({ node: redacted.nodes[0], edges: redacted.edges });
   } catch (e) { next(e); }
 });
 

@@ -10,6 +10,7 @@ export * from "./rules/validation.js";
 export * from "./governance/types.js";
 export * from "./governance/classifier-features.js";
 export * from "./governance/governance-rules.js";
+export * from "./governance/redact.js";
 export { recomputeStations, type RecomputeArtifacts } from "./governance/instance-engine.js";
 export * from "./lineage.js";
 export * from "./graph/index.js";
