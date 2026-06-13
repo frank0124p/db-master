@@ -14,3 +14,4 @@ export * from "./governance/redact.js";
 export { recomputeStations, type RecomputeArtifacts } from "./governance/instance-engine.js";
 export * from "./lineage.js";
 export * from "./graph/index.js";
+export * from "./ask/index.js";
