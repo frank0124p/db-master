@@ -18,7 +18,17 @@ export async function createTable(schemaId: number, input: { name: string; comme
   return { id, schemaId, name: tbl.name, comment: tbl.comment };
 }
 
-export async function updateTable(id: number, input: Partial<{ name: string; comment: string | null; tags: string[]; environment: string | null; layerType: string | null; status: "active" | "deprecated" | null; sampleData: Record<string, unknown>[] }>) {
+export async function updateTable(id: number, input: Partial<{
+  name: string; comment: string | null; tags: string[]; environment: string | null;
+  layerType: string | null; status: "active" | "deprecated" | null;
+  sampleData: Record<string, unknown>[];
+  // Phase 10 stewardship + operational + lifecycle
+  ownerUserId: number | null; stewardUserId: number | null;
+  refreshCycle: import("@schema-studio/core").RefreshCycle | null;
+  dataPeriod: string | null; sourceSystem: string | null;
+  deprecated: boolean | null; deprecatedAt: string | null;
+  deprecationNote: string | null; replacedByRef: string | null;
+}>) {
   const schemaId = await store.indexGet("tableSchema", id);
   if (schemaId === null) throw new NotFoundError("Table", id);
   const oldPath = await getTableFilePath(schemaId, id);
@@ -33,6 +43,15 @@ export async function updateTable(id: number, input: Partial<{ name: string; com
   if (input.layerType !== undefined) tbl.layerType = input.layerType;
   if (input.status !== undefined) tbl.status = input.status;
   if (input.sampleData !== undefined) tbl.sampleData = input.sampleData;
+  if (input.ownerUserId !== undefined) tbl.ownerUserId = input.ownerUserId ?? undefined;
+  if (input.stewardUserId !== undefined) tbl.stewardUserId = input.stewardUserId ?? undefined;
+  if (input.refreshCycle !== undefined) tbl.refreshCycle = input.refreshCycle ?? undefined;
+  if (input.dataPeriod !== undefined) tbl.dataPeriod = input.dataPeriod ?? undefined;
+  if (input.sourceSystem !== undefined) tbl.sourceSystem = input.sourceSystem ?? undefined;
+  if (input.deprecated !== undefined) tbl.deprecated = input.deprecated ?? undefined;
+  if (input.deprecatedAt !== undefined) tbl.deprecatedAt = input.deprecatedAt ?? undefined;
+  if (input.deprecationNote !== undefined) tbl.deprecationNote = input.deprecationNote ?? undefined;
+  if (input.replacedByRef !== undefined) tbl.replacedByRef = input.replacedByRef ?? undefined;
   tbl.updatedAt = new Date().toISOString();
 
   if (nameChanged) {

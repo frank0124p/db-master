@@ -1,6 +1,26 @@
 import { Router } from "express";
+import { z } from "zod";
 import * as govRepo from "../repositories/governance.js";
 import * as knowledgeRepo from "../repositories/knowledge.js";
+import { scheduleRebuild } from "../services/graph-builder.js";
+
+const REFRESH_CYCLES = ["realtime", "hourly", "daily", "weekly", "monthly", "adhoc"] as const;
+
+const PatchWideTableBody = z.object({
+  name:             z.string().optional(),
+  description:      z.string().optional(),
+  columns:          z.array(z.unknown()).optional(),
+  // Phase 10 stewardship + operational + lifecycle
+  owner_user_id:    z.number().int().nullable().optional(),
+  steward_user_id:  z.number().int().nullable().optional(),
+  refresh_cycle:    z.enum(REFRESH_CYCLES).nullable().optional(),
+  data_period:      z.string().nullable().optional(),
+  source_system:    z.string().nullable().optional(),
+  deprecated:       z.boolean().nullable().optional(),
+  deprecated_at:    z.string().nullable().optional(),
+  deprecation_note: z.string().nullable().optional(),
+  replaced_by_ref:  z.string().nullable().optional(),
+});
 
 const router = Router();
 
@@ -29,12 +49,27 @@ router.get("/wide-tables/:slug", async (req, res, next) => {
 router.patch("/wide-tables/:slug", async (req, res, next) => {
   try {
     const { slug } = req.params as { slug: string };
-    const allowed = ["name", "description", "columns"] as const;
-    const patch = Object.fromEntries(
-      Object.entries(req.body as Record<string, unknown>).filter(([k]) => (allowed as readonly string[]).includes(k))
-    );
+    const parsed = PatchWideTableBody.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: { code: "VALIDATION_ERROR", detail: parsed.error.format() } });
+    }
+    const d = parsed.data;
+    const patch: Parameters<typeof govRepo.patchGoverned>[1] = {};
+    if (d.name !== undefined) patch.name = d.name;
+    if (d.description !== undefined) patch.description = d.description;
+    if (d.columns !== undefined) patch.columns = d.columns as import("@schema-studio/core").ProposedColumn[];
+    if (d.owner_user_id !== undefined) patch.ownerUserId = d.owner_user_id ?? undefined;
+    if (d.steward_user_id !== undefined) patch.stewardUserId = d.steward_user_id ?? undefined;
+    if (d.refresh_cycle !== undefined) patch.refreshCycle = d.refresh_cycle ?? undefined;
+    if (d.data_period !== undefined) patch.dataPeriod = d.data_period ?? undefined;
+    if (d.source_system !== undefined) patch.sourceSystem = d.source_system ?? undefined;
+    if (d.deprecated !== undefined) patch.deprecated = d.deprecated ?? undefined;
+    if (d.deprecated_at !== undefined) patch.deprecatedAt = d.deprecated_at ?? undefined;
+    if (d.deprecation_note !== undefined) patch.deprecationNote = d.deprecation_note ?? undefined;
+    if (d.replaced_by_ref !== undefined) patch.replacedByRef = d.replaced_by_ref ?? undefined;
     const updated = await govRepo.patchGoverned(slug, patch);
     if (!updated) return res.status(404).json({ error: { code: "NOT_FOUND", message: "GovernedWideTable not found" } });
+    scheduleRebuild();
     return res.json(updated);
   } catch (e) { next(e); }
 });

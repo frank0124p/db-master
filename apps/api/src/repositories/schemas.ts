@@ -9,6 +9,7 @@ export interface FieldEntry {
   comment: string | null; position: number;
   sourceTable?: string | null; sourceField?: string | null;
   isSensitive?: boolean; aliases?: string[];
+  sensitivity?: import("@schema-studio/core").Sensitivity;
 }
 
 export interface TableFile {
@@ -18,6 +19,16 @@ export interface TableFile {
   createdAt: string; updatedAt: string;
   fields: FieldEntry[];
   sampleData?: Record<string, unknown>[];
+  // Phase 10 — stewardship + operational + lifecycle
+  ownerUserId?: number;
+  stewardUserId?: number;
+  refreshCycle?: import("@schema-studio/core").RefreshCycle;
+  dataPeriod?: string;
+  sourceSystem?: string;
+  deprecated?: boolean;
+  deprecatedAt?: string;
+  deprecationNote?: string;
+  replacedByRef?: string;
 }
 
 interface SchemaMeta {
@@ -40,6 +51,16 @@ export interface SchemaWithTables {
     status?: "active" | "deprecated" | null;
     fields: FieldEntry[];
     sampleData?: Record<string, unknown>[];
+    // Phase 10
+    ownerUserId?: number;
+    stewardUserId?: number;
+    refreshCycle?: import("@schema-studio/core").RefreshCycle;
+    dataPeriod?: string;
+    sourceSystem?: string;
+    deprecated?: boolean;
+    deprecatedAt?: string;
+    deprecationNote?: string;
+    replacedByRef?: string;
   }[];
 }
 
@@ -117,6 +138,15 @@ export async function loadTables(schemaId: number): Promise<SchemaWithTables["ta
       status: t.status ?? null,
       fields: [...t.fields].sort((a, b) => a.position - b.position),
       sampleData: t.sampleData ?? [],
+      ownerUserId: t.ownerUserId,
+      stewardUserId: t.stewardUserId,
+      refreshCycle: t.refreshCycle,
+      dataPeriod: t.dataPeriod,
+      sourceSystem: t.sourceSystem,
+      deprecated: t.deprecated,
+      deprecatedAt: t.deprecatedAt,
+      deprecationNote: t.deprecationNote,
+      replacedByRef: t.replacedByRef,
     });
   }
   return tables.sort((a, b) => a.id - b.id);

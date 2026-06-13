@@ -146,6 +146,32 @@ export const CreateFieldInput = z.object({
 });
 export type CreateFieldInput = z.infer<typeof CreateFieldInput>;
 
+// ── Governance Metadata ──
+
+export type Sensitivity = "public" | "internal" | "confidential" | "pii";
+
+export const SensitivitySchema = z.enum(["public", "internal", "confidential", "pii"]);
+
+export interface AssetStewardship {
+  ownerUserId?: number;
+  stewardUserId?: number;
+}
+
+export type RefreshCycle = "realtime" | "hourly" | "daily" | "weekly" | "monthly" | "adhoc";
+
+export interface OperationalMeta {
+  refreshCycle?: RefreshCycle;
+  dataPeriod?: string;
+  sourceSystem?: string;
+}
+
+export interface LifecycleMeta {
+  deprecated?: boolean;
+  deprecatedAt?: string;
+  deprecationNote?: string;
+  replacedByRef?: string;
+}
+
 // ── Errors ──
 export class NotFoundError extends Error {
   constructor(resource: string, id: number | string) {

@@ -43,6 +43,7 @@ export async function updateField(id: number, input: Partial<{
   is_primary_key: boolean; is_unique: boolean; comment: string | null; position: number;
   source_table: string | null; source_field: string | null;
   is_sensitive: boolean; aliases: string[];
+  sensitivity: import("@schema-studio/core").Sensitivity | null;
 }>) {
   const tableId = await store.indexGet("fieldTable", id);
   if (tableId === null) throw new NotFoundError("Field", id);
@@ -67,6 +68,7 @@ export async function updateField(id: number, input: Partial<{
   if (input.source_field !== undefined) f.sourceField = input.source_field;
   if (input.is_sensitive !== undefined) f.isSensitive = input.is_sensitive;
   if (input.aliases !== undefined) f.aliases = input.aliases;
+  if (input.sensitivity !== undefined) f.sensitivity = input.sensitivity ?? undefined;
 
   tbl.updatedAt = new Date().toISOString();
   await store.writeJson(filePath, tbl);

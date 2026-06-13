@@ -81,21 +81,29 @@ export async function rebuildFor(_scope?: unknown): Promise<UnifiedGraph> {
         domain: full.domain,
         suiteId: full.suiteId,
         layerType: full.layerType,
-        tables: full.tables.map(t => ({
-          id: t.id,
-          name: t.name,
-          comment: t.comment,
-          layerType: t.layerType ?? null,
-          fields: t.fields.map(f => ({
-            id: f.id,
-            name: f.name,
-            dataType: f.dataType,
-            nullable: f.nullable,
-            isPrimaryKey: f.isPrimaryKey,
-            comment: f.comment,
-          })),
-          sampleData: t.sampleData,
-        })),
+        tables: full.tables.map(t => {
+          const tf = t as import("../repositories/schemas.js").TableFile;
+          return {
+            id: t.id,
+            name: t.name,
+            comment: t.comment,
+            layerType: t.layerType ?? null,
+            fields: t.fields.map(f => ({
+              id: f.id,
+              name: f.name,
+              dataType: f.dataType,
+              nullable: f.nullable,
+              isPrimaryKey: f.isPrimaryKey,
+              comment: f.comment,
+              sensitivity: f.sensitivity,
+            })),
+            sampleData: t.sampleData,
+            // Phase 10
+            ownerUserId: tf.ownerUserId,
+            refreshCycle: tf.refreshCycle,
+            deprecated: tf.deprecated,
+          };
+        }),
       });
     } catch {
       // Skip schemas that fail to load (they may have been deleted)

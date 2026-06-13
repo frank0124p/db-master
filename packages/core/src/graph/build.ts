@@ -125,6 +125,10 @@ export function buildUnifiedGraph(input: GraphBuildInput): UnifiedGraph {
       if (resolvedLayerType) tblMeta.layerType = resolvedLayerType;
       if (schema.domain) tblMeta.domain = schema.domain;
       if (schema.suiteId != null) tblMeta.suiteId = schema.suiteId;
+      // Phase 10
+      if (table.ownerUserId != null) tblMeta.ownerUserId = table.ownerUserId;
+      if (table.refreshCycle) tblMeta.refreshCycle = table.refreshCycle;
+      if (table.deprecated) tblMeta.deprecated = table.deprecated;
       addNode({
         ref: tblRef,
         kind: "table",
@@ -166,6 +170,7 @@ export function buildUnifiedGraph(input: GraphBuildInput): UnifiedGraph {
         };
         if (field.comment) fldMeta.definition = field.comment;
         if (sampleValues.length > 0) fldMeta.sampleValues = sampleValues;
+        if (field.sensitivity) fldMeta.sensitivity = field.sensitivity;
         addNode({
           ref: fldRef,
           kind: "field",
@@ -215,15 +220,21 @@ export function buildUnifiedGraph(input: GraphBuildInput): UnifiedGraph {
   for (const gwt of input.governed) {
     const gwtRef = `gwt:${gwt.slug}`;
 
+    const gwtMeta: GraphNode["meta"] = {
+      description: gwt.description,
+      blockKind: gwt.blockKind,
+      version: gwt.version,
+    };
+    // Phase 10 — stewardship + operational + lifecycle
+    if (gwt.ownerUserId != null) gwtMeta.ownerUserId = gwt.ownerUserId;
+    if (gwt.refreshCycle) gwtMeta.refreshCycle = gwt.refreshCycle;
+    if (gwt.deprecated) gwtMeta.deprecated = gwt.deprecated;
+
     addNode({
       ref: gwtRef,
       kind: "governed",
       label: gwt.name,
-      meta: {
-        description: gwt.description,
-        blockKind: gwt.blockKind,
-        version: gwt.version,
-      },
+      meta: gwtMeta,
     });
 
     // belongs_to (governed tables don't have direct domain but we infer from columns)
@@ -233,14 +244,16 @@ export function buildUnifiedGraph(input: GraphBuildInput): UnifiedGraph {
     for (const col of gwt.columns) {
       const gwcRef = `gwc:${gwt.slug}.${col.name}`;
 
+      const gwcMeta: GraphNode["meta"] = {
+        dataType: col.dataType,
+        definition: col.definition,
+      };
+      if (col.sensitivity) gwcMeta.sensitivity = col.sensitivity;
       addNode({
         ref: gwcRef,
         kind: "governed-column",
         label: col.name,
-        meta: {
-          dataType: col.dataType,
-          definition: col.definition,
-        },
+        meta: gwcMeta,
       });
 
       addEdge({

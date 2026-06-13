@@ -115,6 +115,7 @@ export interface ProposedColumn {
   namingDictId?: number;
   conceptId?: number;
   transform?: string;
+  sensitivity?: import("../types.js").Sensitivity;
 }
 
 export interface ProposedJoin {
@@ -225,6 +226,16 @@ export interface GovernedWideTable {
   publishedBy: string;
   publishedAt: string;
   version: number;
+  // Phase 10 — stewardship + operational + lifecycle
+  ownerUserId?: number;
+  stewardUserId?: number;
+  refreshCycle?: import("../types.js").RefreshCycle;
+  dataPeriod?: string;
+  sourceSystem?: string;
+  deprecated?: boolean;
+  deprecatedAt?: string;
+  deprecationNote?: string;
+  replacedByRef?: string;
 }
 
 export interface CatalogGraph {
@@ -254,7 +265,12 @@ export interface GovernanceContext {
   allTables: Array<{
     schemaId: number;
     schemaSlug: string;
-    table: { name: string; fields?: Array<{ name: string; dataType: string; isPrimaryKey: boolean; isUnique: boolean }> };
+    table: {
+      name: string;
+      fields?: Array<{ name: string; dataType: string; isPrimaryKey: boolean; isUnique: boolean; sensitivity?: import("../types.js").Sensitivity }>;
+      deprecated?: boolean;
+      refreshCycle?: import("../types.js").RefreshCycle;
+    };
   }>;
   concepts: ConceptCard[];
   businessRules: BusinessRule[];

@@ -108,6 +108,10 @@ export interface TableInput {
   layerType?: string | null;
   fields: FieldInput[];
   sampleData?: Record<string, unknown>[];
+  // Phase 10
+  ownerUserId?: number;
+  refreshCycle?: string;
+  deprecated?: boolean;
 }
 
 export interface FieldInput {
@@ -117,6 +121,7 @@ export interface FieldInput {
   nullable: boolean;
   isPrimaryKey: boolean;
   comment: string | null;
+  sensitivity?: import("../types.js").Sensitivity;
 }
 
 export interface DomainDef {

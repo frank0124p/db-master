@@ -1,9 +1,10 @@
 import { Router, type Router as ExpressRouter } from "express";
 import { z } from "zod";
-import { CreateFieldInput } from "@schema-studio/core";
+import { CreateFieldInput, SensitivitySchema } from "@schema-studio/core";
 import * as repo from "../repositories/fields.js";
 import * as schemaRepo from "../repositories/schemas.js";
 import { suggestFieldComment } from "../services/llm.js";
+import { scheduleRebuild } from "../services/graph-builder.js";
 
 const router: ExpressRouter = Router({ mergeParams: true });
 
@@ -15,10 +16,15 @@ router.post("/", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+const PatchFieldBody = CreateFieldInput.partial().extend({
+  sensitivity: SensitivitySchema.nullable().optional(),
+});
+
 router.patch("/:fieldId", async (req, res, next) => {
   try {
-    const input = CreateFieldInput.partial().strip().parse(req.body);
+    const input = PatchFieldBody.strip().parse(req.body);
     await repo.updateField(Number((req.params as Record<string, string>)["fieldId"]), input);
+    scheduleRebuild();
     res.status(204).end();
   } catch (e) { next(e); }
 });
