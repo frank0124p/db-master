@@ -226,3 +226,27 @@ If the task or a request asks you to do these, stop and surface a question:
 - Writing a Skill (markdown)? → `data/skills/README.md`
 - Touching the LLM call? → `prompts/` + `apps/api/src/services/llm.ts`
 - Touching storage? → `apps/api/src/db/fileStore.ts` + `apps/api/src/repositories/`
+
+---
+
+## Governance Workflow — Phase 8–11(進行中)
+
+Phase 0–7(五步驟治理工作流 + Instance)已完成。目前進行 Phase 8–11:
+統一語意圖譜 → Ask Pipeline → 治理元資料 → MCP Server。
+規格在 URD/phase2/07–13,開發任何相關任務前必讀順序:
+1. `URD/phase2/07-GAP-ANALYSIS-NEXT-PHASES.md`(為什麼做)
+2. 該 Phase 對應規格(08/09/10/11)— 型別與 node ref 格式是合約,不可擅改
+3. `URD/phase2/12-TASKS-PHASE8-11.md` 中該任務的 AC
+
+### Phase 8–11 硬性約定(與既有約定並行有效)
+
+- 統一圖譜 node ref 格式(cpt:/dom:/ste:/tbl:/fld:/gwt:/gwc:)為全系統合約,所有新 API 與 MCP 以 ref 互通
+- buildUnifiedGraph / linkQuery / join-path 必須是純函式(無 I/O、無 LLM),每個演算法附正反例單元測試
+- join-path 與 linking 是「確定性事實層」:任何 LLM 輸出的 join 條件必須以圖演算法結果交叉驗證
+- LLM 只在 ask 的 Reasoning 階段出現;linking / subgraph / 驗證全為確定性,無 LLM 時必須優雅降級
+- 既有 lineage / catalog retrieve API 保持相容:只新增不破壞,deprecate 需在 README 標註一版
+- 黃金問題集 data/eval/questions.json 是檢索品質的合約:改動 linking/scoring 後必跑 npm run eval:ask,
+  recall@30 不可低於 questions.json 頭部宣告的門檻
+- MCP server 嚴格唯讀:不得 import 任何 mutation API client 方法(lint rule 防呆)
+- 敏感性遮蔽(redact)只在 API 層實作一次,ask / retrieve / MCP 一律繼承,不得各自實作
+- 新 UI 文案同步加 i18n 繁中與英文

@@ -18,6 +18,7 @@
 - [資料儲存說明](#資料儲存說明)
 - [規則與 Skills](#規則與-skills)
 - [LLM 設定](#llm-設定)
+- [MCP Server](#mcp-server)
 - [DataHub 整合](#datahub-整合)
 - [API 端點](#api-端點)
 - [API 注意事項](#api-注意事項)
@@ -554,6 +555,32 @@ LINEAGE_MOCK=true   # 使用預寫的 sample 回應，不呼叫 LLM
 ```
 
 Mock 模式包含 5 個半導體製造 domain 的查詢情境（設備保養、批次晶圓、零件 BOM、良率分析、OEE KPI），每個情境有完整思路步驟與 SQL。接入真實 LLM 後，移除此設定或設為 `false` 即可切換。
+
+---
+
+## MCP Server
+
+DB Master 提供 MCP（Model Context Protocol）Server，讓 Claude Code、Claude Desktop 或任何 MCP 客戶端將資料治理目錄作為 grounding 工具使用。
+
+**特色：唯讀、確定性 JOIN 路徑、敏感性遮蔽繼承**
+
+### 快速設定（Claude Code stdio 模式）
+
+```bash
+claude mcp add dbmaster -- npm run mcp --prefix /path/to/db-master
+```
+
+### 工具清單
+
+| 工具 | 功能 |
+|------|------|
+| `search_assets` | 搜尋欄位、資料表、寬表、概念 |
+| `get_asset` | 取得資產完整詳情（定義、血緣） |
+| `get_join_path` | 計算兩表間可靠 JOIN 路徑（必須用此結果，不可猜測） |
+| `list_concepts` | 業務概念詞彙表 |
+| `ask` | 自然語言問答，選用，預設關閉 |
+
+詳細說明與設定請參閱 [apps/mcp/README.md](apps/mcp/README.md)。
 
 ---
 
