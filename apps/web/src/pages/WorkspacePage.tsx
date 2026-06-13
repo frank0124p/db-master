@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { api, type GovWtDraft, type GovProposedColumn, type GovValidationReport } from "../api.js";
+import { api, type GovWtDraft, type GovProposedColumn, type GovValidationReport, type GovGovernedWideTable } from "../api.js";
 import { useStore } from "../store.js";
 import { useResizable } from "../hooks/useResizable.js";
 
@@ -32,7 +32,7 @@ function ValidationBadge({ report }: { report: GovValidationReport | null }) {
   return <span style={{ fontSize: 11, color: "#f87171" }}>✗ {failCount} 項失敗</span>;
 }
 
-function DraftEditor({ draft }: { draft: GovWtDraft }) {
+function DraftEditor({ draft, impactedGoverned }: { draft: GovWtDraft; impactedGoverned?: GovGovernedWideTable }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const [activeTab, setActiveTab] = useState<"columns" | "log" | "validate">("columns");
@@ -119,6 +119,22 @@ function DraftEditor({ draft }: { draft: GovWtDraft }) {
           )}
         </div>
       </div>
+
+      {/* T10.3: Impacted banner */}
+      {impactedGoverned?.impacted && (
+        <div style={{ padding: "8px 20px", background: "rgba(248,113,113,0.08)", borderBottom: "1px solid rgba(248,113,113,0.3)", flexShrink: 0 }}>
+          <div style={{ fontSize: 12, color: "#f87171", fontWeight: 700, marginBottom: 2 }}>
+            ⚠ 已發布版本受影響 — {impactedGoverned.impacted.cause}
+          </div>
+          {impactedGoverned.impacted.brokenColumns.length > 0 && (
+            <div style={{ fontSize: 11, color: "#f87171" }}>
+              斷鏈欄位: {impactedGoverned.impacted.brokenColumns.join(", ")}
+              {" · "}
+              <em style={{ fontStyle: "normal", opacity: 0.8 }}>請修正欄位來源後重新驗證並發布以解除。</em>
+            </div>
+          )}
+        </div>
+      )}
 
       {publishing && (
         <div style={{ padding: "8px 20px", background: "var(--bg-2)", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
@@ -242,9 +258,17 @@ function DraftEditor({ draft }: { draft: GovWtDraft }) {
   );
 }
 
+// ── Helper: derive governed slug from draft name ──────────────────────────────
+function draftToSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+}
+
 export default function WorkspacePage() {
   const [selected, setSelected] = useState<number | null>(null);
   const { data: drafts = [] } = useQuery({ queryKey: ["gov-drafts"], queryFn: api.workspace.list });
+  const { data: governed = [] } = useQuery({ queryKey: ["gov-catalog"], queryFn: api.catalog.list });
+  // Build map: slug → governed (to check impacted)
+  const governedBySlug = new Map<string, GovGovernedWideTable>(governed.map(g => [g.slug, g]));
   const selectedDraft = drafts.find(d => d.id === selected) ?? null;
   const { size: listW, onMouseDown } = useResizable(260, "horizontal", 140, 500);
 
@@ -259,15 +283,24 @@ export default function WorkspacePage() {
           {drafts.length === 0 && (
             <div style={{ padding: "24px 14px", fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>尚無草稿 — 請在情境組裝頁轉入</div>
           )}
-          {drafts.map(d => (
-            <div key={d.id} style={S.item(selected === d.id)} onClick={() => setSelected(d.id)}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: selected === d.id ? "var(--accent)" : "var(--text-1)", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={S.draftStatus(d.status)}>{d.status}</span>
-                <span style={{ fontSize: 9, color: "var(--text-3)" }}>{d.columns.length} 欄位</span>
+          {drafts.map(d => {
+            const correspondingGov = governedBySlug.get(draftToSlug(d.name));
+            const isImpacted = !!(correspondingGov?.impacted);
+            return (
+              <div key={d.id} style={S.item(selected === d.id)} onClick={() => setSelected(d.id)}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: selected === d.id ? "var(--accent)" : "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
+                  {isImpacted && (
+                    <span title={correspondingGov?.impacted?.cause} style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(248,113,113,0.15)", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", flexShrink: 0 }}>⚠</span>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={S.draftStatus(d.status)}>{d.status}</span>
+                  <span style={{ fontSize: 9, color: "var(--text-3)" }}>{d.columns.length} 欄位</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -288,7 +321,7 @@ export default function WorkspacePage() {
 
       <div style={S.main}>
         {selectedDraft ? (
-          <DraftEditor key={selectedDraft.id} draft={selectedDraft} />
+          <DraftEditor key={selectedDraft.id} draft={selectedDraft} {...(governedBySlug.has(draftToSlug(selectedDraft.name)) ? { impactedGoverned: governedBySlug.get(draftToSlug(selectedDraft.name))! } : {})} />
         ) : (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", fontSize: 13 }}>
             選擇左側草稿開始審閱與編輯

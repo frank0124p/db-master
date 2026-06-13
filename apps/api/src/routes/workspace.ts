@@ -191,6 +191,17 @@ router.post("/drafts/:id/validate", async (req, res, next) => {
       lastReportId: report.id,
     });
 
+    // T10.3: If validation passed, auto-clear impacted mark on the corresponding governed (if any)
+    if (report.summary.passed) {
+      try {
+        const { clearImpacted } = await import("../services/impact.js");
+        const slug = draft.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        await clearImpacted(slug);
+      } catch {
+        // Non-critical; continue
+      }
+    }
+
     return res.json(report);
   } catch (e) { next(e); }
 });

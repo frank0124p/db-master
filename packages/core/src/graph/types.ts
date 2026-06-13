@@ -42,7 +42,10 @@ export interface GraphNode {
     ownerUserId?: number;
     sensitivity?: "public" | "internal" | "confidential" | "pii";
     refreshCycle?: string;
+    dataPeriod?: string;
     deprecated?: boolean;
+    deprecationNote?: string;
+    replacedByRef?: string;
   };
 }
 
@@ -111,7 +114,10 @@ export interface TableInput {
   // Phase 10
   ownerUserId?: number;
   refreshCycle?: string;
+  dataPeriod?: string;
   deprecated?: boolean;
+  deprecationNote?: string;
+  replacedByRef?: string;
 }
 
 export interface FieldInput {

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as governanceRepo from "../repositories/governance.js";
+import { analyzeImpact } from "../services/impact.js";
 
 const router = Router();
 
@@ -27,6 +28,28 @@ router.get("/reports", async (req, res, next) => {
       draftId !== undefined ? { draftId } : undefined,
     );
     return res.json(reports);
+  } catch (e) { next(e); }
+});
+
+// ── GET /api/v1/governance/impact?ref= ──────────────────────────────────────
+
+router.get("/impact", async (req, res, next) => {
+  try {
+    const ref = req.query["ref"];
+    if (!ref || typeof ref !== "string") {
+      return res.status(400).json({ error: { code: "MISSING_PARAM", message: "ref query param is required" } });
+    }
+    const affected = await analyzeImpact(ref);
+    return res.json({
+      ref,
+      affectedCount: affected.length,
+      affected: affected.map(a => ({
+        slug: a.slug,
+        brokenColumns: a.brokenColumns,
+        name: a.gwt.name,
+        impacted: (a.gwt as unknown as Record<string, unknown>)["impacted"] ?? null,
+      })),
+    });
   } catch (e) { next(e); }
 });
 

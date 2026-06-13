@@ -2,7 +2,10 @@ import { Router, type Router as ExpressRouter } from "express";
 import { z } from "zod";
 import { CreateTableInput } from "@schema-studio/core";
 import * as repo from "../repositories/tables.js";
+import * as schemasRepo from "../repositories/schemas.js";
+import * as store from "../db/fileStore.js";
 import { scheduleRebuild } from "../services/graph-builder.js";
+import { analyzeImpact, markImpacted } from "../services/impact.js";
 
 const REFRESH_CYCLES = ["realtime", "hourly", "daily", "weekly", "monthly", "adhoc"] as const;
 
@@ -36,7 +39,26 @@ const UpdateTableBody = z.object({
   deprecated_at:     z.string().nullable().optional(),
   deprecation_note:  z.string().nullable().optional(),
   replaced_by_ref:   z.string().nullable().optional(),
+  // Impact analysis options
+  sync_downstream:   z.boolean().optional(),
+  force:             z.boolean().optional(),
 });
+
+// ── Helper: build tbl ref for a table ────────────────────────────────────────
+
+async function buildTblRef(tableId: number): Promise<string | null> {
+  try {
+    const idx = await store.getIndex();
+    const schemaId = idx.tableSchema[String(tableId)];
+    const tableName = idx.tableIdToName[String(tableId)];
+    if (schemaId === undefined || !tableName) return null;
+    const slug = idx.schemaIdToSlug[String(schemaId)];
+    if (!slug) return null;
+    return `tbl:${slug}.${tableName}`;
+  } catch {
+    return null;
+  }
+}
 
 router.patch("/:tableId", async (req, res, next) => {
   try {
@@ -49,7 +71,37 @@ router.patch("/:tableId", async (req, res, next) => {
       name, comment, tags, environment, layer_type, status, sample_data,
       owner_user_id, steward_user_id, refresh_cycle, data_period, source_system,
       deprecated, deprecated_at, deprecation_note, replaced_by_ref,
+      force,
     } = parsed.data;
+
+    const tableId = Number(req.params["tableId"]);
+
+    // ── Impact analysis: table rename ────────────────────────────────────────
+    if (name !== undefined) {
+      const tblRef = await buildTblRef(tableId);
+      if (tblRef) {
+        const affected = await analyzeImpact(tblRef);
+        if (affected.length > 0 && !force) {
+          res.status(409).json({
+            error: {
+              code: "IMPACT_CONFLICT",
+              message: `Table rename will break ${affected.length} governed wide-table(s)`,
+              affected: affected.map(a => ({ slug: a.slug, brokenColumns: a.brokenColumns })),
+            },
+          });
+          return;
+        }
+        if (affected.length > 0 && force) {
+          // Mark affected governed as impacted
+          const oldName = tblRef.split(".").pop() ?? "";
+          const cause = `table:${oldName} renamed`;
+          for (const a of affected) {
+            await markImpacted(a.slug, cause, a.brokenColumns);
+          }
+        }
+      }
+    }
+
     const input: Parameters<typeof repo.updateTable>[1] = {};
     if (name !== undefined) input.name = name;
     if (comment !== undefined) input.comment = comment;
@@ -67,7 +119,7 @@ router.patch("/:tableId", async (req, res, next) => {
     if (deprecated_at !== undefined) input.deprecatedAt = deprecated_at;
     if (deprecation_note !== undefined) input.deprecationNote = deprecation_note;
     if (replaced_by_ref !== undefined) input.replacedByRef = replaced_by_ref;
-    await repo.updateTable(Number(req.params["tableId"]), input);
+    await repo.updateTable(tableId, input);
     scheduleRebuild();
     res.status(204).end();
   } catch (e) { next(e); }
@@ -75,7 +127,33 @@ router.patch("/:tableId", async (req, res, next) => {
 
 router.delete("/:tableId", async (req, res, next) => {
   try {
-    await repo.deleteTable(Number(req.params["tableId"]));
+    const tableId = Number(req.params["tableId"]);
+    const force = req.query["force"] === "true";
+
+    // ── Impact analysis: table delete ────────────────────────────────────────
+    const tblRef = await buildTblRef(tableId);
+    if (tblRef) {
+      const affected = await analyzeImpact(tblRef);
+      if (affected.length > 0 && !force) {
+        res.status(409).json({
+          error: {
+            code: "IMPACT_CONFLICT",
+            message: `Deleting this table will break ${affected.length} governed wide-table(s)`,
+            affected: affected.map(a => ({ slug: a.slug, brokenColumns: a.brokenColumns })),
+          },
+        });
+        return;
+      }
+      if (affected.length > 0 && force) {
+        const tblName = tblRef.split(".").pop() ?? "";
+        const cause = `table:${tblName} deleted`;
+        for (const a of affected) {
+          await markImpacted(a.slug, cause, a.brokenColumns);
+        }
+      }
+    }
+
+    await repo.deleteTable(tableId);
     scheduleRebuild();
     res.status(204).end();
   } catch (e) { next(e); }

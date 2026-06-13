@@ -363,6 +363,12 @@ export interface GovValidationReport {
   summary: { errors: number; warnings: number; infos: number; passed: boolean };
 }
 
+export interface GovImpactedEntry {
+  at: string;
+  cause: string;
+  brokenColumns: string[];
+}
+
 export interface GovGovernedWideTable {
   id: number; slug: string; draftId: number; reportId: number;
   blockKind: "small" | "medium"; name: string; description: string;
@@ -370,6 +376,16 @@ export interface GovGovernedWideTable {
   joinGraph: GovProposedJoin[];
   relationships: GovRelationship[];
   publishedBy: string; publishedAt: string; version: number;
+  // Phase 10 — stewardship + lifecycle
+  ownerUserId?: number;
+  stewardUserId?: number;
+  refreshCycle?: string;
+  dataPeriod?: string;
+  deprecated?: boolean;
+  deprecationNote?: string;
+  replacedByRef?: string;
+  // T10.3 — impact analysis
+  impacted?: GovImpactedEntry;
 }
 
 export interface GovCatalogGraph {

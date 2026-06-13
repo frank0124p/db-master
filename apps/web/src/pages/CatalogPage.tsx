@@ -43,6 +43,18 @@ function GwtDetail({ gwt }: { gwt: GovGovernedWideTable }) {
         <div style={{ fontSize: 11, color: "var(--text-3)" }}>
           Published by {gwt.publishedBy} · {new Date(gwt.publishedAt).toLocaleString()}
         </div>
+        {gwt.impacted && (
+          <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 6 }}>
+            <div style={{ fontSize: 12, color: "#f87171", fontWeight: 700, marginBottom: 4 }}>
+              ⚠ 此寬表已受影響 — {gwt.impacted.cause}
+            </div>
+            {gwt.impacted.brokenColumns.length > 0 && (
+              <div style={{ fontSize: 11, color: "#f87171" }}>
+                斷鏈欄位: {gwt.impacted.brokenColumns.join(", ")}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -165,7 +177,17 @@ export default function CatalogPage() {
           )}
           {filtered.map(t => (
             <div key={t.slug} style={S.item(selected === t.slug)} onClick={() => setSelected(t.slug)}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: selected === t.slug ? "var(--accent)" : "var(--text-1)", marginBottom: 3 }}>{t.name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: selected === t.slug ? "var(--accent)" : "var(--text-1)" }}>{t.name}</span>
+                {t.impacted && (
+                  <span
+                    title={`${t.impacted.cause}\n受影響欄位: ${t.impacted.brokenColumns.join(", ")}`}
+                    style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "rgba(248,113,113,0.15)", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", flexShrink: 0 }}
+                  >
+                    ⚠ impacted
+                  </span>
+                )}
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: t.blockKind === "small" ? "rgba(52,211,153,0.15)" : "rgba(167,139,250,0.15)", color: t.blockKind === "small" ? "#34d399" : "#a78bfa" }}>
                   {t.blockKind}
