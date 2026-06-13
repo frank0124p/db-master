@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "seed": "node scripts/seed-demo.mjs",
+    "eval:ask": "npx tsx scripts/eval-ask.ts",
     "prepare": "husky"
   },
   "devDependencies": {

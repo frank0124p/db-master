@@ -1,0 +1,262 @@
+{
+  "_config": {
+    "recall30Threshold": 0.85,
+    "description": "Golden question set for Ask Pipeline evaluation. 20 questions (15 answerable + 5 abstain traps)."
+  },
+  "questions": [
+    {
+      "id": "q001",
+      "question": "查某批次經過哪些設備、良率多少",
+      "expect": {
+        "fields": [
+          "gwc:yield-equipment-analysis.lot_id",
+          "fld:mes-equipment.equipments.equip_name"
+        ],
+        "anyOfTables": ["tbl:mes-equipment.equipments"],
+        "joinPathContains": []
+      },
+      "tags": ["cross-domain", "governed-first"]
+    },
+    {
+      "id": "q002",
+      "question": "設備保養記錄，最近一次保養是什麼時候",
+      "expect": {
+        "fields": [
+          "fld:mes-equipment.equipment_pm_records.maintained_at",
+          "fld:mes-equipment.equipment_pm_records.equipment_id"
+        ],
+        "anyOfTables": ["tbl:mes-equipment.equipment_pm_records"],
+        "joinPathContains": []
+      },
+      "tags": ["single-domain", "maintenance"]
+    },
+    {
+      "id": "q003",
+      "question": "在製品 WIP 批次的當前狀態與所在站點",
+      "expect": {
+        "fields": [
+          "fld:wip-tracking.lots.lot_id",
+          "fld:wip-tracking.lots.status",
+          "fld:wip-tracking.lots.current_station"
+        ],
+        "anyOfTables": ["tbl:wip-tracking.lots"],
+        "joinPathContains": []
+      },
+      "tags": ["single-domain", "wip"]
+    },
+    {
+      "id": "q004",
+      "question": "測試良率低於 95% 的批次清單",
+      "expect": {
+        "fields": [
+          "fld:test-quality.test_results.lot_id",
+          "fld:test-quality.test_results.yield_rate"
+        ],
+        "anyOfTables": ["tbl:test-quality.test_results"],
+        "joinPathContains": []
+      },
+      "tags": ["single-domain", "yield"]
+    },
+    {
+      "id": "q005",
+      "question": "哪些製程記錄使用了 EQP001 這台設備",
+      "expect": {
+        "fields": [
+          "fld:mes-process.process_records.lot_id",
+          "fld:mes-process.process_records.equipment_id"
+        ],
+        "anyOfTables": ["tbl:mes-process.process_records"],
+        "joinPathContains": []
+      },
+      "tags": ["value-linking", "equipment"]
+    },
+    {
+      "id": "q006",
+      "question": "governed 寬表 yield-equipment-analysis 包含哪些欄位",
+      "expect": {
+        "fields": [],
+        "anyOfTables": [],
+        "joinPathContains": [],
+        "tableOrGwtHit": "gwt:yield-equipment-analysis"
+      },
+      "tags": ["governed-table", "metadata"]
+    },
+    {
+      "id": "q007",
+      "question": "批次生產完成時間與出貨日期的差距",
+      "expect": {
+        "fields": [
+          "fld:wip-tracking.lots.completed_at",
+          "fld:wip-tracking.lots.lot_id"
+        ],
+        "anyOfTables": ["tbl:wip-tracking.lots"],
+        "joinPathContains": []
+      },
+      "tags": ["time-analysis", "wip"]
+    },
+    {
+      "id": "q008",
+      "question": "各設備的平均良率排名",
+      "expect": {
+        "fields": [
+          "gwc:yield-equipment-analysis.equip_id",
+          "gwc:yield-equipment-analysis.yield_rate"
+        ],
+        "anyOfTables": [],
+        "joinPathContains": []
+      },
+      "tags": ["governed-first", "yield", "ranking"]
+    },
+    {
+      "id": "q009",
+      "question": "製程參數溫度超標的批次",
+      "expect": {
+        "fields": [
+          "fld:mes-process.process_records.lot_id",
+          "fld:mes-process.process_records.temperature"
+        ],
+        "anyOfTables": ["tbl:mes-process.process_records"],
+        "joinPathContains": []
+      },
+      "tags": ["process-params", "anomaly"]
+    },
+    {
+      "id": "q010",
+      "question": "品質測試的 pass/fail 比率",
+      "expect": {
+        "fields": [
+          "fld:test-quality.test_results.result",
+          "fld:test-quality.test_results.lot_id"
+        ],
+        "anyOfTables": ["tbl:test-quality.test_results"],
+        "joinPathContains": []
+      },
+      "tags": ["quality", "ratio"]
+    },
+    {
+      "id": "q011",
+      "question": "查詢設備 equip_id 與批次 lot_id 的對應關係",
+      "expect": {
+        "fields": [
+          "gwc:yield-equipment-analysis.equip_id",
+          "gwc:yield-equipment-analysis.lot_id"
+        ],
+        "anyOfTables": [],
+        "joinPathContains": []
+      },
+      "tags": ["governed-first", "cross-domain"]
+    },
+    {
+      "id": "q012",
+      "question": "設備停機次數最多的時間段",
+      "expect": {
+        "fields": [
+          "fld:mes-equipment.equipment_pm_records.equipment_id",
+          "fld:mes-equipment.equipment_pm_records.maintained_at"
+        ],
+        "anyOfTables": ["tbl:mes-equipment.equipment_pm_records"],
+        "joinPathContains": []
+      },
+      "tags": ["equipment", "downtime"]
+    },
+    {
+      "id": "q013",
+      "question": "批次 lot_id 為 LOT2024001 的完整製程路徑",
+      "expect": {
+        "fields": [
+          "fld:mes-process.process_records.lot_id",
+          "fld:mes-process.process_records.step_name"
+        ],
+        "anyOfTables": ["tbl:mes-process.process_records"],
+        "joinPathContains": []
+      },
+      "tags": ["value-linking", "process-path"]
+    },
+    {
+      "id": "q014",
+      "question": "在製品批次數量與各站點堆積情況",
+      "expect": {
+        "fields": [
+          "fld:wip-tracking.lots.current_station",
+          "fld:wip-tracking.lots.lot_id"
+        ],
+        "anyOfTables": ["tbl:wip-tracking.lots"],
+        "joinPathContains": []
+      },
+      "tags": ["wip", "bottleneck"]
+    },
+    {
+      "id": "q015",
+      "question": "哪些設備的維護間隔超過 30 天",
+      "expect": {
+        "fields": [
+          "fld:mes-equipment.equipments.equip_id",
+          "fld:mes-equipment.equipment_pm_records.maintained_at"
+        ],
+        "anyOfTables": ["tbl:mes-equipment.equipments", "tbl:mes-equipment.equipment_pm_records"],
+        "joinPathContains": []
+      },
+      "tags": ["maintenance", "threshold"]
+    },
+    {
+      "id": "q016",
+      "question": "查詢採購訂單與供應商評分資料",
+      "expect": {
+        "fields": [],
+        "anyOfTables": [],
+        "joinPathContains": [],
+        "shouldAbstain": true,
+        "absentConcept": "採購訂單不存在於 Demo 資料集"
+      },
+      "tags": ["abstain-trap", "non-existent-domain"]
+    },
+    {
+      "id": "q017",
+      "question": "人力資源部門員工的績效評分",
+      "expect": {
+        "fields": [],
+        "anyOfTables": [],
+        "joinPathContains": [],
+        "shouldAbstain": true,
+        "absentConcept": "人力資源/績效評分不在製造 Schema 中"
+      },
+      "tags": ["abstain-trap", "wrong-domain"]
+    },
+    {
+      "id": "q018",
+      "question": "客戶訂單交期達成率",
+      "expect": {
+        "fields": [],
+        "anyOfTables": [],
+        "joinPathContains": [],
+        "shouldAbstain": true,
+        "absentConcept": "客戶訂單/交期達成率不存在於製造資料庫"
+      },
+      "tags": ["abstain-trap", "erp-domain"]
+    },
+    {
+      "id": "q019",
+      "question": "財務損益報表中各成本中心的費用",
+      "expect": {
+        "fields": [],
+        "anyOfTables": [],
+        "joinPathContains": [],
+        "shouldAbstain": true,
+        "absentConcept": "財務損益/成本中心不存在於此資料集"
+      },
+      "tags": ["abstain-trap", "finance-domain"]
+    },
+    {
+      "id": "q020",
+      "question": "倉庫庫存水位與安全庫存比較",
+      "expect": {
+        "fields": [],
+        "anyOfTables": [],
+        "joinPathContains": [],
+        "shouldAbstain": true,
+        "absentConcept": "倉庫/庫存管理不存在於此製造製程資料集"
+      },
+      "tags": ["abstain-trap", "inventory-domain"]
+    }
+  ]
+}
