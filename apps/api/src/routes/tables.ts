@@ -2,6 +2,7 @@ import { Router, type Router as ExpressRouter } from "express";
 import { z } from "zod";
 import { CreateTableInput } from "@schema-studio/core";
 import * as repo from "../repositories/tables.js";
+import { scheduleRebuild } from "../services/graph-builder.js";
 
 const router: ExpressRouter = Router({ mergeParams: true });
 
@@ -9,7 +10,9 @@ router.post("/", async (req, res, next) => {
   try {
     const input = CreateTableInput.parse(req.body);
     const schemaId = Number((req.params as Record<string, string>)["schemaId"]);
-    res.status(201).json(await repo.createTable(schemaId, input));
+    const result = await repo.createTable(schemaId, input);
+    scheduleRebuild();
+    res.status(201).json(result);
   } catch (e) { next(e); }
 });
 
@@ -40,6 +43,7 @@ router.patch("/:tableId", async (req, res, next) => {
     if (status !== undefined) input.status = status;
     if (sample_data !== undefined) input.sampleData = sample_data;
     await repo.updateTable(Number(req.params["tableId"]), input);
+    scheduleRebuild();
     res.status(204).end();
   } catch (e) { next(e); }
 });
@@ -47,6 +51,7 @@ router.patch("/:tableId", async (req, res, next) => {
 router.delete("/:tableId", async (req, res, next) => {
   try {
     await repo.deleteTable(Number(req.params["tableId"]));
+    scheduleRebuild();
     res.status(204).end();
   } catch (e) { next(e); }
 });

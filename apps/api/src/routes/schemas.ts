@@ -6,6 +6,7 @@ import * as namingRepo from "../repositories/naming.js";
 import { getSkillRules } from "../services/skills.js";
 import { resolveSchemaRuleIds } from "./schemaRules.js";
 import { suggestSchemaStream } from "../services/llm.js";
+import { scheduleRebuild } from "../services/graph-builder.js";
 
 const router: ExpressRouter = Router();
 
@@ -18,7 +19,9 @@ router.get("/", async (_req, res, next) => {
 router.post("/", async (req, res, next) => {
   try {
     const input = CreateSchemaInput.parse(req.body);
-    res.status(201).json(await repo.createSchema(input));
+    const result = await repo.createSchema(input);
+    scheduleRebuild();
+    res.status(201).json(result);
   } catch (e) { next(e); }
 });
 
@@ -31,13 +34,16 @@ router.get("/:id", async (req, res, next) => {
 router.patch("/:id", async (req, res, next) => {
   try {
     const input = CreateSchemaInput.partial().strip().parse(req.body);
-    res.json(await repo.updateSchema(Number(req.params["id"]), input));
+    const result = await repo.updateSchema(Number(req.params["id"]), input);
+    scheduleRebuild();
+    res.json(result);
   } catch (e) { next(e); }
 });
 
 router.delete("/:id", async (req, res, next) => {
   try {
     await repo.deleteSchema(Number(req.params["id"]));
+    scheduleRebuild();
     res.status(204).end();
   } catch (e) { next(e); }
 });

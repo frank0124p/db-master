@@ -2,6 +2,7 @@ import type { WideTableDraft, GovernedWideTable, CatalogGraph } from "@schema-st
 import * as govRepo from "../repositories/governance.js";
 import { recordEdge } from "../repositories/lineage.js";
 import { getSchemaById } from "../repositories/schemas.js";
+import { scheduleRebuild } from "./graph-builder.js";
 
 function buildMarkdown(gwt: GovernedWideTable): string {
   const concepts = [...new Set(gwt.columns.map(c => c.conceptId).filter(Boolean))];
@@ -155,10 +156,13 @@ export async function publishDraft(
 
   await govRepo.saveGoverned(gwt);
 
-  // Rebuild catalog graph
+  // Rebuild catalog graph (old format for backward compat)
   const allGoverned = await govRepo.listGoverned();
   const graph = await rebuildCatalogGraph(allGoverned);
   await govRepo.saveCatalogGraph(graph);
+
+  // Trigger unified graph rebuild
+  scheduleRebuild();
 
   // Save markdown export
   const md = buildMarkdown(gwt);

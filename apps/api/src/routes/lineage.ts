@@ -3,6 +3,7 @@ import * as lineageRepo from "../repositories/lineage.js";
 import type { LineageTransformType } from "@schema-studio/core";
 import { queryWithLineage, queryWithLineageStream } from "../services/lineage-query.js";
 import { listSchemas, getSchemaById } from "../repositories/schemas.js";
+import { scheduleRebuild } from "../services/graph-builder.js";
 
 const router = Router();
 
@@ -40,6 +41,7 @@ router.post("/", async (req, res, next) => {
       description: body.description ?? "",
       source: "manual",
     });
+    scheduleRebuild();
     res.status(201).json(edge);
   } catch (e) { next(e); }
 });
@@ -49,6 +51,7 @@ router.delete("/:id", async (req, res, next) => {
   try {
     const ok = await lineageRepo.removeEdge(req.params["id"] as string);
     if (!ok) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Edge not found" } });
+    scheduleRebuild();
     return res.status(204).send();
   } catch (e) { next(e); }
 });
