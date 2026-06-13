@@ -12,3 +12,4 @@ export * from "./governance/classifier-features.js";
 export * from "./governance/governance-rules.js";
 export { recomputeStations, type RecomputeArtifacts } from "./governance/instance-engine.js";
 export * from "./lineage.js";
+export * from "./graph/index.js";
