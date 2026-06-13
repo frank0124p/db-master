@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
+    "mcp": "npm run dev -w apps/mcp",
+    "mcp:http": "MCP_HTTP_PORT=3006 npm run dev -w apps/mcp",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
