@@ -1,10 +1,270 @@
-import { useState, useMemo } from "react";
+/**
+ * GlobalGraphPage — Unified Semantic Graph viewer
+ *
+ * Fetches from GET /api/v1/graph (UnifiedGraph v2)
+ * Two view modes:
+ *   - "blood"   (血緣視圖): flows_to + composed_from edges
+ *   - "semantic" (語意視圖): maps_to_concept + related_to + joins_on edges
+ *
+ * Default: renders only tbl/gwt/cpt nodes; clicking a node expands fields via /neighborhood
+ * Node side panel: meta + edge list with provenance explanation
+ * broken composed_from edges: rendered as red dashed lines
+ */
+
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type LineageEdge, type LineageTransformType, type LineageNodeKind } from "../api.js";
+import {
+  api,
+  type LineageEdge,
+  type LineageTransformType,
+  type UnifiedGraph,
+  type UnifiedGraphNode,
+  type UnifiedGraphEdge,
+  type GraphEdgeKind,
+} from "../api.js";
 import { useStore } from "../store.js";
 import { LineageSvgGraph, LineageLegend, nodeKey, type GraphNode } from "./LineageGraph.js";
 
-// ── Add Edge Panel ─────────────────────────────────────────────────────────────
+// ── i18n labels ───────────────────────────────────────────────────────────────
+
+const LABELS = {
+  zh: {
+    title: "統一語意圖",
+    bloodView: "血緣視圖",
+    semanticView: "語意視圖",
+    bloodViewDesc: "資料流向：flows_to + composed_from",
+    semanticViewDesc: "語意關係：maps_to_concept + related_to + joins_on",
+    allDomains: "所有 Domain",
+    nodeCount: "節點",
+    edgeCount: "邊",
+    brokenEdges: "斷鏈",
+    generatedAt: "更新於",
+    noNodeSelected: "點選節點查看詳情",
+    metaTitle: "元資料",
+    edgesTitle: "關聯邊",
+    close: "✕",
+    provenanceLabel: "來源",
+    addEdge: "+ 新增關係",
+    cancelAdd: "取消",
+    switchToQuery: "⇝ 切換查詢模式",
+    provenanceSources: {
+      "governed-column": (gwtSlug: string) => `寬表 ${gwtSlug} 的欄位血緣`,
+      "governed-join": (gwtSlug: string) => `寬表 ${gwtSlug} 的 JOIN 定義`,
+      "governed-relationship": (gwtSlug: string) => `寬表 ${gwtSlug} 的關係定義`,
+      "fk-inference": (schemaSlug: string) => `Schema ${schemaSlug} FK 推導`,
+      "lineage-edge": (edgeId: string) => `血緣邊 ${edgeId}`,
+      "concept-hint": (conceptId: string) => `概念 #${conceptId} 提示`,
+      "structure": () => "結構定義",
+    },
+    broken: "斷鏈（來源欄位不存在）",
+    nodeKinds: {
+      concept: "概念",
+      domain: "領域",
+      suite: "產品線",
+      table: "資料表",
+      field: "欄位",
+      governed: "治理寬表",
+      "governed-column": "治理欄位",
+    },
+    edgeKinds: {
+      has_field: "包含欄位",
+      fk: "外鍵",
+      joins_on: "JOIN 條件",
+      composed_from: "欄位血緣",
+      flows_to: "資料流向",
+      maps_to_concept: "對應概念",
+      related_to: "相關聯",
+      belongs_to: "所屬",
+    },
+  },
+  en: {
+    title: "Unified Semantic Graph",
+    bloodView: "Lineage View",
+    semanticView: "Semantic View",
+    bloodViewDesc: "Data flow: flows_to + composed_from",
+    semanticViewDesc: "Semantic: maps_to_concept + related_to + joins_on",
+    allDomains: "All Domains",
+    nodeCount: "Nodes",
+    edgeCount: "Edges",
+    brokenEdges: "Broken",
+    generatedAt: "Updated",
+    noNodeSelected: "Click a node to see details",
+    metaTitle: "Metadata",
+    edgesTitle: "Edges",
+    close: "✕",
+    provenanceLabel: "Source",
+    addEdge: "+ Add Edge",
+    cancelAdd: "Cancel",
+    switchToQuery: "⇝ Switch to Query Mode",
+    provenanceSources: {
+      "governed-column": (gwtSlug: string) => `Field lineage from GWT ${gwtSlug}`,
+      "governed-join": (gwtSlug: string) => `JOIN def from GWT ${gwtSlug}`,
+      "governed-relationship": (gwtSlug: string) => `Relationship from GWT ${gwtSlug}`,
+      "fk-inference": (schemaSlug: string) => `FK inference from Schema ${schemaSlug}`,
+      "lineage-edge": (edgeId: string) => `Lineage edge ${edgeId}`,
+      "concept-hint": (conceptId: string) => `Concept #${conceptId} hint`,
+      "structure": () => "Structural definition",
+    },
+    broken: "Broken (source field missing)",
+    nodeKinds: {
+      concept: "Concept",
+      domain: "Domain",
+      suite: "Suite",
+      table: "Table",
+      field: "Field",
+      governed: "Governed Table",
+      "governed-column": "Governed Column",
+    },
+    edgeKinds: {
+      has_field: "Has Field",
+      fk: "Foreign Key",
+      joins_on: "Joins On",
+      composed_from: "Composed From",
+      flows_to: "Flows To",
+      maps_to_concept: "Maps to Concept",
+      related_to: "Related To",
+      belongs_to: "Belongs To",
+    },
+  },
+};
+
+type Lang = "zh" | "en";
+
+// ── View mode types ───────────────────────────────────────────────────────────
+
+type ViewMode = "blood" | "semantic";
+
+const BLOOD_EDGE_KINDS = new Set<GraphEdgeKind>(["flows_to", "composed_from"]);
+const SEMANTIC_EDGE_KINDS = new Set<GraphEdgeKind>(["maps_to_concept", "related_to", "joins_on"]);
+const TOP_LEVEL_KINDS = new Set(["table", "governed", "concept"]);
+
+// ── Provenance helper ─────────────────────────────────────────────────────────
+
+function formatProvenance(provenance: Record<string, unknown>, labels: typeof LABELS["zh"]): string {
+  const src = provenance["source"] as string;
+  if (!src) return "未知";
+  const fns = labels.provenanceSources;
+  switch (src) {
+    case "governed-column": return fns["governed-column"](String(provenance["gwtSlug"] ?? ""));
+    case "governed-join": return fns["governed-join"](String(provenance["gwtSlug"] ?? ""));
+    case "governed-relationship": return fns["governed-relationship"](String(provenance["gwtSlug"] ?? ""));
+    case "fk-inference": return fns["fk-inference"](String(provenance["schemaSlug"] ?? ""));
+    case "lineage-edge": return fns["lineage-edge"](String(provenance["lineageEdgeId"] ?? ""));
+    case "concept-hint": return fns["concept-hint"](String(provenance["conceptId"] ?? ""));
+    case "structure": return fns["structure"]();
+    default: return src;
+  }
+}
+
+// ── Node Side Panel ───────────────────────────────────────────────────────────
+
+function NodeSidePanel({
+  node,
+  edges,
+  graphNodes,
+  labels,
+  onClose,
+}: {
+  node: UnifiedGraphNode;
+  edges: UnifiedGraphEdge[];
+  graphNodes: UnifiedGraphNode[];
+  labels: typeof LABELS["zh"];
+  onClose: () => void;
+}) {
+  const nodeEdges = edges.filter(e => e.from === node.ref || e.to === node.ref);
+  const refToLabel = new Map(graphNodes.map(n => [n.ref, n.label]));
+
+  const inputEdges = nodeEdges.filter(e => e.to === node.ref);
+  const outputEdges = nodeEdges.filter(e => e.from === node.ref);
+
+  const metaEntries = Object.entries(node.meta).filter(([, v]) => v !== undefined && v !== null);
+
+  return (
+    <div style={{
+      width: 280, flexShrink: 0, borderLeft: "1px solid var(--border)",
+      background: "var(--bg-2)", overflowY: "auto", display: "flex",
+      flexDirection: "column", gap: 0,
+    }}>
+      {/* Header */}
+      <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{node.label}</div>
+          <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>
+            {labels.nodeKinds[node.kind as keyof typeof labels.nodeKinds] ?? node.kind}
+            {" · "}<span style={{ fontFamily: "var(--font-mono)", fontSize: 9 }}>{node.ref}</span>
+          </div>
+        </div>
+        <button onClick={onClose} style={{ background: "transparent", border: "none", color: "var(--text-3)", cursor: "pointer", fontSize: 14, padding: "2px 4px" }}>{labels.close}</button>
+      </div>
+
+      {/* Meta */}
+      {metaEntries.length > 0 && (
+        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 6 }}>{labels.metaTitle}</div>
+          {metaEntries.map(([k, v]) => (
+            <div key={k} style={{ display: "flex", gap: 6, marginBottom: 4, fontSize: 11 }}>
+              <span style={{ color: "var(--text-3)", flexShrink: 0, width: 90, overflow: "hidden", textOverflow: "ellipsis" }}>{k}</span>
+              <span style={{ color: "var(--text-2)", fontFamily: typeof v === "string" ? "var(--font-mono)" : "inherit", flex: 1, wordBreak: "break-all" }}>
+                {Array.isArray(v) ? (v as string[]).join(", ") : String(v)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Edges */}
+      {nodeEdges.length > 0 && (
+        <div style={{ padding: "10px 14px" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 6 }}>{labels.edgesTitle} ({nodeEdges.length})</div>
+
+          {inputEdges.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: "var(--accent)", marginBottom: 4 }}>↓ 輸入</div>
+              {inputEdges.map(e => {
+                const isBroken = e.kind === "composed_from" && e.meta?.["broken"] === true;
+                return (
+                  <div key={e.id} style={{ marginBottom: 4, padding: "4px 8px", background: isBroken ? "rgba(239,68,68,0.08)" : "var(--bg-3)", borderRadius: 4, borderLeft: `2px solid ${isBroken ? "#ef4444" : "var(--accent)"}` }}>
+                    <div style={{ fontSize: 10, color: "var(--text-2)" }}>
+                      <span style={{ color: "var(--text-3)", marginRight: 4 }}>{labels.edgeKinds[e.kind] ?? e.kind}</span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9 }}>{refToLabel.get(e.from) ?? e.from}</span>
+                    </div>
+                    {isBroken && <div style={{ fontSize: 9, color: "#ef4444", marginTop: 2 }}>{labels.broken}</div>}
+                    <div style={{ fontSize: 9, color: "var(--text-3)", marginTop: 2 }}>
+                      此關聯來自：{formatProvenance(e.provenance, labels)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {outputEdges.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, color: "#34d399", marginBottom: 4 }}>↑ 輸出</div>
+              {outputEdges.map(e => {
+                const isBroken = e.kind === "composed_from" && e.meta?.["broken"] === true;
+                return (
+                  <div key={e.id} style={{ marginBottom: 4, padding: "4px 8px", background: isBroken ? "rgba(239,68,68,0.08)" : "var(--bg-3)", borderRadius: 4, borderLeft: `2px solid ${isBroken ? "#ef4444" : "#34d399"}` }}>
+                    <div style={{ fontSize: 10, color: "var(--text-2)" }}>
+                      <span style={{ color: "var(--text-3)", marginRight: 4 }}>{labels.edgeKinds[e.kind] ?? e.kind}</span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9 }}>{refToLabel.get(e.to) ?? e.to}</span>
+                    </div>
+                    {isBroken && <div style={{ fontSize: 9, color: "#ef4444", marginTop: 2 }}>{labels.broken}</div>}
+                    <div style={{ fontSize: 9, color: "var(--text-3)", marginTop: 2 }}>
+                      此關聯來自：{formatProvenance(e.provenance, labels)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Add Edge Panel (legacy lineage) ───────────────────────────────────────────
 
 function AddEdgePanel({
   schemas,
@@ -104,59 +364,161 @@ function AddEdgePanel({
   );
 }
 
-// ── Node detail sidebar ───────────────────────────────────────────────────────
+// ── Unified Graph SVG Renderer ────────────────────────────────────────────────
 
-function NodeDetailSidebar({
-  nodeK, edges, schemas, onClose,
+const NODE_W = 160;
+const NODE_H = 32;
+const COL_GAP = 100;
+const ROW_GAP = 12;
+const PAD = 30;
+
+type NodePos = { ref: string; x: number; y: number; w: number; h: number };
+
+const EDGE_COLORS: Partial<Record<GraphEdgeKind, string>> = {
+  flows_to: "#60a5fa",
+  composed_from: "#a78bfa",
+  maps_to_concept: "#34d399",
+  related_to: "#f59e0b",
+  joins_on: "#f87171",
+  fk: "var(--accent)",
+  has_field: "rgba(123,140,255,0.3)",
+  belongs_to: "rgba(123,140,255,0.2)",
+};
+
+const NODE_COLORS: Partial<Record<string, string>> = {
+  table: "var(--bg-3)",
+  governed: "rgba(167,139,250,0.12)",
+  concept: "rgba(52,211,153,0.08)",
+  domain: "rgba(96,165,250,0.08)",
+  suite: "rgba(251,191,36,0.08)",
+  field: "var(--bg-3)",
+  "governed-column": "rgba(167,139,250,0.08)",
+};
+
+const NODE_BORDER: Partial<Record<string, string>> = {
+  table: "var(--border)",
+  governed: "rgba(167,139,250,0.5)",
+  concept: "rgba(52,211,153,0.4)",
+  domain: "rgba(96,165,250,0.4)",
+  suite: "rgba(251,191,36,0.4)",
+  field: "rgba(123,140,255,0.3)",
+  "governed-column": "rgba(167,139,250,0.3)",
+};
+
+function UnifiedGraphSvg({
+  nodes,
+  edges,
+  selectedRef,
+  onSelect,
 }: {
-  nodeK: string;
-  edges: LineageEdge[];
-  schemas: { id: number; name: string; domain: string; tables: { id: number; name: string; comment?: string | null }[] }[];
-  onClose: () => void;
+  nodes: UnifiedGraphNode[];
+  edges: UnifiedGraphEdge[];
+  selectedRef: string | null;
+  onSelect: (ref: string | null) => void;
 }) {
-  const [, schemaIdStr, tableIdStr] = nodeK.split(":");
-  const schemaId = Number(schemaIdStr);
-  const tableId = Number(tableIdStr);
-  const schema = schemas.find(s => s.id === schemaId);
-  const table = schema?.tables.find(t => t.id === tableId);
-  const upstream = edges.filter(e => e.toSchemaId === schemaId && e.toTableId === tableId);
-  const downstream = edges.filter(e => e.fromSchemaId === schemaId && e.fromTableId === tableId);
+  // Simple column-based layout: group by kind, then domain
+  const grouped = useMemo(() => {
+    const groups = new Map<string, UnifiedGraphNode[]>();
+    for (const n of nodes) {
+      const key = n.meta.domain ?? n.kind;
+      const list = groups.get(key);
+      if (list) list.push(n);
+      else groups.set(key, [n]);
+    }
+    return groups;
+  }, [nodes]);
 
-  if (!schema || !table) return null;
+  const positions = useMemo(() => {
+    const pos = new Map<string, NodePos>();
+    let colX = PAD;
+    for (const [, groupNodes] of grouped) {
+      let rowY = PAD;
+      for (const n of groupNodes) {
+        pos.set(n.ref, { ref: n.ref, x: colX, y: rowY, w: NODE_W, h: NODE_H });
+        rowY += NODE_H + ROW_GAP;
+      }
+      colX += NODE_W + COL_GAP;
+    }
+    return pos;
+  }, [grouped]);
+
+  const svgW = Math.max(800, PAD * 2 + grouped.size * (NODE_W + COL_GAP));
+  const svgH = Math.max(600, PAD * 2 + Math.max(0, ...[...grouped.values()].map(g => g.length)) * (NODE_H + ROW_GAP));
 
   return (
-    <div style={{ width: 260, flexShrink: 0, borderLeft: "1px solid var(--border)", background: "var(--bg-2)", padding: 14, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)" }}>{table.name}</div>
-        <button style={{ background: "transparent", border: "none", color: "var(--text-3)", cursor: "pointer", fontSize: 14 }} onClick={onClose}>✕</button>
-      </div>
-      <div style={{ fontSize: 11, color: "var(--text-2)" }}>{schema.name} · {schema.domain || "未分類"}</div>
+    <div style={{ flex: 1, overflow: "auto", position: "relative", background: "var(--bg-1)" }}>
+      <svg width={svgW} height={svgH} style={{ display: "block" }}>
+        {/* Edges */}
+        {edges.map(edge => {
+          const fromPos = positions.get(edge.from);
+          const toPos = positions.get(edge.to);
+          if (!fromPos || !toPos) return null;
 
-      <div>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 6 }}>上游 ({upstream.length})</div>
-        {upstream.length === 0
-          ? <div style={{ fontSize: 11, color: "var(--text-3)" }}>— 無上游（源頭）</div>
-          : upstream.map(e => (
-            <div key={e.id} style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 4, padding: "4px 8px", background: "var(--bg-3)", borderRadius: 4 }}>
-              ↑ {e.fromDomain}/{e.fromSchemaName}.{e.fromTableName}
-              <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 6 }}>[{e.transformType}]</span>
-            </div>
-          ))
-        }
-      </div>
+          const isBroken = edge.kind === "composed_from" && edge.meta?.["broken"] === true;
+          const color = isBroken ? "#ef4444" : (EDGE_COLORS[edge.kind] ?? "rgba(123,140,255,0.4)");
+          const dashArray = isBroken ? "5 3" : edge.kind === "flows_to" ? "none" : "none";
 
-      <div>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 6 }}>下游 ({downstream.length})</div>
-        {downstream.length === 0
-          ? <div style={{ fontSize: 11, color: "var(--text-3)" }}>— 無下游（終點）</div>
-          : downstream.map(e => (
-            <div key={e.id} style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 4, padding: "4px 8px", background: "var(--bg-3)", borderRadius: 4 }}>
-              ↓ {e.toDomain}/{e.toSchemaName}.{e.toTableName}
-              <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 6 }}>[{e.transformType}]</span>
-            </div>
-          ))
-        }
-      </div>
+          const x1 = fromPos.x + fromPos.w;
+          const y1 = fromPos.y + fromPos.h / 2;
+          const x2 = toPos.x;
+          const y2 = toPos.y + toPos.h / 2;
+          const cpOffset = Math.max(40, Math.abs(x2 - x1) * 0.4);
+
+          return (
+            <g key={edge.id} opacity={0.7}>
+              <path
+                d={`M ${x1} ${y1} C ${x1 + cpOffset} ${y1}, ${x2 - cpOffset} ${y2}, ${x2} ${y2}`}
+                stroke={color}
+                strokeWidth={isBroken ? 1.5 : 1.5}
+                strokeDasharray={dashArray}
+                fill="none"
+                markerEnd={`url(#arr-${edge.kind})`}
+              />
+            </g>
+          );
+        })}
+
+        {/* Arrow markers */}
+        <defs>
+          {Object.entries(EDGE_COLORS).map(([kind, color]) => (
+            <marker key={kind} id={`arr-${kind}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L6,3 z" fill={color ?? "#888"} />
+            </marker>
+          ))}
+          <marker id="arr-broken" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L6,3 z" fill="#ef4444" />
+          </marker>
+        </defs>
+
+        {/* Nodes */}
+        {nodes.map(node => {
+          const pos = positions.get(node.ref);
+          if (!pos) return null;
+          const isSelected = node.ref === selectedRef;
+          const bg = NODE_COLORS[node.kind] ?? "var(--bg-3)";
+          const border = NODE_BORDER[node.kind] ?? "var(--border)";
+
+          return (
+            <g key={node.ref} onClick={() => onSelect(isSelected ? null : node.ref)} style={{ cursor: "pointer" }}>
+              <rect
+                x={pos.x} y={pos.y} width={pos.w} height={pos.h}
+                rx={5}
+                fill={bg}
+                stroke={isSelected ? "var(--accent)" : border}
+                strokeWidth={isSelected ? 2 : 1}
+              />
+              <text
+                x={pos.x + 8} y={pos.y + pos.h / 2 + 4}
+                fontSize={11} fill="var(--text-1)"
+                fontFamily="var(--font-mono)"
+                style={{ userSelect: "none" }}
+              >
+                {node.label.length > 18 ? node.label.slice(0, 17) + "…" : node.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }
@@ -166,11 +528,29 @@ function NodeDetailSidebar({
 export default function GlobalGraphPage() {
   const qc = useQueryClient();
   const { showToast, setPage } = useStore();
-  const [showAdd, setShowAdd] = useState(false);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [filterDomain, setFilterDomain] = useState("all");
+  const [lang] = useState<Lang>("zh");
+  const labels = LABELS[lang];
 
-  const { data: edges = [] } = useQuery({ queryKey: ["lineage"], queryFn: api.lineage.list });
+  const [viewMode, setViewMode] = useState<ViewMode>("blood");
+  const [filterDomain, setFilterDomain] = useState("all");
+  const [selectedRef, setSelectedRef] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [expandedRefs, setExpandedRefs] = useState<Set<string>>(new Set());
+
+  // Fetch unified graph
+  const { data: graph, isLoading: graphLoading } = useQuery<UnifiedGraph>({
+    queryKey: ["unified-graph"],
+    queryFn: () => api.graph.get(),
+    staleTime: 30_000,
+  });
+
+  // Fetch lineage edges (for add-edge panel)
+  const { data: lineageEdges = [] } = useQuery({
+    queryKey: ["lineage"],
+    queryFn: api.lineage.list,
+  });
+
+  // Fetch schemas for add-edge panel
   const { data: schemaMetas = [] } = useQuery({ queryKey: ["schemas"], queryFn: () => api.schemas.list() });
   const { data: schemaDetails = [] } = useQuery({
     queryKey: ["schemas-full-lineage"],
@@ -178,114 +558,215 @@ export default function GlobalGraphPage() {
     enabled: schemaMetas.length > 0,
   });
 
-  // Build all graph nodes from schemas + unique wide-table/governed targets from edges
-  const allNodes = useMemo((): GraphNode[] => {
+  // Neighborhood expansion query (triggered when user clicks a node)
+  const { data: neighborhoodData } = useQuery({
+    queryKey: ["graph-neighborhood", selectedRef],
+    queryFn: () => selectedRef ? api.graph.neighborhood(selectedRef, 1) : Promise.resolve(null),
+    enabled: !!selectedRef,
+  });
+
+  const addMut = useMutation({
+    mutationFn: (e: Omit<LineageEdge, "id" | "createdAt">) => api.lineage.add(e),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["lineage"] });
+      await qc.invalidateQueries({ queryKey: ["unified-graph"] });
+      setShowAdd(false);
+      showToast("✓ 血緣關係已新增");
+    },
+  });
+
+  // Compute filtered graph for display
+  const { displayNodes, displayEdges } = useMemo(() => {
+    if (!graph) return { displayNodes: [], displayEdges: [] };
+
+    const activeEdgeKinds = viewMode === "blood" ? BLOOD_EDGE_KINDS : SEMANTIC_EDGE_KINDS;
+
+    // Start with top-level nodes (tbl/gwt/cpt) + expanded field nodes
+    const visibleRefs = new Set<string>();
+    for (const node of graph.nodes) {
+      if (TOP_LEVEL_KINDS.has(node.kind)) {
+        if (filterDomain === "all" || node.meta.domain === filterDomain || !node.meta.domain) {
+          visibleRefs.add(node.ref);
+        }
+      }
+    }
+
+    // Add expanded neighborhood nodes
+    if (neighborhoodData) {
+      for (const n of neighborhoodData.nodes) {
+        visibleRefs.add(n.ref);
+      }
+    }
+
+    const displayNodes = graph.nodes.filter(n => visibleRefs.has(n.ref));
+    const displayEdges = graph.edges.filter(
+      e => activeEdgeKinds.has(e.kind) && visibleRefs.has(e.from) && visibleRefs.has(e.to),
+    );
+
+    return { displayNodes, displayEdges };
+  }, [graph, viewMode, filterDomain, neighborhoodData]);
+
+  // Domain filter options
+  const domains = useMemo(() => {
+    if (!graph) return ["all"];
+    const domainSet = new Set<string>();
+    for (const node of graph.nodes) {
+      if (node.meta.domain) domainSet.add(node.meta.domain);
+    }
+    return ["all", ...domainSet];
+  }, [graph]);
+
+  // Selected node details
+  const selectedNode = useMemo(() => {
+    if (!selectedRef || !graph) return null;
+    return graph.nodes.find(n => n.ref === selectedRef) ?? null;
+  }, [selectedRef, graph]);
+
+  const selectedNodeEdges = useMemo(() => {
+    if (!selectedRef || !graph) return [];
+    return graph.edges.filter(e => e.from === selectedRef || e.to === selectedRef);
+  }, [selectedRef, graph]);
+
+  // Graph stats
+  const stats = graph?.stats;
+  const brokenCount = useMemo(() => {
+    if (!graph) return 0;
+    return graph.edges.filter(e => e.kind === "composed_from" && e.meta?.["broken"] === true).length;
+  }, [graph]);
+
+  const schemaForAdd = schemaDetails.map(s => ({
+    id: s.id,
+    name: s.name,
+    domain: s.domain || "未分類",
+    tables: s.tables.map(t => ({ id: t.id, name: t.name })),
+  }));
+
+  // Legacy: also build lineage graph nodes for backward-compat rendering
+  const legacyNodes = useMemo((): GraphNode[] => {
     const result: GraphNode[] = [];
     const seen = new Set<string>();
-
-    // Regular tables
     for (const s of schemaDetails) {
       for (const t of s.tables) {
         const k = nodeKey(s.id, t.id, "table");
         if (!seen.has(k)) { seen.add(k); result.push({ schemaId: s.id, schemaName: s.name, domain: s.domain || "未分類", tableId: t.id, tableName: t.name, kind: "table" }); }
       }
     }
-
-    // Virtual nodes from edges (wide-tables, governed)
-    for (const e of edges) {
+    for (const e of lineageEdges) {
       const fromK = nodeKey(e.fromSchemaId, e.fromTableId, e.fromKind ?? "table");
-      if (!seen.has(fromK)) {
-        seen.add(fromK);
-        result.push({ schemaId: e.fromSchemaId, schemaName: e.fromSchemaName, domain: e.fromDomain, tableId: e.fromTableId, tableName: e.fromTableName, kind: e.fromKind ?? "table" });
-      }
+      if (!seen.has(fromK)) { seen.add(fromK); result.push({ schemaId: e.fromSchemaId, schemaName: e.fromSchemaName, domain: e.fromDomain, tableId: e.fromTableId, tableName: e.fromTableName, kind: e.fromKind ?? "table" }); }
       const toK = nodeKey(e.toSchemaId, e.toTableId, e.toKind ?? "table");
-      if (!seen.has(toK)) {
-        seen.add(toK);
-        result.push({ schemaId: e.toSchemaId, schemaName: e.toSchemaName, domain: e.toDomain, tableId: e.toTableId, tableName: e.toTableName, kind: e.toKind ?? "table" });
-      }
+      if (!seen.has(toK)) { seen.add(toK); result.push({ schemaId: e.toSchemaId, schemaName: e.toSchemaName, domain: e.toDomain, tableId: e.toTableId, tableName: e.toTableName, kind: e.toKind ?? "table" }); }
     }
-
     return result;
-  }, [schemaDetails, edges]);
+  }, [schemaDetails, lineageEdges]);
 
-  const domains = useMemo(() => ["all", ...new Set(allNodes.map(n => n.domain)).values()], [allNodes]);
-
-  const visibleNodes = useMemo(() =>
-    filterDomain === "all" ? allNodes : allNodes.filter(n => n.domain === filterDomain),
-    [allNodes, filterDomain]
-  );
-
-  const visibleEdges = useMemo(() =>
-    edges.filter(e => {
-      if (filterDomain === "all") return true;
-      return e.fromDomain === filterDomain || e.toDomain === filterDomain;
-    }),
-    [edges, filterDomain]
-  );
-
-  const addMut = useMutation({
-    mutationFn: (e: Omit<LineageEdge, "id" | "createdAt">) => api.lineage.add(e),
-    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["lineage"] }); setShowAdd(false); showToast("✓ 血緣關係已新增"); },
-  });
+  const legacyVisibleNodes = filterDomain === "all" ? legacyNodes : legacyNodes.filter(n => n.domain === filterDomain);
+  const legacyVisibleEdges = filterDomain === "all" ? lineageEdges : lineageEdges.filter(e => e.fromDomain === filterDomain || e.toDomain === filterDomain);
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => api.lineage.remove(id),
-    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["lineage"] }); showToast("✓ 已刪除"); },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["lineage"] });
+      await qc.invalidateQueries({ queryKey: ["unified-graph"] });
+      showToast("✓ 已刪除");
+    },
   });
 
-  // Stats
-  const autoEdges = edges.filter(e => e.source !== "manual").length;
-  const schemaForNodes = schemaDetails.map(s => ({ id: s.id, name: s.name, domain: s.domain || "未分類", tables: s.tables.map(t => ({ id: t.id, name: t.name })) }));
+  const [legacySelectedKey, setLegacySelectedKey] = useState<string | null>(null);
+
+  // Use unified graph if available, fallback to legacy for blood view
+  const useUnifiedGraph = !!graph && !graphLoading;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", background: "var(--bg-1)" }}>
       {/* Toolbar */}
-      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 10, background: "var(--bg-2)" }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>全局血緣圖</span>
-        <span style={{ fontSize: 11, color: "var(--text-3)" }}>{edges.length} 條關係（{autoEdges} 自動 · {edges.length - autoEdges} 手動）</span>
+      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 10, background: "var(--bg-2)", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>{labels.title}</span>
+
+        {/* View mode toggle */}
+        <div style={{ display: "flex", gap: 2, background: "var(--bg-3)", borderRadius: 6, padding: 2 }}>
+          {(["blood", "semantic"] as const).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              style={{
+                padding: "3px 10px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 11,
+                background: viewMode === mode ? "var(--accent)" : "transparent",
+                color: viewMode === mode ? "#fff" : "var(--text-2)",
+                fontWeight: viewMode === mode ? 700 : 400,
+              }}
+              title={mode === "blood" ? labels.bloodViewDesc : labels.semanticViewDesc}
+            >
+              {mode === "blood" ? labels.bloodView : labels.semanticView}
+            </button>
+          ))}
+        </div>
 
         {/* Domain filter */}
         <select
           style={{ background: "var(--bg-3)", border: "1px solid var(--border)", color: "var(--text-1)", padding: "4px 8px", borderRadius: 5, fontSize: 11, fontFamily: "inherit" }}
           value={filterDomain} onChange={e => setFilterDomain(e.target.value)}>
-          {domains.map(d => <option key={d} value={d}>{d === "all" ? "所有 Domain" : d}</option>)}
+          {domains.map(d => <option key={d} value={d}>{d === "all" ? labels.allDomains : d}</option>)}
         </select>
+
+        {/* Stats */}
+        {stats && (
+          <span style={{ fontSize: 11, color: "var(--text-3)" }}>
+            {stats.nodeCount} {labels.nodeCount} · {stats.edgeCount} {labels.edgeCount}
+            {brokenCount > 0 && <span style={{ color: "#ef4444", marginLeft: 6 }}>⚠ {brokenCount} {labels.brokenEdges}</span>}
+          </span>
+        )}
 
         <div style={{ flex: 1 }} />
         <LineageLegend showSource />
         <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setPage("lineage")}>
-          ⇝ 切換查詢模式
+          {labels.switchToQuery}
         </button>
         <button className={showAdd ? "btn btn-ghost" : "btn btn-primary"} style={{ fontSize: 12 }}
           onClick={() => setShowAdd(v => !v)}>
-          {showAdd ? "取消" : "+ 新增關係"}
+          {showAdd ? labels.cancelAdd : labels.addEdge}
         </button>
       </div>
 
       {showAdd && schemaDetails.length > 0 && (
         <AddEdgePanel
-          schemas={schemaForNodes}
+          schemas={schemaForAdd}
           onClose={() => setShowAdd(false)}
           onAdd={e => addMut.mutate(e)}
         />
       )}
 
-      {/* Graph + optional node detail */}
+      {/* Main content */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <LineageSvgGraph
-          nodes={visibleNodes}
-          edges={visibleEdges}
-          selectedNodeKey={selectedKey}
-          onSelectNode={setSelectedKey}
-          onDeleteEdge={id => deleteMut.mutate(id)}
-        />
-        {selectedKey && (
-          <NodeDetailSidebar
-            nodeK={selectedKey}
-            edges={edges}
-            schemas={schemaForNodes}
-            onClose={() => setSelectedKey(null)}
-          />
+        {useUnifiedGraph ? (
+          <>
+            <UnifiedGraphSvg
+              nodes={displayNodes}
+              edges={displayEdges}
+              selectedRef={selectedRef}
+              onSelect={setSelectedRef}
+            />
+            {selectedNode && (
+              <NodeSidePanel
+                node={selectedNode}
+                edges={selectedNodeEdges}
+                graphNodes={graph.nodes}
+                labels={labels}
+                onClose={() => setSelectedRef(null)}
+              />
+            )}
+          </>
+        ) : (
+          // Fallback: legacy LineageSvgGraph
+          <>
+            <LineageSvgGraph
+              nodes={legacyVisibleNodes}
+              edges={legacyVisibleEdges}
+              selectedNodeKey={legacySelectedKey}
+              onSelectNode={setLegacySelectedKey}
+              onDeleteEdge={id => deleteMut.mutate(id)}
+            />
+          </>
         )}
       </div>
     </div>

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useStore } from "../store.js";
 import { api, type Table } from "../api.js";
 import { useBreakpoint } from "../hooks/useBreakpoint.js";
+import { inferFkEdges } from "@schema-studio/core";
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const CARD_W = 224;
@@ -28,39 +29,32 @@ interface GraphEdge {
 
 function detectEdges(tables: Table[], visible: Set<number>): GraphEdge[] {
   const edges: GraphEdge[] = [];
-  const vis = new Set(tables.filter(t => visible.has(t.id)).map(t => t.name));
-  for (const table of tables) {
-    if (!visible.has(table.id)) continue;
+  const visTables = tables.filter(t => visible.has(t.id));
+  const vis = new Set(visTables.map(t => t.name));
+
+  // FK edges — use shared inferFkEdges from @schema-studio/core
+  const fkInput = visTables.map(t => ({
+    name: t.name,
+    fields: t.fields.map(f => ({ name: f.name, isPrimaryKey: f.isPrimaryKey })),
+  }));
+  const inferredFks = inferFkEdges(fkInput);
+  for (const fk of inferredFks) {
+    // Get the nullable flag from the original field
+    const fromTable = visTables.find(t => t.name === fk.fromTable);
+    const fromField = fromTable?.fields.find(f => f.name === fk.fromField);
+    edges.push({
+      fromTable: fk.fromTable,
+      fromField: fk.fromField,
+      toTable: fk.toTable,
+      toField: fk.toField,
+      type: "fk",
+      nullable: fromField?.nullable ?? true,
+    });
+  }
+
+  // Source field annotation (kept inline — specific to ErDiagram)
+  for (const table of visTables) {
     for (const f of table.fields) {
-      // FK by naming convention — handles abbreviated stems and self-referential hierarchies
-      if (f.name.endsWith("_id") && !f.isPrimaryKey) {
-        const stem = f.name.slice(0, -3);
-
-        function stemMatches(n: string, s: string): boolean {
-          return n === s || n === `${s}s` || n === `${s}es` ||
-            n.endsWith(`_${s}s`) || n.endsWith(`_${s}es`) ||
-            n.endsWith(s.replace(/y$/, "ies")) || n.endsWith(`_${s.replace(/y$/, "ies")}`) ||
-            (n.startsWith(s) && n.length - s.length <= 6);
-        }
-
-        // Try direct stem match (non-self first)
-        let ref = tables.find(t => t.id !== table.id && stemMatches(t.name, stem));
-
-        // If not found, try stripping hierarchy prefixes (parent_X_id, root_X_id, …)
-        if (!ref) {
-          const unprefixed = stem.replace(/^(parent|child|root|prev|next|master|sub)_/, "");
-          if (unprefixed !== stem) {
-            ref = unprefixed
-              ? tables.find(t => stemMatches(t.name, unprefixed))  // includes self
-              : tables.find(t => t.id === table.id);               // parent_id → self
-          }
-        }
-
-        if (ref && vis.has(ref.name)) {
-          edges.push({ fromTable: table.name, fromField: f.name, toTable: ref.name, toField: "id", type: "fk", nullable: f.nullable });
-        }
-      }
-      // Source field annotation
       if (f.sourceTable && vis.has(f.sourceTable)) {
         // Deduplicate: only one edge per (fromTable, toTable, type=source)
         const dup = edges.find(e => e.type === "source" && e.fromTable === table.name && e.toTable === f.sourceTable);
@@ -70,6 +64,7 @@ function detectEdges(tables: Table[], visible: Set<number>): GraphEdge[] {
       }
     }
   }
+
   return edges;
 }
 

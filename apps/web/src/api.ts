@@ -177,6 +177,67 @@ export interface LineageEdge {
   createdAt: string;
 }
 
+// ── Unified Graph types ───────────────────────────────────────────────────────
+
+export type GraphNodeKind = "concept" | "domain" | "suite" | "table" | "field" | "governed" | "governed-column";
+export type GraphEdgeKind = "has_field" | "fk" | "joins_on" | "composed_from" | "flows_to" | "maps_to_concept" | "related_to" | "belongs_to";
+
+export interface UnifiedGraphNode {
+  ref: string;
+  kind: GraphNodeKind;
+  label: string;
+  meta: {
+    dataType?: string;
+    definition?: string;
+    nullable?: boolean;
+    isPrimaryKey?: boolean;
+    sampleValues?: string[];
+    description?: string;
+    layerType?: string;
+    domain?: string;
+    suiteId?: number;
+    blockKind?: "small" | "medium";
+    version?: number;
+    ownerUserId?: number;
+    sensitivity?: "public" | "internal" | "confidential" | "pii";
+    refreshCycle?: string;
+    deprecated?: boolean;
+  };
+}
+
+export interface UnifiedGraphEdge {
+  id: string;
+  from: string;
+  to: string;
+  kind: GraphEdgeKind;
+  meta?: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+}
+
+export interface UnifiedGraph {
+  version: 2;
+  generatedAt: string;
+  nodes: UnifiedGraphNode[];
+  edges: UnifiedGraphEdge[];
+  stats: { nodeCount: number; edgeCount: number; byKind: Record<string, number> };
+}
+
+export interface JoinPathStep {
+  from: string;
+  to: string;
+  via: GraphEdgeKind;
+  on: Array<{ left: string; right: string }>;
+  throughGwt?: string;
+}
+
+export interface JoinPathResult {
+  from: string;
+  to: string;
+  cost: number;
+  steps: JoinPathStep[];
+  caveats: string[];
+}
+
 export interface LineageQueryResult {
   question: string;
   relevantEdgeIds: string[];
@@ -800,6 +861,20 @@ const realApi = {
       req<LineageQueryResult>("/lineage/query", { method: "POST", body: JSON.stringify({ question }) }),
     queryStream: (question: string) =>
       fetch("/api/v1/lineage/query-stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) }),
+  },
+
+  graph: {
+    get: (kinds?: string) => req<UnifiedGraph>(`/graph${kinds ? `?kinds=${encodeURIComponent(kinds)}` : ""}`),
+    getNode: (ref: string) => req<{ node: UnifiedGraphNode; edges: UnifiedGraphEdge[] }>(`/graph/node/${encodeURIComponent(ref)}`),
+    neighborhood: (ref: string, hops = 1, kinds?: string) => {
+      const params = new URLSearchParams({ ref, hops: String(hops) });
+      if (kinds) params.set("kinds", kinds);
+      return req<{ center: string; nodes: UnifiedGraphNode[]; edges: UnifiedGraphEdge[] }>(`/graph/neighborhood?${params.toString()}`);
+    },
+    joinPath: (from: string, to: string, maxHops = 6) =>
+      req<JoinPathResult>(`/graph/join-path?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&max_hops=${maxHops}`),
+    rebuild: () => req<UnifiedGraph["stats"]>("/graph/rebuild", { method: "POST" }),
+    stats: () => req<UnifiedGraph["stats"] & { generatedAt: string; brokenCount: number }>("/graph/stats"),
   },
 };
 
