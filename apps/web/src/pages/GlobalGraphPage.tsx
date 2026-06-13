@@ -405,6 +405,18 @@ const NODE_BORDER: Partial<Record<string, string>> = {
   "governed-column": "rgba(167,139,250,0.3)",
 };
 
+const HEADER_H = 36;
+const ROW_START = PAD + HEADER_H + 8;
+
+function schemaSlugFromRef(ref: string): string {
+  // tbl:mes-equipment.equipments → mes-equipment
+  // gwt:wip-lot-lifecycle-wide → Governed
+  // cpt:some-concept → Concept
+  if (ref.startsWith("tbl:")) return ref.slice(4).split(".")[0]!;
+  if (ref.startsWith("gwt:")) return "Governed";
+  return ref.split(":")[0]!;
+}
+
 function UnifiedGraphSvg({
   nodes,
   edges,
@@ -416,11 +428,19 @@ function UnifiedGraphSvg({
   selectedRef: string | null;
   onSelect: (ref: string | null) => void;
 }) {
-  // Simple column-based layout: group by kind, then domain
+  // Group by schema slug extracted from ref — gives one column per schema
   const grouped = useMemo(() => {
     const groups = new Map<string, UnifiedGraphNode[]>();
-    for (const n of nodes) {
-      const key = n.meta.domain ?? n.kind;
+    // Sort: governed and concept go last
+    const sorted = [...nodes].sort((a, b) => {
+      const aG = a.kind === "governed" || a.kind === "concept";
+      const bG = b.kind === "governed" || b.kind === "concept";
+      if (aG && !bG) return 1;
+      if (!aG && bG) return -1;
+      return schemaSlugFromRef(a.ref).localeCompare(schemaSlugFromRef(b.ref));
+    });
+    for (const n of sorted) {
+      const key = schemaSlugFromRef(n.ref);
       const list = groups.get(key);
       if (list) list.push(n);
       else groups.set(key, [n]);
@@ -428,52 +448,52 @@ function UnifiedGraphSvg({
     return groups;
   }, [nodes]);
 
-  const positions = useMemo(() => {
+  // Column layout with header labels
+  const { positions, colHeaders } = useMemo(() => {
     const pos = new Map<string, NodePos>();
+    const headers: { label: string; x: number; colW: number }[] = [];
     let colX = PAD;
-    for (const [, groupNodes] of grouped) {
-      let rowY = PAD;
+    for (const [key, groupNodes] of grouped) {
+      let rowY = ROW_START;
       for (const n of groupNodes) {
         pos.set(n.ref, { ref: n.ref, x: colX, y: rowY, w: NODE_W, h: NODE_H });
         rowY += NODE_H + ROW_GAP;
       }
+      headers.push({ label: key, x: colX, colW: NODE_W });
       colX += NODE_W + COL_GAP;
     }
-    return pos;
+    return { positions: pos, colHeaders: headers };
   }, [grouped]);
 
   const svgW = Math.max(800, PAD * 2 + grouped.size * (NODE_W + COL_GAP));
-  const svgH = Math.max(600, PAD * 2 + Math.max(0, ...[...grouped.values()].map(g => g.length)) * (NODE_H + ROW_GAP));
+  const maxRows = Math.max(0, ...[...grouped.values()].map(g => g.length));
+  const svgH = Math.max(600, ROW_START + maxRows * (NODE_H + ROW_GAP) + PAD);
 
   return (
     <div style={{ flex: 1, overflow: "auto", position: "relative", background: "var(--bg-1)" }}>
       <svg width={svgW} height={svgH} style={{ display: "block" }}>
-        {/* Edges */}
-        {edges.map(edge => {
-          const fromPos = positions.get(edge.from);
-          const toPos = positions.get(edge.to);
-          if (!fromPos || !toPos) return null;
-
-          const isBroken = edge.kind === "composed_from" && edge.meta?.["broken"] === true;
-          const color = isBroken ? "#ef4444" : (EDGE_COLORS[edge.kind] ?? "rgba(123,140,255,0.4)");
-          const dashArray = isBroken ? "5 3" : edge.kind === "flows_to" ? "none" : "none";
-
-          const x1 = fromPos.x + fromPos.w;
-          const y1 = fromPos.y + fromPos.h / 2;
-          const x2 = toPos.x;
-          const y2 = toPos.y + toPos.h / 2;
-          const cpOffset = Math.max(40, Math.abs(x2 - x1) * 0.4);
-
+        {/* Column background bands + headers */}
+        {colHeaders.map(h => {
+          const isGoverned = h.label === "Governed";
+          const isConcept = h.label === "concept";
           return (
-            <g key={edge.id} opacity={0.7}>
-              <path
-                d={`M ${x1} ${y1} C ${x1 + cpOffset} ${y1}, ${x2 - cpOffset} ${y2}, ${x2} ${y2}`}
-                stroke={color}
-                strokeWidth={isBroken ? 1.5 : 1.5}
-                strokeDasharray={dashArray}
-                fill="none"
-                markerEnd={`url(#arr-${edge.kind})`}
+            <g key={h.label}>
+              <rect
+                x={h.x - 4} y={PAD - 4} width={h.colW + 8} height={svgH - PAD + 4}
+                rx={5}
+                fill={isGoverned ? "rgba(167,139,250,0.06)" : isConcept ? "rgba(52,211,153,0.04)" : "var(--bg-2)"}
+                stroke={isGoverned ? "rgba(167,139,250,0.25)" : "var(--border)"}
+                strokeWidth={1} opacity={0.6}
               />
+              <text
+                x={h.x + h.colW / 2} y={PAD + 16}
+                textAnchor="middle" fontSize={10} fontWeight={700}
+                fill={isGoverned ? "#a78bfa" : "var(--text-3)"}
+                fontFamily="var(--font-mono)"
+                style={{ userSelect: "none" }}
+              >
+                {h.label.length > 20 ? h.label.slice(0, 19) + "…" : h.label}
+              </text>
             </g>
           );
         })}
@@ -489,6 +509,35 @@ function UnifiedGraphSvg({
             <path d="M0,0 L0,6 L6,3 z" fill="#ef4444" />
           </marker>
         </defs>
+
+        {/* Edges (rendered below nodes) */}
+        {edges.map(edge => {
+          const fromPos = positions.get(edge.from);
+          const toPos = positions.get(edge.to);
+          if (!fromPos || !toPos) return null;
+
+          const isBroken = edge.kind === "composed_from" && edge.meta?.["broken"] === true;
+          const color = isBroken ? "#ef4444" : (EDGE_COLORS[edge.kind] ?? "rgba(123,140,255,0.4)");
+
+          const x1 = fromPos.x + fromPos.w;
+          const y1 = fromPos.y + fromPos.h / 2;
+          const x2 = toPos.x;
+          const y2 = toPos.y + toPos.h / 2;
+          const cpOffset = Math.max(40, Math.abs(x2 - x1) * 0.4);
+
+          return (
+            <g key={edge.id} opacity={0.7}>
+              <path
+                d={`M ${x1} ${y1} C ${x1 + cpOffset} ${y1}, ${x2 - cpOffset} ${y2}, ${x2} ${y2}`}
+                stroke={color}
+                strokeWidth={1.5}
+                strokeDasharray={isBroken ? "5 3" : undefined}
+                fill="none"
+                markerEnd={`url(#arr-${isBroken ? "broken" : edge.kind})`}
+              />
+            </g>
+          );
+        })}
 
         {/* Nodes */}
         {nodes.map(node => {
@@ -509,7 +558,7 @@ function UnifiedGraphSvg({
               />
               <text
                 x={pos.x + 8} y={pos.y + pos.h / 2 + 4}
-                fontSize={11} fill="var(--text-1)"
+                fontSize={11} fill={node.kind === "governed" ? "#a78bfa" : "var(--text-1)"}
                 fontFamily="var(--font-mono)"
                 style={{ userSelect: "none" }}
               >

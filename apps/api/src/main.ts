@@ -38,6 +38,8 @@ import catalogRouter from "./routes/catalog.js";
 import instancesRouter from "./routes/instances.js";
 import governanceRouter from "./routes/governance.js";
 import lineageRouter from "./routes/lineage.js";
+import graphRouter from "./routes/graph.js";
+import askRouter from "./routes/ask.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -108,6 +110,8 @@ app.use("/api/v1/catalog", catalogRouter);
 app.use("/api/v1/instances", instancesRouter);
 app.use("/api/v1/governance", governanceRouter);
 app.use("/api/v1/lineage", lineageRouter);
+app.use("/api/v1/graph", graphRouter);
+app.use("/api/v1/ask", askRouter);
 
 // Gate-policy settings (admin only)
 app.get("/api/v1/settings/gate-policy", async (_req, res, next) => {
