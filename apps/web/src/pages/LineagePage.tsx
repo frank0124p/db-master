@@ -228,7 +228,10 @@ export default function LineagePage() {
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0, background: "var(--bg-2)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>⇝ Data Lineage 查詢</span>
-            <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setPage("lineage-graph")}>全局圖 →</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setPage("ask")}>自然語言查詢 →</button>
+              <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setPage("lineage-graph")}>全局圖 →</button>
+            </div>
           </div>
           <textarea
             value={question}

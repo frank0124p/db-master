@@ -14,6 +14,7 @@ const zh = {
   "nav.datahub":       "DataHub",
   "nav.lineage":       "Data Lineage",
   "nav.lineage_graph": "全局血緣圖",
+  "nav.ask":           "NL 查詢",
 
   // ── Sidebar ───────────────────────────────────────────────────────────────
   "sidebar.schemas":    "Schemas",
@@ -249,6 +250,7 @@ const en: Record<string, string> = {
   "nav.datahub":       "DataHub",
   "nav.lineage":       "Data Lineage",
   "nav.lineage_graph": "Global Graph",
+  "nav.ask":           "NL Query",
 
   "sidebar.schemas":    "Schemas",
   "sidebar.ai_gen":     "AI Generate",

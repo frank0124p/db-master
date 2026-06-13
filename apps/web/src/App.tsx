@@ -23,6 +23,7 @@ import CatalogPage from "./pages/CatalogPage.js";
 import InstanceListPage from "./pages/InstanceListPage.js";
 import LineagePage from "./pages/LineagePage.js";
 import GlobalGraphPage from "./pages/GlobalGraphPage.js";
+import AskPage from "./pages/AskPage.js";
 
 const NAV_KEYS: { id: Page; key: string; icon: string }[] = [
   { id: "editor",   key: "nav.editor",   icon: "⬡" },
@@ -35,6 +36,7 @@ const NAV_KEYS: { id: Page; key: string; icon: string }[] = [
   { id: "datahub",  key: "nav.datahub",  icon: "⬆" },
   { id: "lineage",       key: "nav.lineage",       icon: "⇝" },
   { id: "lineage-graph", key: "nav.lineage_graph", icon: "⊛" },
+  { id: "ask",           key: "nav.ask",           icon: "⊕" },
 ];
 
 const GOV_NAV_KEYS: { id: Page; key: string; icon: string }[] = [
@@ -48,7 +50,7 @@ const GOV_NAV_KEYS: { id: Page; key: string; icon: string }[] = [
 
 const GOV_PAGES_SET = new Set<Page>(["knowledge", "import-classify", "compose", "workspace", "catalog", "instances"]);
 // Pages that are independent of suite selection (cross-domain or global views)
-const SUITE_FREE_PAGES = new Set<Page>(["lineage", "lineage-graph"]);
+const SUITE_FREE_PAGES = new Set<Page>(["lineage", "lineage-graph", "ask"]);
 
 const GOV_STEPS: { step: number; id: Page; icon: string; labelKey: string; desc: string }[] = [
   { step: 1, id: "knowledge",       icon: "⊕", labelKey: "nav.knowledge",       desc: "文件 · 概念 · 業務規則" },
@@ -1611,6 +1613,7 @@ export default function App() {
                 {page === "instances"       && <InstanceListPage />}
                 {page === "lineage"         && <LineagePage />}
                 {page === "lineage-graph"  && <GlobalGraphPage />}
+                {page === "ask"            && <AskPage />}
               </>
             )}
           </ErrorBoundary>
