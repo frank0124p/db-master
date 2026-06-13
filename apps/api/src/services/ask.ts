@@ -22,11 +22,12 @@ import {
   extractSubgraph,
   compileSynonyms,
 } from "@schema-studio/core";
-import type { UnifiedGraph } from "@schema-studio/core";
+import type { UnifiedGraph, GraphNode } from "@schema-studio/core";
 import { readUnifiedGraph, rebuildFor } from "./graph-builder.js";
-import { validateAskResult, type AskResult } from "./ask-validate.js";
+import { validateAskResult, type AskResult, type AnswerField } from "./ask-validate.js";
 import * as namingRepo from "../repositories/naming.js";
 import * as knowledgeRepo from "../repositories/knowledge.js";
+import * as usersRepo from "../repositories/users.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROMPTS_DIR = path.resolve(__dirname, "../../../../prompts");
@@ -91,6 +92,95 @@ function parseAskResult(text: string): AskResult | null {
   } catch {
     return null;
   }
+}
+
+// ── T10.5 Answer enrichment ───────────────────────────────────────────────────
+
+/**
+ * Enrich answerFields with governance metadata:
+ *  - sensitivity, ownerName, refreshCycle, dataPeriod from graph nodes
+ *  - deprecated flag + deprecationNote + replacedByRef (from tbl node)
+ */
+async function enrichAnswerFields(
+  fields: AnswerField[],
+  graph: UnifiedGraph,
+): Promise<AnswerField[]> {
+  // Build a map of ownerUserId → user name (cached)
+  const ownerNameCache = new Map<number, string>();
+
+  async function getOwnerName(ownerUserId: number): Promise<string | undefined> {
+    if (ownerNameCache.has(ownerUserId)) return ownerNameCache.get(ownerUserId);
+    try {
+      const user = await usersRepo.getUserById(String(ownerUserId));
+      const name = user?.name;
+      if (name) ownerNameCache.set(ownerUserId, name);
+      return name ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Build node map for fast lookup
+  const nodeMap = new Map<string, GraphNode>(graph.nodes.map(n => [n.ref, n]));
+
+  /**
+   * For a field ref (fld/gwc), try to find the parent table ref to get
+   * refreshCycle, dataPeriod, deprecated, deprecationNote, replacedByRef.
+   */
+  function getParentTblRef(ref: string): string | null {
+    if (ref.startsWith("fld:")) {
+      const withoutPrefix = ref.slice(4);
+      const lastDot = withoutPrefix.lastIndexOf(".");
+      if (lastDot === -1) return null;
+      return `tbl:${withoutPrefix.slice(0, lastDot)}`;
+    }
+    if (ref.startsWith("gwc:")) {
+      const withoutPrefix = ref.slice(4);
+      const dot = withoutPrefix.indexOf(".");
+      if (dot === -1) return `gwt:${withoutPrefix}`;
+      return `gwt:${withoutPrefix.slice(0, dot)}`;
+    }
+    return null;
+  }
+
+  const enriched: AnswerField[] = [];
+
+  for (const f of fields) {
+    const node = nodeMap.get(f.ref);
+    const parentRef = getParentTblRef(f.ref);
+    const parentNode = parentRef ? nodeMap.get(parentRef) : undefined;
+
+    // Sensitivity comes from the field node
+    const sensitivity = node?.meta.sensitivity as AnswerField["sensitivity"] | undefined;
+
+    // Owner comes from field node or parent node
+    const ownerUserId =
+      (node?.meta.ownerUserId as number | undefined) ??
+      (parentNode?.meta.ownerUserId as number | undefined);
+    const ownerName = ownerUserId !== undefined ? await getOwnerName(ownerUserId) : undefined;
+
+    // Operational metadata from parent table node
+    const refreshCycle = parentNode?.meta.refreshCycle as string | undefined;
+    const dataPeriod = (parentNode?.meta as Record<string, unknown>)["dataPeriod"] as string | undefined;
+
+    // Lifecycle from parent
+    const deprecated = parentNode?.meta.deprecated as boolean | undefined;
+    const deprecationNote = (parentNode?.meta as Record<string, unknown>)["deprecationNote"] as string | undefined;
+    const replacedByRef = (parentNode?.meta as Record<string, unknown>)["replacedByRef"] as string | undefined;
+
+    enriched.push({
+      ...f,
+      ...(sensitivity !== undefined ? { sensitivity } : {}),
+      ...(ownerName !== undefined ? { ownerName } : {}),
+      ...(refreshCycle !== undefined ? { refreshCycle } : {}),
+      ...(dataPeriod !== undefined ? { dataPeriod } : {}),
+      ...(deprecated !== undefined ? { deprecated } : {}),
+      ...(deprecationNote !== undefined ? { deprecationNote } : {}),
+      ...(replacedByRef !== undefined ? { replacedByRef } : {}),
+    });
+  }
+
+  return enriched;
 }
 
 // ── Main streaming service ────────────────────────────────────────────────────
@@ -216,7 +306,20 @@ export async function* runAskPipeline(
   }
 
   const validated = validateAskResult(parsed, graph);
-  yield { type: "result", result: validated };
+
+  // T10.5: Enrich answerFields with governance metadata
+  const enrichedFields = await enrichAnswerFields(validated.answerFields, graph);
+  const enrichedWarnings = [...validated.warnings];
+
+  // Add deprecation warnings
+  for (const f of enrichedFields) {
+    if (f.deprecated) {
+      const replSuggest = f.replacedByRef ? `，建議改用 ${f.replacedByRef}` : "";
+      enrichedWarnings.push(`欄位/表 ${f.ref} 已棄用${replSuggest}`);
+    }
+  }
+
+  yield { type: "result", result: { ...validated, answerFields: enrichedFields, warnings: enrichedWarnings } };
   yield { type: "done" };
 }
 

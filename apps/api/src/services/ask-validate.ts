@@ -15,6 +15,14 @@ import type { UnifiedGraph, JoinStep } from "@schema-studio/core";
 export interface AnswerField {
   ref: string;
   why: string;
+  // T10.5 enrichment (optional — populated after graph lookup)
+  sensitivity?: "public" | "internal" | "confidential" | "pii";
+  ownerName?: string;
+  refreshCycle?: string;
+  dataPeriod?: string;
+  deprecated?: boolean;
+  deprecationNote?: string;
+  replacedByRef?: string;
 }
 
 export interface AskResult {

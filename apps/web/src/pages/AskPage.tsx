@@ -44,7 +44,7 @@ const labels = {
     addLineageEdge: "補一條 Lineage 邊 →",
     copy: "複製",
     copied: "已複製",
-    deprecated: "已廢棄",
+    deprecated: "已棄用",
     reasons: "原因",
     score: "分數",
     navigateToLineage: "返回血緣圖 →",
@@ -90,6 +90,14 @@ interface LinkingHit {
 interface AnswerField {
   ref: string;
   why: string;
+  // T10.5 enrichment
+  sensitivity?: "public" | "internal" | "confidential" | "pii";
+  ownerName?: string;
+  refreshCycle?: string;
+  dataPeriod?: string;
+  deprecated?: boolean;
+  deprecationNote?: string;
+  replacedByRef?: string;
 }
 
 interface JoinStep {
@@ -176,6 +184,66 @@ function RefKindBadge({ ref }: { ref: string }) {
       }}
     >
       {kind.toUpperCase()}
+    </span>
+  );
+}
+
+// ── T10.5: Sensitivity badge ──────────────────────────────────────────────────
+
+function SensitivityBadge({ level }: { level: "public" | "internal" | "confidential" | "pii" | undefined }) {
+  if (!level || level === "public") return null;
+  const map: Record<string, { icon: string; color: string; label: string }> = {
+    pii:          { icon: "🔒", color: "#f87171", label: "PII" },
+    confidential: { icon: "🔒", color: "#fb923c", label: "機密" },
+    internal:     { icon: "🛡", color: "#fbbf24", label: "內部" },
+  };
+  const cfg = map[level];
+  if (!cfg) return null;
+  return (
+    <span
+      title={`Sensitivity: ${level}`}
+      style={{
+        fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
+        background: `${cfg.color}18`, color: cfg.color,
+        border: `1px solid ${cfg.color}44`,
+        flexShrink: 0,
+      }}
+    >
+      {cfg.icon} {cfg.label}
+    </span>
+  );
+}
+
+// ── T10.5: Owner popup ────────────────────────────────────────────────────────
+
+function OwnerChip({ ownerName }: { ownerName: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span style={{ position: "relative", display: "inline-block" }}>
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
+        style={{
+          fontSize: 9, padding: "1px 5px", borderRadius: 3, cursor: "pointer",
+          background: "rgba(96,165,250,0.15)", color: "#60a5fa",
+          border: "1px solid rgba(96,165,250,0.3)",
+          fontFamily: "inherit", fontWeight: 700,
+        }}
+      >
+        @{ownerName}
+      </button>
+      {open && (
+        <div
+          style={{
+            position: "absolute", bottom: "100%", left: 0, zIndex: 60,
+            background: "var(--bg-2)", border: "1px solid var(--border-light)",
+            borderRadius: 6, padding: "8px 12px", minWidth: 160,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.4)", marginBottom: 4, whiteSpace: "nowrap",
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-1)", marginBottom: 2 }}>Data Owner</div>
+          <div style={{ fontSize: 12, color: "var(--text-2)" }}>{ownerName}</div>
+        </div>
+      )}
     </span>
   );
 }
@@ -451,7 +519,7 @@ function AnswerCard({
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {result.answerFields.map((f, i) => {
-              const isDeprecated = f.ref.includes("deprecated");
+              const isDeprecated = f.deprecated === true;
               return (
                 <div
                   key={i}
@@ -462,25 +530,50 @@ function AnswerCard({
                     padding: "6px 10px",
                     borderRadius: 5,
                     background: "var(--bg-2)",
-                    border: `1px solid var(--border)`,
-                    opacity: isDeprecated ? 0.6 : 1,
+                    border: isDeprecated ? "1px solid rgba(248,113,113,0.3)" : "1px solid var(--border)",
+                    opacity: isDeprecated ? 0.7 : 1,
                   }}
                 >
                   <RefKindBadge ref={f.ref} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                    >
-                      {f.ref}
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                      <span
+                        style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      >
+                        {f.ref}
+                      </span>
                       {isDeprecated && (
                         <span
-                          style={{ marginLeft: 6, fontSize: 9, color: "#f87171", background: "#f8717120", padding: "1px 4px", borderRadius: 3 }}
+                          style={{ fontSize: 9, color: "#f87171", background: "#f8717120", padding: "1px 4px", borderRadius: 3, flexShrink: 0 }}
                         >
-                          {L.deprecated}
+                          ⚠ {L.deprecated}
                         </span>
+                      )}
+                      {f.sensitivity && f.sensitivity !== "public" && (
+                        <SensitivityBadge level={f.sensitivity} />
+                      )}
+                      {f.ownerName && (
+                        <OwnerChip ownerName={f.ownerName} />
                       )}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 1 }}>{f.why}</div>
+                    {(f.refreshCycle ?? f.dataPeriod) && (
+                      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>
+                        {f.refreshCycle && <span>更新頻率: {f.refreshCycle}</span>}
+                        {f.refreshCycle && f.dataPeriod && <span style={{ margin: "0 4px" }}>·</span>}
+                        {f.dataPeriod && <span>資料範圍: {f.dataPeriod}</span>}
+                      </div>
+                    )}
+                    {isDeprecated && f.replacedByRef && (
+                      <div style={{ fontSize: 11, color: "#fbbf24", marginTop: 3 }}>
+                        建議改用: <span style={{ fontFamily: "var(--font-mono)" }}>{f.replacedByRef}</span>
+                      </div>
+                    )}
+                    {isDeprecated && f.deprecationNote && (
+                      <div style={{ fontSize: 10, color: "#f87171", marginTop: 1, opacity: 0.8 }}>
+                        {f.deprecationNote}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

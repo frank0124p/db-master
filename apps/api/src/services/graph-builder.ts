@@ -101,7 +101,10 @@ export async function rebuildFor(_scope?: unknown): Promise<UnifiedGraph> {
             // Phase 10
             ownerUserId: tf.ownerUserId,
             refreshCycle: tf.refreshCycle,
+            dataPeriod: tf.dataPeriod,
             deprecated: tf.deprecated,
+            deprecationNote: tf.deprecationNote,
+            replacedByRef: tf.replacedByRef,
           };
         }),
       });

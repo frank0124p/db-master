@@ -128,7 +128,10 @@ export function buildUnifiedGraph(input: GraphBuildInput): UnifiedGraph {
       // Phase 10
       if (table.ownerUserId != null) tblMeta.ownerUserId = table.ownerUserId;
       if (table.refreshCycle) tblMeta.refreshCycle = table.refreshCycle;
+      if (table.dataPeriod) tblMeta.dataPeriod = table.dataPeriod;
       if (table.deprecated) tblMeta.deprecated = table.deprecated;
+      if (table.deprecationNote) tblMeta.deprecationNote = table.deprecationNote;
+      if (table.replacedByRef) tblMeta.replacedByRef = table.replacedByRef;
       addNode({
         ref: tblRef,
         kind: "table",
