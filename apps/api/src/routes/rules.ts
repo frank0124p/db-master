@@ -62,6 +62,33 @@ async function mutateSkillRules(filePath: string, fn: (entries: string[]) => str
 
 const router: RouterType = Router();
 
+// Static registry of governance rule IDs — kept in sync with governance-rules.ts
+const GOVERNANCE_RULE_DEFS: Array<{ id: string; group: string; severity: string; description: string }> = [
+  { id: "gov.single_source_of_truth", group: "governance", severity: "error",   description: "每個有 conceptId 的欄位必須有對應 SSOT 宣告且來源表符合" },
+  { id: "gov.lineage_complete",        group: "governance", severity: "error",   description: "所有欄位必須有完整的 lineage（source.tableName + source.fieldName）" },
+  { id: "gov.block_hierarchy",         group: "governance", severity: "error",   description: "Medium block 不可引用其他 medium block" },
+  { id: "gov.join_key_validity",       group: "governance", severity: "warning", description: "JOIN 鍵兩端至少一端為 PK/UNIQUE，避免笛卡兒積" },
+  { id: "gov.naming_dict_coverage",    group: "governance", severity: "warning", description: "欄位命名字典覆蓋率 ≥ 80%" },
+  { id: "gov.definition_required",     group: "governance", severity: "error",   description: "每個欄位需有業務定義（至少 10 字）" },
+  { id: "gov.no_duplicate_semantics",  group: "governance", severity: "warning", description: "不可有相同概念 + 來源的重複欄位" },
+  { id: "gov.owner_required",          group: "governance", severity: "warning", description: "寬表必須指定 Data Owner（ownerUserId）" },
+  { id: "gov.sensitivity_declared",    group: "governance", severity: "info",    description: "PII 特徵欄位必須宣告 sensitivity" },
+  { id: "gov.no_deprecated_source",    group: "governance", severity: "error",   description: "不可引用已 deprecated 的來源表" },
+  { id: "gov.freshness_declared",      group: "governance", severity: "info",    description: "來源表需宣告 refreshCycle，資料新鮮度覆蓋率 ≥ 50%" },
+];
+
+// GET /api/v1/rules/definitions — flat list of all rule IDs + metadata for linking UI
+router.get("/definitions", (_req: Request, res: Response) => {
+  const allRuleDefns = getAllRules();
+  const studioRules = allRuleDefns.map(r => ({
+    id: r.id,
+    group: r.group,
+    severity: r.defaultSeverity,
+    description: r.description,
+  }));
+  res.json({ studioRules, governanceRules: GOVERNANCE_RULE_DEFS });
+});
+
 // GET /api/v1/rules — list all rules (built-in + skill) with current settings
 router.get("/", async (_req: Request, res: Response) => {
   const rules = await listRules();

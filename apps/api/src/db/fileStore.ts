@@ -1,7 +1,7 @@
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs/promises";
-import { uploadFileAsync } from "../services/minio.js";
+import { uploadFileAsync, deleteObjectAsync, deleteObjectsWithPrefixAsync } from "../services/minio.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = process.env["DATA_DIR"]
@@ -42,10 +42,12 @@ export async function deleteFile(filePath: string): Promise<void> {
   await fs.unlink(filePath).catch((e: NodeJS.ErrnoException) => {
     if (e.code !== "ENOENT") throw e;
   });
+  deleteObjectAsync(filePath); // sync MinIO removal — mirrors writeJson pattern
 }
 
 export async function deleteDir(dirPath: string): Promise<void> {
   await fs.rm(dirPath, { recursive: true, force: true });
+  void deleteObjectsWithPrefixAsync(dirPath); // remove all objects under this prefix from MinIO
 }
 
 // List numeric IDs from JSON files in a directory (used by migration)

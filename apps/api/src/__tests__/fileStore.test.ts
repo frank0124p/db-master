@@ -7,6 +7,8 @@ import crypto from "crypto";
 // Mock MinIO so fileStore doesn't need a real connection
 vi.mock("../services/minio.js", () => ({
   uploadFileAsync: vi.fn(),
+  deleteObjectAsync: vi.fn(),
+  deleteObjectsWithPrefixAsync: vi.fn(),
 }));
 
 // DATA_DIR is resolved at module import time from process.env["DATA_DIR"].
@@ -34,6 +36,8 @@ async function importStore() {
   // Re-mock after resetModules
   vi.mock("../services/minio.js", () => ({
     uploadFileAsync: vi.fn(),
+    deleteObjectAsync: vi.fn(),
+    deleteObjectsWithPrefixAsync: vi.fn(),
   }));
   return import("../db/fileStore.js");
 }
@@ -170,7 +174,7 @@ describe("getIndex / writeIndex", () => {
 
     // Re-import to bypass in-memory cache
     vi.resetModules();
-    vi.mock("../services/minio.js", () => ({ uploadFileAsync: vi.fn() }));
+    vi.mock("../services/minio.js", () => ({ uploadFileAsync: vi.fn(), deleteObjectAsync: vi.fn(), deleteObjectsWithPrefixAsync: vi.fn() }));
     const store2 = await import("../db/fileStore.js");
     const idx2 = await store2.getIndex();
     expect(idx2.tableSchema["42"]).toBe(7);

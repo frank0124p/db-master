@@ -52,12 +52,12 @@ const GOV_PAGES_SET = new Set<Page>(["knowledge", "import-classify", "compose", 
 // Pages that are independent of suite selection (cross-domain or global views)
 const SUITE_FREE_PAGES = new Set<Page>(["lineage", "lineage-graph", "ask"]);
 
-const GOV_STEPS: { step: number; id: Page; icon: string; labelKey: string; desc: string }[] = [
-  { step: 1, id: "knowledge",       icon: "⊕", labelKey: "nav.knowledge",       desc: "文件 · 概念 · 業務規則" },
-  { step: 2, id: "import-classify", icon: "⊟", labelKey: "nav.import_classify", desc: "DDL 批次 · 分類提案" },
-  { step: 3, id: "compose",         icon: "✦", labelKey: "nav.compose",         desc: "LLM 寬表情境組裝" },
-  { step: 4, id: "workspace",       icon: "⊗", labelKey: "nav.workspace",       desc: "草稿編輯 · 驗證發布" },
-  { step: 5, id: "catalog",         icon: "⊞", labelKey: "nav.catalog",         desc: "已發布治理寬表" },
+const GOV_STEPS: { step: number; id: Page; icon: string; labelKey: string; desc: string; stationId: string }[] = [
+  { step: 1, id: "knowledge",       icon: "⊕", labelKey: "nav.knowledge",       desc: "文件 · 概念 · 業務規則", stationId: "knowledge" },
+  { step: 2, id: "import-classify", icon: "⊟", labelKey: "nav.import_classify", desc: "DDL 批次 · 分類提案",     stationId: "classify"  },
+  { step: 3, id: "compose",         icon: "✦", labelKey: "nav.compose",         desc: "LLM 寬表情境組裝",       stationId: "compose"   },
+  { step: 4, id: "workspace",       icon: "⊗", labelKey: "nav.workspace",       desc: "草稿編輯 · 驗證發布",    stationId: "review"    },
+  { step: 5, id: "catalog",         icon: "⊞", labelKey: "nav.catalog",         desc: "已發布治理寬表",         stationId: "validate"  },
 ];
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
@@ -1088,20 +1088,70 @@ function SidebarContent({ onSchemaSelect, onSearch }: { onSchemaSelect?: () => v
 
 // ── Governance Workflow Sidebar ───────────────────────────────────────────────
 function GovWorkflowSidebar() {
-  const { page, setPage } = useStore();
+  const { page, setPage, activeInstanceId, setActiveInstanceId } = useStore();
   const t = useT();
+
+  const { data: activeInstance } = useQuery({
+    queryKey: ["gov-instance", activeInstanceId],
+    queryFn: () => api.instances.get(activeInstanceId!),
+    enabled: activeInstanceId !== null,
+    refetchInterval: 10000,
+    staleTime: 5000,
+  });
+
+  function getStationStatus(stationId: string) {
+    if (!activeInstance) return null;
+    return activeInstance.stations.find(s => s.station === stationId) ?? null;
+  }
+
+  function stCircleContent(stationId: string, stepNum: number, isActive: boolean): { label: string; bg: string; color: string } {
+    const st = getStationStatus(stationId);
+    if (!st || st.status === "not-started") {
+      return { label: String(stepNum), bg: isActive ? "#a78bfa" : "var(--bg-3)", color: isActive ? "#fff" : "var(--text-3)" };
+    }
+    if (st.status === "done" || st.status === "bypassed") {
+      return { label: "✓", bg: isActive ? "#a78bfa" : "#4ade8030", color: isActive ? "#fff" : "#4ade80" };
+    }
+    if (st.status === "in-progress") {
+      return { label: "●", bg: isActive ? "#a78bfa" : "#60a5fa20", color: isActive ? "#fff" : "#60a5fa" };
+    }
+    return { label: String(stepNum), bg: isActive ? "#a78bfa" : "var(--bg-3)", color: isActive ? "#fff" : "var(--text-3)" };
+  }
+
   return (
     <div style={{ width: "100%", height: "100%", background: "var(--bg-1)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Header */}
       <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 2 }}>Governance Workflow</div>
         <div style={{ fontSize: 10, color: "var(--text-3)" }}>5-Step Data Governance</div>
+
+        {/* Active instance context strip */}
+        {activeInstance && (
+          <div style={{ marginTop: 8, background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.25)", borderRadius: 6, padding: "6px 8px", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 9, color: "#a78bfa", fontWeight: 700, flexShrink: 0 }}>◈ 追蹤中</span>
+            <button
+              onClick={() => setPage("instances")}
+              style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
+              title="查看上線單詳情">
+              <div style={{ fontSize: 10, color: "var(--text-1)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                #{activeInstance.id} {activeInstance.subjectName}
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveInstanceId(null)}
+              style={{ width: 16, height: 16, borderRadius: 3, border: "none", background: "rgba(167,139,250,0.2)", color: "#a78bfa", cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+              title="取消追蹤">
+              ✕
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Workflow steps */}
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
         {GOV_STEPS.map(s => {
           const active = page === s.id;
+          const circle = stCircleContent(s.stationId, s.step, active);
           return (
             <button key={s.id} onClick={() => setPage(s.id)}
               style={{
@@ -1113,16 +1163,15 @@ function GovWorkflowSidebar() {
               }}
               onMouseEnter={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-2)"; }}
               onMouseLeave={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}>
-              {/* Step circle */}
+              {/* Step circle — shows station status when an instance is active */}
               <div style={{
                 width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
-                background: active ? "#a78bfa" : "var(--bg-3)",
+                background: circle.bg,
                 border: active ? "none" : "1px solid var(--border-light)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 11, fontWeight: 700,
-                color: active ? "#fff" : "var(--text-3)",
+                fontSize: 11, fontWeight: 700, color: circle.color,
                 transition: "all 0.15s",
-              }}>{s.step}</div>
+              }}>{circle.label}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: active ? 700 : 500, color: active ? "#a78bfa" : "var(--text-2)", marginBottom: 1 }}>
                   {t(s.labelKey)}
@@ -1559,6 +1608,28 @@ export default function App() {
         </div>
       </div>
 
+      {/* ── Suite picker — full-screen blocking overlay (Studio & Governance) ── */}
+      {!suitePicked && !SUITE_FREE_PAGES.has(page) && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9000,
+          background: "var(--bg-1)", display: "flex", flexDirection: "column",
+        }}>
+          {/* Minimal topbar so user knows what app they're in */}
+          <div style={{
+            height: topBarHeight, background: "var(--bg-2)",
+            borderBottom: "1px solid var(--border)",
+            display: "flex", alignItems: "center",
+            padding: isMobile ? "0 12px" : "0 20px",
+            gap: 12, flexShrink: 0,
+          }}>
+            <span style={{ fontWeight: 700, fontSize: 14, color: "var(--accent)", letterSpacing: "0.5px" }}>⬡ Schema Studio</span>
+            <span style={{ width: 1, height: 16, background: "var(--border)" }} />
+            <span style={{ fontSize: 12, color: "var(--text-3)" }}>請先選擇 Product Suite 才能繼續</span>
+          </div>
+          <SuiteSplash />
+        </div>
+      )}
+
       {/* ── Main content ── */}
       {(() => {
         const mode = GOV_PAGES_SET.has(page) ? "governance" : "studio";
@@ -1593,29 +1664,25 @@ export default function App() {
 
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           <ErrorBoundary>
-            {!suitePicked && mode === "studio" && !SUITE_FREE_PAGES.has(page) ? (
-              <SuiteSplash />
-            ) : (
-              <>
-                {page === "editor"          && <SchemaEditorPage />}
-                {page === "dict"            && <NamingDictPage />}
-                {page === "versions"        && <VersionHistoryPage />}
-                {page === "analysis"        && <AnalysisPage />}
-                {page === "er"              && <ErDiagramPage />}
-                {page === "wide"            && <WideTablePage />}
-                {page === "rules"           && <RulesPage />}
-                {page === "datahub"         && <DataHubPage />}
-                {page === "knowledge"       && <KnowledgePage />}
-                {page === "import-classify" && <ImportBatchPage />}
-                {page === "compose"         && <ComposePage />}
-                {page === "workspace"       && <WorkspacePage />}
-                {page === "catalog"         && <CatalogPage />}
-                {page === "instances"       && <InstanceListPage />}
-                {page === "lineage"         && <LineagePage />}
-                {page === "lineage-graph"  && <GlobalGraphPage />}
-                {page === "ask"            && <AskPage />}
-              </>
-            )}
+            <>
+              {page === "editor"          && <SchemaEditorPage />}
+              {page === "dict"            && <NamingDictPage />}
+              {page === "versions"        && <VersionHistoryPage />}
+              {page === "analysis"        && <AnalysisPage />}
+              {page === "er"              && <ErDiagramPage />}
+              {page === "wide"            && <WideTablePage />}
+              {page === "rules"           && <RulesPage />}
+              {page === "datahub"         && <DataHubPage />}
+              {page === "knowledge"       && <KnowledgePage />}
+              {page === "import-classify" && <ImportBatchPage />}
+              {page === "compose"         && <ComposePage />}
+              {page === "workspace"       && <WorkspacePage />}
+              {page === "catalog"         && <CatalogPage />}
+              {page === "instances"       && <InstanceListPage />}
+              {page === "lineage"         && <LineagePage />}
+              {page === "lineage-graph"  && <GlobalGraphPage />}
+              {page === "ask"            && <AskPage />}
+            </>
           </ErrorBoundary>
         </div>
       </div>

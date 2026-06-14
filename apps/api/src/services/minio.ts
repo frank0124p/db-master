@@ -64,6 +64,24 @@ export function uploadFileAsync(absPath: string, content: string): void {
     .catch(() => {}); // silent — never block the main write
 }
 
+export function deleteObjectAsync(absPath: string): void {
+  if (!_client || !_config) return;
+  const key = objectKey(toRelPath(absPath));
+  _client.removeObject(_config.bucket, key)
+    .catch(() => {}); // silent — mirrors uploadFileAsync pattern
+}
+
+export async function deleteObjectsWithPrefixAsync(absDir: string): Promise<void> {
+  if (!_client || !_config) return;
+  const prefix = objectKey(toRelPath(absDir)) + "/";
+  try {
+    const keys = await listKeys(prefix);
+    for (const key of keys) {
+      await _client.removeObject(_config.bucket, key).catch(() => {});
+    }
+  } catch { /* silent */ }
+}
+
 export async function uploadRaw(relPath: string, content: string, contentType = "text/plain"): Promise<void> {
   if (!_client || !_config) return;
   const key = objectKey(relPath);

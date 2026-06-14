@@ -268,6 +268,7 @@ export interface GovSourceDoc {
   id: number; slug: string; title: string; content?: string; format: string;
   chunks?: Array<{ idx: number; text: string }> | number;
   uploadedBy?: string; createdAt: string;
+  domain?: string; minioKey?: string; originalFilename?: string;
 }
 
 export interface GovConceptCard {
@@ -284,10 +285,17 @@ export interface GovConceptCard {
 export interface GovBusinessRule {
   id: number; slug: string; title: string; ruleType: string;
   statement: string; machine: Record<string, unknown> | null;
+  domain?: string;
   sourceRefs: Array<{ docId: number; chunkIdx: number }>;
   status: GovStatus;
   reviewers: Array<{ userId: number; name: string; signedAt: string | null }>;
   createdAt: string; updatedAt: string;
+  /** Studio/governance RuleDefinition IDs that technically enforce this business rule */
+  schemaRuleIds?: string[];
+}
+
+export interface RuleDefinitionSummary {
+  id: string; group: string; severity: string; description: string; source?: string;
 }
 
 export interface GovImportBatch {
@@ -661,6 +669,7 @@ const realApi = {
       req<ImportResult>(`/schemas/${schemaId}/import-ddl`, { method: "POST", body: JSON.stringify({ sql, dryRun: false }) }),
   },
   rules: {
+    definitions: () => req<{ studioRules: RuleDefinitionSummary[]; governanceRules: RuleDefinitionSummary[] }>("/rules/definitions"),
     list: () => req<{ rules: RuleDetail[] }>("/rules"),
     update: (ruleId: string, patch: Partial<{ severity: "error" | "warning" | "info"; enabled: boolean; config: Record<string, unknown> }>) =>
       req<{ rule: RuleDetail }>(`/rules/${ruleId}`, { method: "PATCH", body: JSON.stringify(patch) }),
@@ -779,18 +788,39 @@ const realApi = {
 
   // ── Governance ──────────────────────────────────────────────────────────────
   knowledge: {
-    listSources: () => req<GovSourceDoc[]>("/knowledge/sources"),
-    createSource: (b: { title: string; content: string; tags?: string[] }) =>
+    listSources: (domain?: string) => req<GovSourceDoc[]>(`/knowledge/sources${domain ? `?domain=${domain}` : ""}`),
+    getSource: (id: number) => req<GovSourceDoc>(`/knowledge/sources/${id}`),
+    createSource: (b: { title: string; content: string; format?: string; domain?: string; originalFilename?: string }) =>
       req<GovSourceDoc>("/knowledge/sources", { method: "POST", body: JSON.stringify(b) }),
+    patchSource: (id: number, b: { title?: string; content?: string; domain?: string }) =>
+      req<GovSourceDoc>(`/knowledge/sources/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     deleteSource: (id: number) => req<void>(`/knowledge/sources/${id}`, { method: "DELETE" }),
     extractSSE: (sourceId: number) =>
       fetch(`/api/v1/knowledge/sources/${sourceId}/extract`, { method: "POST" }),
-    listConcepts: (params?: { status?: string }) =>
-      req<GovConceptCard[]>(`/knowledge/concepts${params?.status ? `?status=${params.status}` : ""}`),
+    listConcepts: (params?: { status?: string; domain?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.status) qs.set("status", params.status);
+      if (params?.domain) qs.set("domain", params.domain);
+      const q = qs.toString();
+      return req<GovConceptCard[]>(`/knowledge/concepts${q ? `?${q}` : ""}`);
+    },
+    createConcept: (b: { name: string; std_name: string; definition: string; domain?: string; aliases?: string[] }) =>
+      req<GovConceptCard>("/knowledge/concepts", { method: "POST", body: JSON.stringify({ ...b, table_hints: [], naming_dict_ids: [], source_refs: [] }) }),
+    patchConcept: (id: number, b: Partial<{ name: string; definition: string; aliases: string[]; domain: string; status: string }>) =>
+      req<GovConceptCard>(`/knowledge/concepts/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     approveConcept: (id: number) => req<GovConceptCard>(`/knowledge/concepts/${id}/approve`, { method: "POST" }),
     rejectConcept: (id: number) => req<GovConceptCard>(`/knowledge/concepts/${id}/reject`, { method: "POST" }),
-    listRules: (params?: { status?: string }) =>
-      req<GovBusinessRule[]>(`/knowledge/business-rules${params?.status ? `?status=${params.status}` : ""}`),
+    listRules: (params?: { status?: string; domain?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.status) qs.set("status", params.status);
+      if (params?.domain) qs.set("domain", params.domain);
+      const q = qs.toString();
+      return req<GovBusinessRule[]>(`/knowledge/business-rules${q ? `?${q}` : ""}`);
+    },
+    createRule: (b: { title: string; statement: string; rule_type: string; domain?: string; schema_rule_ids?: string[] }) =>
+      req<GovBusinessRule>("/knowledge/business-rules", { method: "POST", body: JSON.stringify({ ...b, source_refs: [] }) }),
+    patchRule: (id: number, b: Partial<{ title: string; statement: string; ruleType: string; domain: string; schemaRuleIds: string[] }>) =>
+      req<GovBusinessRule>(`/knowledge/business-rules/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     approveRule: (id: number) => req<GovBusinessRule>(`/knowledge/business-rules/${id}/approve`, { method: "POST" }),
     rejectRule: (id: number) => req<GovBusinessRule>(`/knowledge/business-rules/${id}/reject`, { method: "POST" }),
     retrieve: (q: string) =>
@@ -852,19 +882,23 @@ const realApi = {
   instances: {
     list: () => req<GovInstance[]>("/instances"),
     get: (id: number) => req<GovInstance>(`/instances/${id}`),
-    create: (b: { subject: string; blockKind: string }) =>
-      req<GovInstance>("/instances", { method: "POST", body: JSON.stringify(b) }),
+    create: (b: { subject: string; blockKind?: string; description?: string }) =>
+      req<GovInstance>("/instances", { method: "POST", body: JSON.stringify({ subject_name: b.subject, description: b.description }) }),
     startStation: (instanceId: number, stationId: string) =>
       req<GovInstance>(`/instances/${instanceId}/stations/${stationId}/start`, { method: "POST" }),
-    completeStation: (instanceId: number, stationId: string, b: { artifactId?: number }) =>
-      req<GovInstance>(`/instances/${instanceId}/stations/${stationId}/complete`, { method: "POST", body: JSON.stringify(b) }),
+    completeStation: (instanceId: number, stationId: string, b?: { reason?: string }) =>
+      req<GovInstance>(`/instances/${instanceId}/stations/${stationId}/complete`, { method: "POST", body: JSON.stringify(b ?? {}) }),
+    reopenStation: (instanceId: number, stationId: string) =>
+      req<GovInstance>(`/instances/${instanceId}/stations/${stationId}/reopen`, { method: "POST" }),
     bypassStation: (instanceId: number, stationId: string, b: { reason: string }) =>
       req<GovInstance>(`/instances/${instanceId}/stations/${stationId}/bypass`, { method: "POST", body: JSON.stringify(b) }),
     hold: (id: number, b: { reason: string }) =>
       req<GovInstance>(`/instances/${id}/hold`, { method: "POST", body: JSON.stringify(b) }),
     resume: (id: number) => req<GovInstance>(`/instances/${id}/resume`, { method: "POST" }),
-    cancel: (id: number, b: { reason: string }) =>
-      req<GovInstance>(`/instances/${id}/cancel`, { method: "POST", body: JSON.stringify(b) }),
+    cancel: (id: number, b?: { reason?: string }) =>
+      req<GovInstance>(`/instances/${id}/cancel`, { method: "POST", body: JSON.stringify(b ?? {}) }),
+    patch: (id: number, b: { subject_name?: string; description?: string }) =>
+      req<GovInstance>(`/instances/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
     gatePolicy: () => req<GovGatePolicy>("/instances/gate-policy"),
   },
 

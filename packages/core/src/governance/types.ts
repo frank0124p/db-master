@@ -9,6 +9,9 @@ export interface SourceDoc {
   chunks: Array<{ idx: number; text: string }>;
   uploadedBy: string;
   createdAt: string;
+  domain?: string;
+  minioKey?: string;
+  originalFilename?: string;
 }
 
 export interface ConceptCard {
@@ -40,6 +43,7 @@ export interface BusinessRule {
   title: string;
   ruleType: "ssot" | "constraint" | "relationship" | "process";
   statement: string;
+  domain?: string;
   machine?:
     | {
         kind: "ssot_declaration";
@@ -50,12 +54,16 @@ export interface BusinessRule {
         kind: "field_constraint";
         fieldPattern: string;
         requirement: string;
+        /** When set, the governance validator executes this check on matching wide-table columns */
+        checkType?: "must_have_concept" | "must_declare_sensitivity" | "must_have_dict_entry" | "must_not_exist";
       };
   sourceRefs: Array<{ docId: number; chunkIdx: number }>;
   status: "pending" | "approved" | "rejected";
   reviewers: Array<{ userId: number; name: string; signedAt?: string }>;
   createdAt: string;
   updatedAt: string;
+  /** Studio/governance RuleDefinition IDs that technically enforce this business rule */
+  schemaRuleIds?: string[];
 }
 
 // ── Step 2 — Import & Classification ─────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api, type GovWtDraft, type GovProposedColumn, type GovValidationReport, type GovGovernedWideTable } from "../api.js";
 import { useStore } from "../store.js";
@@ -40,6 +40,13 @@ function DraftEditor({ draft, impactedGoverned }: { draft: GovWtDraft; impactedG
   const [colDef, setColDef] = useState("");
   const [showSql, setShowSql] = useState(false);
   const [sql, setSql] = useState("");
+
+  useEffect(() => {
+    if (!showSql) return;
+    const handle = (e: KeyboardEvent) => { if (e.key === "Escape") setShowSql(false); };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [showSql]);
   const [validationReport, setValidationReport] = useState<GovValidationReport | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishedBy, setPublishedBy] = useState("");

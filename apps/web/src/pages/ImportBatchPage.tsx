@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api, type GovImportBatch } from "../api.js";
 import { useStore } from "../store.js";
@@ -31,6 +31,12 @@ function NewBatchModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const [form, setForm] = useState({ name: "", ddl: "" });
+
+  useEffect(() => {
+    const handle = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [onClose]);
   const createMut = useMutation({
     mutationFn: () => api.importBatches.create({ name: form.name.trim(), ddl: form.ddl.trim() }),
     onSuccess: async () => {

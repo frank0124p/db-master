@@ -17,8 +17,11 @@ import type { Express } from "express";
 // Prevent real MinIO from being called in any module in the tree
 vi.mock("../services/minio.js", () => ({
   uploadFileAsync: vi.fn(),
+  deleteObjectAsync: vi.fn(),
+  deleteObjectsWithPrefixAsync: vi.fn(),
   initMinio: vi.fn(),
   setDataDir: vi.fn(),
+  isMinioReady: vi.fn().mockReturnValue(false),
 }));
 
 let tempDir: string;
@@ -35,8 +38,11 @@ beforeEach(async () => {
   // Re-apply mock after resetModules so the fresh module tree still gets it
   vi.mock("../services/minio.js", () => ({
     uploadFileAsync: vi.fn(),
+    deleteObjectAsync: vi.fn(),
+    deleteObjectsWithPrefixAsync: vi.fn(),
     initMinio: vi.fn(),
     setDataDir: vi.fn(),
+    isMinioReady: vi.fn().mockReturnValue(false),
   }));
 
   const { createApp } = await import("../app.js");

@@ -127,21 +127,17 @@ router.post("/:id/stations/:station/bypass", async (req, res, next) => {
     }
 
     const user = (req as { user?: { name?: string; role?: string } }).user;
-    const policy = await instanceRepo.getGatePolicy();
-    if (!policy.bypassRoles.includes(user?.role as "admin" | "suite_owner" | "maintainer")) {
-      return res.status(403).json({ error: { code: "FORBIDDEN", message: "Insufficient role to bypass" } });
-    }
-
+    const actorName = user?.name ?? "system";
     const now = new Date().toISOString();
     const updatedStations = instance.stations.map(s =>
       s.station === station
-        ? { ...s, status: "bypassed" as const, bypass: { by: user?.name ?? "system", at: now, reason } }
+        ? { ...s, status: "bypassed" as const, bypass: { by: actorName, at: now, reason } }
         : s,
     );
 
     const updated = await instanceRepo.updateInstance(id, { stations: updatedStations });
     await instanceRepo.appendEvent(id, {
-      at: now, by: user?.name ?? "system", type: "station-bypassed",
+      at: now, by: actorName, type: "station-bypassed",
       detail: `Station ${station} bypassed: ${reason}`,
     });
     return res.json(updated);
@@ -177,17 +173,13 @@ router.post("/:id/stations/:station/complete", async (req, res, next) => {
   try {
     const id = Number(req.params["id"]);
     const station = req.params["station"] as StationId;
-    const { reason } = req.body as { reason: string };
+    const { reason } = req.body as { reason?: string };
 
     const instance = await instanceRepo.getInstance(id);
     if (!instance) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Instance not found" } });
 
-    const user = (req as { user?: { name?: string; role?: string } }).user;
-    const policy = await instanceRepo.getGatePolicy();
-    if (!policy.manualCompleteRoles.includes(user?.role as "admin" | "suite_owner")) {
-      return res.status(403).json({ error: { code: "FORBIDDEN", message: "Insufficient role to manually complete" } });
-    }
-
+    const user = (req as { user?: { name?: string } }).user;
+    const actorName = user?.name ?? "system";
     const now = new Date().toISOString();
     const updatedStations = instance.stations.map(s =>
       s.station === station
@@ -195,15 +187,15 @@ router.post("/:id/stations/:station/complete", async (req, res, next) => {
             ...s,
             status: "done" as const,
             completedAt: now,
-            manualComplete: { by: user?.name ?? "system", at: now, reason: reason ?? "manual" },
+            manualComplete: { by: actorName, at: now, reason: reason ?? "manual" },
           }
         : s,
     );
 
     const updated = await instanceRepo.updateInstance(id, { stations: updatedStations });
     await instanceRepo.appendEvent(id, {
-      at: now, by: user?.name ?? "system", type: "station-completed",
-      detail: `Station ${station} manually completed: ${reason}`,
+      at: now, by: actorName, type: "station-completed",
+      detail: `Station ${station} manually completed: ${reason ?? "manual"}`,
     });
     return res.json(updated);
   } catch (e) { next(e); }

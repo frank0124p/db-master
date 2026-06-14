@@ -63,6 +63,14 @@ export async function createSourceDoc(
   return doc;
 }
 
+export async function updateSourceDoc(id: number, patch: Partial<Omit<SourceDoc, "id" | "slug" | "createdAt">>): Promise<SourceDoc | null> {
+  const doc = await getSourceDoc(id);
+  if (!doc) return null;
+  const updated: SourceDoc = { ...doc, ...patch };
+  await store.writeJson(sourceDocPath(doc.slug), updated);
+  return updated;
+}
+
 export async function deleteSourceDoc(id: number): Promise<void> {
   const idx = await getSourceDocIndex();
   const slug = idx.idToSlug[String(id)];

@@ -6,6 +6,8 @@ import crypto from "crypto";
 
 vi.mock("../services/minio.js", () => ({
   uploadFileAsync: vi.fn(),
+  deleteObjectAsync: vi.fn(),
+  deleteObjectsWithPrefixAsync: vi.fn(),
 }));
 
 let tempDir: string;
@@ -24,7 +26,7 @@ afterEach(async () => {
 });
 
 async function importRepo() {
-  vi.mock("../services/minio.js", () => ({ uploadFileAsync: vi.fn() }));
+  vi.mock("../services/minio.js", () => ({ uploadFileAsync: vi.fn(), deleteObjectAsync: vi.fn(), deleteObjectsWithPrefixAsync: vi.fn() }));
   return import("../repositories/knowledge.js");
 }
 

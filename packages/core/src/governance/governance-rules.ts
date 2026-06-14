@@ -10,11 +10,15 @@ export interface GovRuleResult {
   ruleId: string;
   severity: "error" | "warning" | "info";
   passed: boolean;
+  /** BusinessRule.id that triggered this result (for field_constraint / ssot rules) */
+  bizRuleId?: number;
   violations: Array<{
     target: string;
     message: string;
     evidence?: string;
     suggestion?: string;
+    /** BusinessRule.id that directly caused this violation */
+    bizRuleId?: number;
   }>;
 }
 
@@ -40,6 +44,7 @@ export function runSsotRule(
         target: col.name,
         message: `欄位概念 (conceptId=${col.conceptId}) 尚未宣告 SSOT`,
         suggestion: "在知識庫中為此概念新增 ssot_declaration 類型的業務規則",
+        // no bizRuleId — no BusinessRule exists yet for this concept
       });
       continue;
     }
@@ -53,8 +58,9 @@ export function runSsotRule(
       violations.push({
         target: col.name,
         message: `欄位來源 (${col.source.tableName}) 不是宣告的 SSOT (${m.ssotTable.tableName})`,
-        evidence: `BusinessRule: "${ssot.title}" — ${ssot.statement}`,
+        evidence: `BusinessRule #${ssot.id}: "${ssot.title}" — ${ssot.statement}`,
         suggestion: `請將此欄的 source 改為 ${m.ssotTable.tableName}`,
+        bizRuleId: ssot.id,
       });
     }
   }
@@ -471,13 +477,109 @@ export function runFreshnessDeclaredRule(
   };
 }
 
+// ── gov.bizrule.* — dynamic rules from approved field_constraint BusinessRules ─
+
+export function runFieldConstraintRules(
+  draft: WideTableDraft,
+  ctx: GovernanceContext,
+): GovRuleResult[] {
+  const fieldConstraints = ctx.businessRules.filter(
+    r => r.status === "approved" && r.machine?.kind === "field_constraint",
+  );
+
+  return fieldConstraints.map(rule => {
+    const m = rule.machine as {
+      kind: "field_constraint";
+      fieldPattern: string;
+      requirement: string;
+      checkType?: "must_have_concept" | "must_declare_sensitivity" | "must_have_dict_entry" | "must_not_exist";
+    };
+
+    if (!m.checkType) {
+      // No executable check — document-only rule, always passes
+      return {
+        ruleId: `bizrule.${rule.id}`,
+        severity: "info" as const,
+        passed: true,
+        bizRuleId: rule.id,
+        violations: [],
+      };
+    }
+
+    let pattern: RegExp;
+    try {
+      pattern = new RegExp(m.fieldPattern, "i");
+    } catch {
+      return {
+        ruleId: `bizrule.${rule.id}`,
+        severity: "error" as const,
+        passed: false,
+        bizRuleId: rule.id,
+        violations: [{
+          target: "pattern",
+          message: `業務規則 #${rule.id} 的 fieldPattern "${m.fieldPattern}" 不是合法的 regex`,
+          bizRuleId: rule.id,
+        }],
+      };
+    }
+
+    const violations: GovRuleResult["violations"] = [];
+    for (const col of draft.columns) {
+      if (!pattern.test(col.name)) continue;
+      let failed = false;
+      let message = "";
+      switch (m.checkType) {
+        case "must_have_concept":
+          if (!col.conceptId) {
+            failed = true;
+            message = `欄位「${col.name}」命中規則「${rule.title}」但未對應概念 (conceptId 缺失)`;
+          }
+          break;
+        case "must_declare_sensitivity":
+          if (!col.sensitivity) {
+            failed = true;
+            message = `欄位「${col.name}」命中規則「${rule.title}」但未宣告 sensitivity`;
+          }
+          break;
+        case "must_have_dict_entry":
+          if (!col.namingDictId) {
+            failed = true;
+            message = `欄位「${col.name}」命中規則「${rule.title}」但未連結命名字典詞條`;
+          }
+          break;
+        case "must_not_exist":
+          failed = true;
+          message = `欄位「${col.name}」命中禁用規則「${rule.title}」，此欄位不允許存在`;
+          break;
+      }
+      if (failed) {
+        violations.push({
+          target: col.name,
+          message,
+          evidence: `BusinessRule #${rule.id}: ${rule.statement}`,
+          suggestion: m.requirement,
+          bizRuleId: rule.id,
+        });
+      }
+    }
+
+    return {
+      ruleId: `bizrule.${rule.id}`,
+      severity: "error" as const,
+      passed: violations.length === 0,
+      bizRuleId: rule.id,
+      violations,
+    };
+  });
+}
+
 // ── Run all governance rules ──────────────────────────────────────────────────
 
 export function runGovernanceRules(
   draft: WideTableDraft,
   ctx: GovernanceContext,
 ): ValidationReport["ruleResults"] {
-  const results: GovRuleResult[] = [
+  const staticResults: GovRuleResult[] = [
     runSsotRule(draft, ctx),
     runLineageRule(draft, ctx),
     runBlockHierarchyRule(draft, ctx),
@@ -491,8 +593,12 @@ export function runGovernanceRules(
     runFreshnessDeclaredRule(draft, ctx),
   ];
 
+  // Dynamic rules derived from approved field_constraint BusinessRules
+  const fieldConstraintResults = runFieldConstraintRules(draft, ctx);
+  const allResults = [...staticResults, ...fieldConstraintResults];
+
   // Apply overrides (severity adjustments / disable)
-  return results.map(r => {
+  return allResults.map(r => {
     const override = (ctx.ruleOverrides as Record<string, { severity?: string; disabled?: boolean }>)[r.ruleId];
     if (override?.disabled) {
       return { ...r, passed: true, violations: [], _disabled: true };

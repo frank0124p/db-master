@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import * as repo from "../repositories/knowledge.js";
 import { chunkContent } from "../services/knowledge-chunks.js";
+import * as minio from "../services/minio.js";
 import type { ConceptCard, BusinessRule } from "@schema-studio/core";
 
 const router = Router();
@@ -12,6 +13,8 @@ const CreateSourceDocInput = z.object({
   title: z.string().min(1).max(255),
   format: z.enum(["markdown", "text"]).default("markdown"),
   content: z.string().min(1),
+  domain: z.string().optional(),
+  originalFilename: z.string().optional(),
   instance_id: z.number().int().optional(),
 });
 
@@ -23,6 +26,22 @@ router.post("/sources", async (req, res, next) => {
       .replace(/[^a-z0-9]+/g, "-")
       .slice(0, 40)}`;
     const chunks = chunkContent(body.content);
+
+    // Upload original file to Minio if configured
+    const ext = body.format === "markdown" ? "md" : "txt";
+    const minioRelPath = `knowledge/docs/${slug}.${ext}`;
+    let minioKey: string | undefined;
+    if (minio.isMinioReady()) {
+      try {
+        await minio.uploadRaw(
+          minioRelPath,
+          body.content,
+          body.format === "markdown" ? "text/markdown" : "text/plain",
+        );
+        minioKey = minioRelPath;
+      } catch { /* non-blocking */ }
+    }
+
     const doc = await repo.createSourceDoc(
       {
         title: body.title,
@@ -30,6 +49,9 @@ router.post("/sources", async (req, res, next) => {
         content: body.content,
         chunks,
         uploadedBy: (req as { user?: { name?: string } }).user?.name ?? "system",
+        ...(body.domain && { domain: body.domain }),
+        ...(minioKey && { minioKey }),
+        ...(body.originalFilename && { originalFilename: body.originalFilename }),
       },
       slug,
     );
@@ -37,9 +59,11 @@ router.post("/sources", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.get("/sources", async (_req, res, next) => {
+router.get("/sources", async (req, res, next) => {
   try {
-    const docs = await repo.listSourceDocs();
+    const domain = req.query["domain"] as string | undefined;
+    let docs = await repo.listSourceDocs();
+    if (domain) docs = docs.filter(d => d.domain === domain);
     res.json(docs.map(d => ({ ...d, content: undefined, chunks: d.chunks.length })));
   } catch (e) { next(e); }
 });
@@ -50,6 +74,23 @@ router.get("/sources/:id", async (req, res, next) => {
     const doc = await repo.getSourceDoc(id);
     if (!doc) return res.status(404).json({ error: { code: "NOT_FOUND", message: "SourceDoc not found" } });
     return res.json(doc);
+  } catch (e) { next(e); }
+});
+
+router.patch("/sources/:id", async (req, res, next) => {
+  try {
+    const id = Number(req.params["id"]);
+    const { title, content, domain } = req.body as { title?: string; content?: string; domain?: string };
+    const patch: Record<string, unknown> = {};
+    if (title) patch["title"] = title;
+    if (domain !== undefined) patch["domain"] = domain;
+    if (content !== undefined) {
+      patch["content"] = content;
+      patch["chunks"] = chunkContent(content);
+    }
+    const updated = await repo.updateSourceDoc(id, patch as Parameters<typeof repo.updateSourceDoc>[1]);
+    if (!updated) return res.status(404).json({ error: { code: "NOT_FOUND", message: "SourceDoc not found" } });
+    return res.json({ ...updated, content: undefined, chunks: (updated.chunks as Array<unknown>).length });
   } catch (e) { next(e); }
 });
 
@@ -246,6 +287,7 @@ const CreateBizRuleInput = z.object({
   title: z.string().min(1).max(200),
   rule_type: z.enum(["ssot", "constraint", "relationship", "process"]),
   statement: z.string().min(1),
+  domain: z.string().optional(),
   machine: z.union([
     z.object({
       kind: z.literal("ssot_declaration"),
@@ -256,16 +298,21 @@ const CreateBizRuleInput = z.object({
       kind: z.literal("field_constraint"),
       field_pattern: z.string(),
       requirement: z.string(),
+      check_type: z.enum(["must_have_concept", "must_declare_sensitivity", "must_have_dict_entry", "must_not_exist"]).optional(),
     }),
   ]).optional(),
   source_refs: z.array(z.object({ doc_id: z.number(), chunk_idx: z.number() })).default([]),
   instance_id: z.number().int().optional(),
+  /** Studio/governance RuleDefinition IDs that enforce this business rule */
+  schema_rule_ids: z.array(z.string()).optional(),
 });
 
 router.get("/business-rules", async (req, res, next) => {
   try {
     const status = req.query["status"] as BusinessRule["status"] | undefined;
-    const rules = await repo.listBusinessRules({ status });
+    const domain = req.query["domain"] as string | undefined;
+    let rules = await repo.listBusinessRules({ status });
+    if (domain) rules = rules.filter(r => r.domain === domain);
     res.json(rules);
   } catch (e) { next(e); }
 });
@@ -288,13 +335,15 @@ router.post("/business-rules", async (req, res, next) => {
         },
       };
     } else if (body.machine?.kind === "field_constraint") {
-      machine = {
+      const fc: Extract<BusinessRule["machine"], { kind: "field_constraint" }> = {
         kind: "field_constraint",
         fieldPattern: body.machine.field_pattern,
         requirement: body.machine.requirement,
       };
+      if (body.machine.check_type) fc.checkType = body.machine.check_type;
+      machine = fc;
     }
-    const rule = await repo.createBusinessRule({
+    const createInput: Parameters<typeof repo.createBusinessRule>[0] = {
       slug,
       title: body.title,
       ruleType: body.rule_type,
@@ -303,7 +352,10 @@ router.post("/business-rules", async (req, res, next) => {
       sourceRefs: body.source_refs.map(r => ({ docId: r.doc_id, chunkIdx: r.chunk_idx })),
       status: "pending",
       reviewers: [],
-    });
+    };
+    if (body.domain) createInput.domain = body.domain;
+    if (body.schema_rule_ids?.length) createInput.schemaRuleIds = body.schema_rule_ids;
+    const rule = await repo.createBusinessRule(createInput);
     res.status(201).json(rule);
   } catch (e) { next(e); }
 });

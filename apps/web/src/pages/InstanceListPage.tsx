@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api, type GovInstance, type GovStationId } from "../api.js";
 import { useStore } from "../store.js";
@@ -66,6 +66,12 @@ function NewInstanceModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { showToast } = useStore();
   const [form, setForm] = useState({ subject: "", blockKind: "small" });
+
+  useEffect(() => {
+    const handle = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [onClose]);
   const createMut = useMutation({
     mutationFn: () => api.instances.create({ subject: form.subject.trim(), blockKind: form.blockKind }),
     onSuccess: async () => {
